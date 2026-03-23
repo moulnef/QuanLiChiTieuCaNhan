@@ -1,0 +1,30 @@
+# Các file tạm của Dart/Flutter
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Các file cấu hình của IDE (Android Studio/VS Code)
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Các file cấu hình Android cá nhân (Cực kỳ quan trọng)
+android/local.properties
+android/key.properties
+android/app/src/debug/google-services.json
+# android/app/google-services.json 
+
+# Các file iOS (nếu sau này có làm)
+ios/.DS_Store
+ios/.symlinks/
+ios/Pods/
+ios/Podfile.lock
+
+# File Log và hệ thống
+*.log
+.DS_Store
+Thumbs.db
