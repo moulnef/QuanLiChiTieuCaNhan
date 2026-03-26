@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/config/otp_service.dart';
+import 'otp_screen.dart';
+import 'dart:math';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -9,48 +12,58 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) return "Vui lòng nhập email";
+    if (!RegExp(r'^[\w-\.]+@gmail\.com$').hasMatch(value)) {
+      return "Email phải đúng định dạng @gmail.com";
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return "Vui lòng nhập mật khẩu";
+    if (value.length < 8) return "Mật khẩu tối thiểu 8 ký tự";
+    if (!RegExp(r'^(?=.*[A-Z])(?=.*\d).+$').hasMatch(value)) {
+      return "Mật khẩu phải bao gồm chữ hoa và số";
+    }
+    return null;
+  }
+
   Future<void> signUp() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirmPassword = _confirmPasswordController.text.trim();
+    if (!_formKey.currentState!.validate()) return;
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      _showError("Vui lòng điền đầy đủ thông tin");
-      return;
-    }
-
-    if (password.length < 6) {
-      _showError("Mật khẩu phải có ít nhất 6 ký tự");
-      return;
-    }
-
-    if (password != confirmPassword) {
-      _showError("Mật khẩu xác nhận không khớp");
-      return;
-    }
+    setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      if (mounted) Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
-      String message = "Đã có lỗi xảy ra";
-      if (e.code == 'weak-password') {
-        message = "Mật khẩu quá yếu (tối thiểu 6 ký tự)";
-      } else if (e.code == 'email-already-in-use') {
-        message = "Email này đã được sử dụng";
-      } else if (e.code == 'invalid-email') {
-        message = "Email không hợp lệ";
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
+      // Gửi OTP trước khi chuyển trang
+      await OtpService.sendOTP(email);
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpScreen(
+              email: email,
+              password: password,
+            ),
+          ),
+        );
       }
-      _showError(message);
     } catch (e) {
-      _showError(e.toString());
+      _showError("Lỗi chi tiết: ${e.toString()}");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -58,8 +71,10 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("Thông báo: $message"),
+        content: Text(message),
         backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -74,63 +89,140 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Đăng ký tài khoản")),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: SingleChildScrollView(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: const BackButton(color: Colors.black),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Form(
+          key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 30),
-              const Icon(Icons.person_add, size: 80, color: Colors.blue),
-              const SizedBox(height: 20),
-              TextField(
+              const Text(
+                "Đăng ký tài khoản",
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Thông tin của bạn sẽ được bảo mật tuyệt đối",
+                style: TextStyle(color: Colors.grey.withOpacity(0.8)),
+              ),
+              const SizedBox(height: 32),
+              _buildTextField(
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: "Email",
-                  border: OutlineInputBorder(),
-                ),
+                label: "Email",
+                icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
+                validator: _validateEmail,
               ),
-              const SizedBox(height: 15),
-              TextField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: "Mật khẩu",
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
+                label: "Mật khẩu",
+                icon: Icons.lock_outline,
+                isPassword: true,
+                validator: _validatePassword,
               ),
-              const SizedBox(height: 15),
-              TextField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _confirmPasswordController,
-                decoration: const InputDecoration(
-                  labelText: "Xác nhận mật khẩu",
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
+                label: "Xác nhận mật khẩu",
+                icon: Icons.lock_reset_outlined,
+                isPassword: true,
+                validator: (val) => val != _passwordController.text
+                    ? "Mật khẩu không khớp"
+                    : null,
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 56,
                 child: ElevatedButton(
-                  onPressed: signUp,
+                  onPressed: _isLoading ? null : signUp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  child: const Text("ĐĂNG KÝ"),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "GỬI MÃ OTP",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Đã có tài khoản? Đăng nhập ngay"),
-              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isPassword = false,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: isPassword && _obscurePassword,
+          readOnly: readOnly,
+          onTap: onTap,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 20),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  )
+                : null,
+            filled: true,
+            fillColor: const Color(0xFFF5F7FA),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

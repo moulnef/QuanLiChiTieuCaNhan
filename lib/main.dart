@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'core/config/firebase_options.dart';
 import 'ui/auth/login_screen.dart';
-import 'ui/home/home_screen.dart';
+import 'ui/home/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,10 +27,21 @@ class MyApp extends StatelessWidget {
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return const HomePage(); // Nếu đã đăng nhập -> vào trang chủ
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
-          return const LoginPage(); // Nếu chưa -> ở lại trang đăng nhập
+          if (snapshot.hasData) {
+            final user = snapshot.data;
+            if (user != null && user.emailVerified) {
+              return const MainScreen(); // Đã xác minh -> Vào App
+            } else {
+              // Note: Nếu user đã đăng nhập nhưng chưa verify qua Stream này,
+              // ta sẽ thực hiện logout để đồng nhất flow chuyển hướng thủ công trong WaitingScreen
+              FirebaseAuth.instance.signOut();
+              return const LoginPage();
+            }
+          }
+          return const LoginPage(); // Nếu chưa đăng nhập -> trang đăng nhập
         },
       ),
     );
