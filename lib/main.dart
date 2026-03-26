@@ -30,18 +30,14 @@ class MyApp extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          
+          // NẾU CÓ DỮ LIỆU USER ĐĂNG NHẬP -> VÀO THẲNG MAIN SCREEN
           if (snapshot.hasData) {
-            final user = snapshot.data;
-            if (user != null && user.emailVerified) {
-              return const MainScreen(); // Đã xác minh -> Vào App
-            } else {
-              // Note: Nếu user đã đăng nhập nhưng chưa verify qua Stream này,
-              // ta sẽ thực hiện logout để đồng nhất flow chuyển hướng thủ công trong WaitingScreen
-              FirebaseAuth.instance.signOut();
-              return const LoginPage();
-            }
+            return const MainScreen(); 
           }
-          return const LoginPage(); // Nếu chưa đăng nhập -> trang đăng nhập
+          
+          // NẾU CHƯA ĐĂNG NHẬP HOẶC ĐÃ ĐĂNG XUẤT -> VỀ TRANG LOGIN
+          return const LoginPage(); 
         },
       ),
     );

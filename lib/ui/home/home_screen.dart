@@ -71,6 +71,7 @@ class _HomePageState extends State<HomePage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'home_add_transaction',
         onPressed: () {
           Navigator.push(
             context,

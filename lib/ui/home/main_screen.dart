@@ -38,6 +38,7 @@ class _MainScreenState extends State<MainScreen> {
         children: _pages,
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'main_add_transaction',
         onPressed: () {
           Navigator.push(
             context,
