@@ -18,13 +18,13 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _pages = [
     const HomePage(),
     const AccountPage(),
-    const SizedBox.shrink(), // Placeholder cho nút Thêm ở giữa
+    const SizedBox.shrink(), 
     const StatsPage(),
     const ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
-    if (index == 2) return; // Không làm gì khi bấm vào nút "Thêm" ở BottomNavigationBar
+    if (index == 2) return; 
     setState(() {
       _selectedIndex = index;
     });
@@ -38,7 +38,6 @@ class _MainScreenState extends State<MainScreen> {
         children: _pages,
       ),
       floatingActionButton: FloatingActionButton(
-        heroTag: 'main_add_transaction',
         onPressed: () {
           Navigator.push(
             context,
