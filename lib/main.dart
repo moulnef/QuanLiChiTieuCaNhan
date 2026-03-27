@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; 
-import 'ui/transaction/create_transaction_page.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -10,8 +8,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -26,20 +23,21 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
+      // StreamBuilder giúp tự động nhận biết trạng thái đăng nhập
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            return const HomePage();
+            return const HomePage(); // Nếu đã đăng nhập -> vào trang chủ
           }
-          return const LoginPage(); 
+          return const LoginPage(); // Nếu chưa -> ở lại trang đăng nhập
         },
       ),
     );
   }
 }
 
-
+// --- MÀN HÌNH ĐĂNG NHẬP & ĐĂNG KÝ ---
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -51,7 +49,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-
+  // Hàm Đăng Nhập
   Future<void> login() async {
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -63,7 +61,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-
+  // Hàm Đăng Ký
   Future<void> signUp() async {
     try {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
@@ -129,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-
+// --- MÀN HÌNH TRANG CHỦ (Sau khi đăng nhập thành công) ---
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -158,18 +156,6 @@ class HomePage extends StatelessWidget {
             const Text("Firebase đã kết nối hoàn hảo!"),
           ],
         ),
-      ),
-      
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CreateTransactionPage()),
-          );
-        },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
     );
   }
