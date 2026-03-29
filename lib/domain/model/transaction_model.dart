@@ -1,47 +1,42 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TransactionModel {
-  String id;
-  double amount;
-  String type; 
-  String categoryId;
-  String walletId;
-  DateTime date;
-  String note;
-  String? person;
+  final String id;
+  final double amount;
+  final String type; // 'expense' hoặc 'income'
+  final String categoryId; // Tên danh mục (vd: 'Ăn sáng')
+  final DateTime date;
+  final String note;
 
   TransactionModel({
     required this.id,
     required this.amount,
     required this.type,
     required this.categoryId,
-    required this.walletId,
     required this.date,
     this.note = '',
-    this.person,
   });
 
+  // Đóng gói dữ liệu để đẩy lên Firebase
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'amount': amount,
       'type': type,
       'categoryId': categoryId,
-      'walletId': walletId,
-      'date': date.toIso8601String(),
+      'date': Timestamp.fromDate(date), // Firebase dùng kiểu Timestamp thay vì DateTime
       'note': note,
-      'person': person,
     };
   }
 
-  factory TransactionModel.fromMap(Map<String, dynamic> map) {
+  // Giải mã dữ liệu từ Firebase tải về
+  factory TransactionModel.fromMap(Map<String, dynamic> map, String documentId) {
     return TransactionModel(
-      id: map['id'],
-      amount: map['amount'],
-      type: map['type'],
-      categoryId: map['categoryId'],
-      walletId: map['walletId'],
-      date: DateTime.parse(map['date']),
-      note: map['note'],
-      person: map['person'],
+      id: documentId,
+      amount: (map['amount'] ?? 0).toDouble(),
+      type: map['type'] ?? 'expense',
+      categoryId: map['categoryId'] ?? '',
+      date: (map['date'] as Timestamp).toDate(),
+      note: map['note'] ?? '',
     );
   }
 }
