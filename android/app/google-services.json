@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "10314181716",
+    "project_id": "ai-quanlichitieucanhan",
+    "storage_bucket": "ai-quanlichitieucanhan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:10314181716:android:e294747ffb4d90ad5e11c1",
+        "android_client_info": {
+          "package_name": "com.example.ai_quan_ly_chi_tieu_ca_nhan"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "10314181716-tg9r9tsaoi1h3nbjo61svu2q2g2cil3q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBS7Qx_3FEijEWndH6x_icXfHBAQm3qyBc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "10314181716-tg9r9tsaoi1h3nbjo61svu2q2g2cil3q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
