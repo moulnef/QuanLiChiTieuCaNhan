@@ -1,17 +1,35 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; 
-import 'ui/transaction/create_transaction_page.dart';
-import 'firebase_options.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/config/firebase_options.dart';
+import 'ui/auth/login_screen.dart';
+import 'ui/home/main_screen.dart';
 
 void main() async {
+  // 1. Khởi tạo binding cho Flutter
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Khởi tạo Firebase với cấu hình chuẩn
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
-  runApp(const ProviderScope(child: MyApp()));
+
+  // 3. Khởi tạo thư viện đa ngôn ngữ
+  await EasyLocalization.ensureInitialized();
+
+  runApp(
+    // Bọc ProviderScope NGOÀI CÙNG để kích hoạt Riverpod cho toàn bộ app
+    ProviderScope(
+      child: EasyLocalization(
+        supportedLocales: const [Locale('vi'), Locale('en')],
+        path: 'lib/assets/translations', // Đường dẫn folder chứa file json của bạn
+        fallbackLocale: const Locale('vi'),
+        child: const MyApp(),
+      ),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -22,154 +40,36 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Quản Lý Chi Tiêu AI',
       debugShowCheckedModeBanner: false,
+
+      // --- CẤU HÌNH ĐA NGÔN NGỮ (BẮT BUỘC) ---
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
+
+      // LOGIC KIỂM TRA ĐĂNG NHẬP REALTIME
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return const HomePage();
+          // Trong lúc chờ Firebase phản hồi
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
           }
-          return const LoginPage(); 
+
+          // Nếu đã đăng nhập thành công -> Vào thẳng MainScreen
+          if (snapshot.hasData) {
+            return const MainScreen();
+          }
+
+          // Nếu chưa đăng nhập hoặc đã Logout -> Về trang Login
+          return const LoginPage();
         },
-      ),
-    );
-  }
-}
-
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-
-  Future<void> login() async {
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    }
-  }
-
-
-  Future<void> signUp() async {
-    try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Thông báo: $message"), backgroundColor: Colors.redAccent),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Xác thực tài khoản")),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.account_balance_wallet, size: 80, color: Colors.blue),
-            const SizedBox(height: 20),
-            const Text(
-              "QUẢN LÝ CHI TIÊU AI",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 30),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: "Email", border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: "Mật khẩu", border: OutlineInputBorder()),
-              obscureText: true,
-            ),
-            const SizedBox(height: 25),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: login,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                child: const Text("ĐĂNG NHẬP"),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: signUp,
-              child: const Text("Chưa có tài khoản? Đăng ký ngay"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Trang Chủ"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => FirebaseAuth.instance.signOut(),
-          )
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 100),
-            const SizedBox(height: 20),
-            Text("Chào mừng Vương: ${user?.email}"),
-            const SizedBox(height: 10),
-            const Text("Firebase đã kết nối hoàn hảo!"),
-          ],
-        ),
-      ),
-      
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CreateTransactionPage()),
-          );
-        },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
     );
   }
