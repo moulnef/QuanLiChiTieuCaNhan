@@ -74,6 +74,10 @@ class CategoryData {
 
       // --- Nhóm khác ---
       _cat('e46', 'Tiền ra', Icons.outbox_outlined, Colors.redAccent, 'Khác'),
+      // Nhóm tài chính bổ sung để đồng bộ transaction với module tài chính
+      _cat('e47', 'Nạp tiết kiệm', Icons.savings_outlined, Colors.teal, 'Tài chính'),
+      _cat('e48', 'Thanh toán trả góp', Icons.credit_card, Colors.blue, 'Tài chính'),
+      _cat('e49', 'Trả nợ', Icons.account_balance_wallet_outlined, Colors.deepOrange, 'Tài chính'),
     ];
   }
 
@@ -87,12 +91,21 @@ class CategoryData {
       _cat('i5', 'Tiền vào', Icons.input_rounded, Colors.teal, 'Khác'),
       _cat('i6', 'Được cho/tặng', Icons.volunteer_activism_outlined, Colors.pink, 'Thu nhập phụ'),
       _cat('i7', 'Khác', Icons.more_horiz, Colors.grey, 'Khác'),
+      _cat('i8', 'Rút tiết kiệm', Icons.savings_outlined, Colors.teal, 'Tài chính'),
     ];
   }
 
   // 3. HÀM TIỆN ÍCH GỘP TẤT CẢ
   static List<CategoryModel> getAllCategories() {
     return [...getExpenseCategories(), ...getIncomeCategories()];
+  }
+  static CategoryModel? findById(String value) {
+    for (final item in getAllCategories()) {
+      if (item.id == value || item.name == value) {
+        return item;
+      }
+    }
+    return null;
   }
 
   // Hàm helper để viết code ngắn gọn hơn

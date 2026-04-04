@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
+import 'package:provider/provider.dart';
 import '../../ui/home/home_screen.dart';
-import '../../ui/transaction/transaction_list_page.dart'; // Vẫn dùng trang này
+import '../../ui/transaction/transaction_list_page.dart';
 import '../../ui/stats/stats_screen.dart';
 import '../../ui/settings/profile_screen.dart';
 import '../../ui/transaction/create_transaction_page.dart';
+import '../../ui/providers/finance_provider.dart';
 
-// --- LỚP HỖ TRỢ ĐIỀU HƯỚNG LỒNG NHAU (GIỮ BOTTOM NAV BAR) ---
 class TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   final Widget rootPage;
@@ -85,7 +86,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             index: _selectedIndex,
             children: [
               TabNavigator(navigatorKey: _navigatorKeys[0], rootPage: const HomePage()),
-              // ĐÂY NÈ: Tên biến là Tài khoản nhưng trang là TransactionListPage
               TabNavigator(navigatorKey: _navigatorKeys[1], rootPage: const TransactionListPage()),
               const SizedBox.shrink(),
               TabNavigator(navigatorKey: _navigatorKeys[3], rootPage: const StatsPage()),
@@ -95,7 +95,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           if (_isMenuOpen) GestureDetector(onTap: _toggleMenu, child: Container(color: Colors.black54)),
           if (_isMenuOpen)
             Positioned(
-              bottom: 100, left: 0, right: 0,
+              bottom: 112, left: 0, right: 0,
               child: Column(
                 children: [
                   _buildMenuOption(icon: Icons.document_scanner_outlined, color: Colors.orange, label: "Quét hóa đơn", onTap: () {}),
@@ -107,25 +107,46 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         ],
       ),
 
-      floatingActionButton: GestureDetector(
-        onTap: _toggleMenu,
-        child: Container(
-          width: 56, height: 56,
-          decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 4))]),
-          child: RotationTransition(turns: _rotationAnimation, child: const Icon(Icons.add, color: Colors.white, size: 32)),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, 16),
+        child: GestureDetector(
+          onTap: _toggleMenu,
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: Colors.blue,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: RotationTransition(
+              turns: _rotationAnimation,
+              child: const Icon(
+                Icons.add,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(), notchMargin: 8.0,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 10,
         child: SizedBox(
-          height: 60,
+          height: 64,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildNavItem(0, Icons.home_outlined, Icons.home, 'Trang chủ'),
-              // CHỖ NÀY: Đổi text hiển thị thành "Tài khoản" cho giống file mới
               _buildNavItem(1, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
               const SizedBox(width: 48),
               _buildNavItem(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Thống kê'),

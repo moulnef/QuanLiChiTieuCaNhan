@@ -44,9 +44,7 @@ class BudgetService {
       year: year,
     );
 
-    final expenseMap = groupExpenseByCategory(
-      transactions: monthlyExpenses,
-    );
+    final expenseMap = groupExpenseByCategory(transactions: monthlyExpenses);
 
     final updatedBudgets = budgets.map((budget) {
       final spent = expenseMap[budget.categoryId] ?? 0;
@@ -58,15 +56,26 @@ class BudgetService {
       return budget.copyWith(
         spentAmount: spent,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
-        status: FinanceCalculator.getBudgetStatus(
-          progressPercent: progress,
-        ),
+        status: FinanceCalculator.getBudgetStatus(progressPercent: progress),
       );
-    }).toList();
-
-    updatedBudgets.sort((a, b) => b.spentAmount.compareTo(a.spentAmount));
+    }).toList()
+      ..sort((a, b) => b.spentAmount.compareTo(a.spentAmount));
 
     return updatedBudgets;
+  }
+
+  static List<Budget> getHomeBudgetItems({
+    required List<Budget> budgets,
+    int limit = 3,
+  }) {
+    final clone = [...budgets]
+      ..sort((a, b) {
+        final byStatus = b.progressPercent.compareTo(a.progressPercent);
+        if (byStatus != 0) return byStatus;
+        return b.spentAmount.compareTo(a.spentAmount);
+      });
+
+    return clone.take(limit).toList();
   }
 
   static int getTotalSpent({
@@ -79,5 +88,21 @@ class BudgetService {
     required List<Budget> budgets,
   }) {
     return budgets.fold(0, (sum, item) => sum + item.limitAmount);
+  }
+
+  static String? getPrimaryBudgetAlert(List<Budget> budgets) {
+    if (budgets.isEmpty) return null;
+
+    final sorted = [...budgets]
+      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+
+    final target = sorted.first;
+    if (target.progressPercent >= 100) {
+      return 'Bạn đã vượt ngân sách ${target.categoryName.toLowerCase()}.';
+    }
+    if (target.progressPercent >= 80) {
+      return 'Bạn đã dùng ${target.progressPercent}% ngân sách ${target.categoryName.toLowerCase()}.';
+    }
+    return null;
   }
 }
