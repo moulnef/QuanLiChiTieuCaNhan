@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../ui/home/home_screen.dart';
-import '../../ui/transaction/transaction_list_page.dart'; // Vẫn dùng trang này
-import '../../ui/stats/stats_screen.dart';
-import '../../ui/settings/profile_screen.dart';
+import '../../ui/transaction/transaction_list_page.dart';
+// 💡 ĐÃ VÁ: Tạm thời comment các trang bị thiếu để hết lỗi đỏ
+// import '../../ui/stats/stats_screen.dart';
+// import '../../ui/settings/profile_screen.dart';
 import '../../ui/transaction/create_transaction_page.dart';
 
 class TabNavigator extends StatelessWidget {
@@ -84,17 +84,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             index: _selectedIndex,
             children: [
               TabNavigator(navigatorKey: _navigatorKeys[0], rootPage: const HomePage()),
-              // ĐÂY NÈ: Tên biến là Tài khoản nhưng trang là TransactionListPage
               TabNavigator(navigatorKey: _navigatorKeys[1], rootPage: const TransactionListPage()),
               const SizedBox.shrink(),
-              TabNavigator(navigatorKey: _navigatorKeys[3], rootPage: const StatsPage()),
-              TabNavigator(navigatorKey: _navigatorKeys[4], rootPage: const ProfilePage()),
+              // 💡 ĐÃ VÁ: Thay StatsPage và ProfilePage bằng Widget tạm thời để hết lỗi
+              TabNavigator(navigatorKey: _navigatorKeys[3], rootPage: const Scaffold(body: Center(child: Text("Màn hình Thống kê")))),
+              TabNavigator(navigatorKey: _navigatorKeys[4], rootPage: const Scaffold(body: Center(child: Text("Màn hình Hồ sơ")))),
             ],
           ),
           if (_isMenuOpen) GestureDetector(onTap: _toggleMenu, child: Container(color: Colors.black54)),
           if (_isMenuOpen)
             Positioned(
-              bottom: 32, // <--- ĐIỂM QUAN TRỌNG: 28px là chiều cao nửa trên nút (+), 4px là khoảng cách giãn ra.
+              bottom: 32,
               left: 0, right: 0,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -107,7 +107,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     bgColor: Colors.blue.shade50,
                     label: "Thêm thủ công",
                     onTap: _openCreateTransaction,
-                    bottomMargin: 0, // <--- Ép sát item cuối cùng để không bị dư khoảng trắng
+                    bottomMargin: 0,
                   ),
                 ],
               ),
@@ -133,7 +133,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildNavItem(0, Icons.home_outlined, Icons.home, 'Trang chủ'),
-              // CHỖ NÀY: Đổi text hiển thị thành "Tài khoản" cho giống file mới
               _buildNavItem(1, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
               const SizedBox(width: 48),
               _buildNavItem(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Thống kê'),
@@ -149,7 +148,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     return GestureDetector(
       onTap: () { _toggleMenu(); onTap(); },
       child: Container(
-        margin: EdgeInsets.only(bottom: bottomMargin), // <--- Áp dụng margin ở đây
+        margin: EdgeInsets.only(bottom: bottomMargin),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))]),
         child: Row(

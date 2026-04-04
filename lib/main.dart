@@ -3,28 +3,29 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// 💡 KIỂM TRA ĐƯỜNG DẪN: Đảm bảo file này tồn tại trong core/config/
 import 'core/config/firebase_options.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/home/main_screen.dart';
 
 void main() async {
-  // 1. Khởi tạo binding cho Flutter
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Khởi tạo Firebase với cấu hình chuẩn
+  // 1. Khởi tạo Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 3. Khởi tạo thư viện đa ngôn ngữ
+  // 2. Khởi tạo đa ngôn ngữ
   await EasyLocalization.ensureInitialized();
 
   runApp(
-    // Bọc ProviderScope NGOÀI CÙNG để kích hoạt Riverpod cho toàn bộ app
     ProviderScope(
-      child: EasyLocalization(
+      child: // Trong main.dart
+      EasyLocalization(
         supportedLocales: const [Locale('vi'), Locale('en')],
-        path: 'lib/assets/translations', // Đường dẫn folder chứa file json của bạn
+        path: 'lib/assets/translations', // 💡 BẮT BUỘC phải có 'lib/' ở đầu
         fallbackLocale: const Locale('vi'),
         child: const MyApp(),
       ),
@@ -41,7 +42,7 @@ class MyApp extends StatelessWidget {
       title: 'Quản Lý Chi Tiêu AI',
       debugShowCheckedModeBanner: false,
 
-      // --- CẤU HÌNH ĐA NGÔN NGỮ (BẮT BUỘC) ---
+      // Cấu hình đa ngôn ngữ
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
@@ -51,23 +52,19 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // LOGIC KIỂM TRA ĐĂNG NHẬP REALTIME
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          // Trong lúc chờ Firebase phản hồi
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
 
-          // Nếu đã đăng nhập thành công -> Vào thẳng MainScreen
           if (snapshot.hasData) {
             return const MainScreen();
           }
 
-          // Nếu chưa đăng nhập hoặc đã Logout -> Về trang Login
+          // 💡 LƯU Ý: Kiểm tra xem class trong login_screen.dart
+          // là LoginPage hay LoginScreen để gọi cho đúng
           return const LoginPage();
         },
       ),

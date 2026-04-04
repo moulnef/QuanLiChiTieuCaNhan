@@ -53,8 +53,4 @@ flutter:
   generate: true
 
   assets:
-    # Khai báo cả thư mục translations để dùng easy_localization
     - lib/assets/translations/
-    # Hoặc khai báo chi tiết từng file nếu bạn muốn chắc chắn
-    - lib/assets/translations/en.json
-    - lib/assets/translations/vi.json
