@@ -27,7 +27,7 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
   bool _speechInitialized = false;
   String _text = "Sẵn sàng lắng nghe và trò chuyện...";
 
-  final String githubToken = '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';
+  final String githubToken = 'MA_GIT';
 
   static final List<Map<String, dynamic>> _voiceHistory = [];
 
@@ -88,7 +88,7 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
         _speech.listen(
           localeId: 'vi-VN',
           listenMode: stt.ListenMode.dictation,
-          pauseFor: const Duration(seconds: 7),
+          pauseFor: const Duration(seconds: 6),
           onResult: (val) {
             setState(() {
               if (val.recognizedWords.isNotEmpty) _text = val.recognizedWords;
