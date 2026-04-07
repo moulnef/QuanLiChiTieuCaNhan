@@ -5,6 +5,8 @@ import '../../ui/transaction/transaction_list_page.dart';
 // import '../../ui/stats/stats_screen.dart';
 // import '../../ui/settings/profile_screen.dart';
 import '../../ui/transaction/create_transaction_page.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/ai_chat/chatbot.dart';
+import '../../ui/home/voice_assistant.dart';
 
 class TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -86,7 +88,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               TabNavigator(navigatorKey: _navigatorKeys[0], rootPage: const HomePage()),
               TabNavigator(navigatorKey: _navigatorKeys[1], rootPage: const TransactionListPage()),
               const SizedBox.shrink(),
-              // 💡 ĐÃ VÁ: Thay StatsPage và ProfilePage bằng Widget tạm thời để hết lỗi
               TabNavigator(navigatorKey: _navigatorKeys[3], rootPage: const Scaffold(body: Center(child: Text("Màn hình Thống kê")))),
               TabNavigator(navigatorKey: _navigatorKeys[4], rootPage: const Scaffold(body: Center(child: Text("Màn hình Hồ sơ")))),
             ],
@@ -100,7 +101,20 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildMenuOption(icon: Icons.document_scanner_outlined, iconColor: Colors.orange, bgColor: Colors.orange.shade50, label: "Quét hóa đơn", onTap: () {}),
-                  _buildMenuOption(icon: Icons.mic_none, iconColor: Colors.deepPurple, bgColor: Colors.deepPurple.shade50, label: "Nhập giọng nói", onTap: () {}),
+                  _buildMenuOption(
+                      icon: Icons.mic_none,
+                      iconColor: Colors.deepPurple,
+                      bgColor: Colors.deepPurple.shade50,
+                      label: "Nhập giọng nói",
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+                          builder: (context) => const VoiceAssistant(),
+                        );
+                      }
+                  ),
                   _buildMenuOption(
                     icon: Icons.edit_outlined,
                     iconColor: Colors.blue,
@@ -110,9 +124,36 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     bottomMargin: 0,
                   ),
                 ],
+
               ),
             ),
+          Positioned(
+            bottom: 20, // Giảm xuống một chút vì con robot to hơn, để nó không bị quá cao so với thanh dưới
+            right: 16,  // Giữ nguyên bên phải
+            child: GestureDetector(
+              onTap: () {
+                // Vẫn giữ nguyên lệnh mở Chatbot
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+                );
+              },
+              child: SizedBox( // Chuyển từ Container sang SizedBox để chỉ định kích thước mà không có nền/đổ bóng
+                width: 90,  // Tăng kích thước chiều rộng lên 90 (cũ là 65)
+                height: 90, // Tăng kích thước chiều cao lên 90 (cũ là 65)
+                child: Image.asset(
+                  'lib/ui/ai_chat/robot.gif', // Đường dẫn file gif của Thúy
+                  fit: BoxFit.contain, // Sử dụng BoxFit.contain để con robot hiện đầy đủ, không bị cắt mất
+                  errorBuilder: (context, error, stackTrace) {
+                    // Tăng kích thước icon lỗi lên cho tương xứng
+                    return const Icon(Icons.smart_toy, color: Colors.purple, size: 50);
+                  },
+                ),
+              ),
+            ),
+          ),
         ],
+
       ),
 
       floatingActionButton: GestureDetector(

@@ -415,17 +415,11 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   }
 
   Widget _renderSmartIcon(CategoryModel? cat, double size) {
-    if (cat == null) return Icon(Icons.add_circle_outline, color: Colors.red, size: size);
-    if (cat.iconData != null) return Icon(cat.iconData, color: cat.color, size: size);
-
-    if (cat.icon != null && cat.icon!.isNotEmpty) {
-      final parsed = int.tryParse(cat.icon!);
-      if (parsed != null) {
-        return Icon(IconData(parsed, fontFamily: 'MaterialIcons'), color: cat.color, size: size);
-      }
-      return Text(cat.icon!, style: TextStyle(fontSize: size, fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji']));
+    if (cat == null) {
+      return Icon(Icons.add_circle_outline, color: Colors.red, size: size);
     }
-    return Icon(Icons.category, color: cat.color, size: size);
+    // Vì bây giờ cat.icon chắc chắn là IconData, nên ta gọi thẳng luôn:
+    return Icon(cat.icon, color: cat.color, size: size);
   }
 
   @override

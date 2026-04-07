@@ -11,8 +11,6 @@ class TimeSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _TimeSettingsPageState extends ConsumerState<TimeSettingsPage> {
-  // Logic chọn ngày/tháng/khoảng thời gian của bạn...
-  // Sau khi tạo xong file này, Loan hãy bỏ comment ở file TransactionListPage nhé!
   @override
   Widget build(BuildContext context) {
     return Scaffold(

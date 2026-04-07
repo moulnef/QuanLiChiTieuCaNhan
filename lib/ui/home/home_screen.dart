@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+
+// Các import chuyển hướng trang
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/all_overview_screen.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/database/mock/mock_budgets.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/database/mock/mock_transactions.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/budget_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_home_section.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/ai_chat/chatbot.dart';
+
+// Import Model chuẩn của Thúy
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,14 +25,14 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final FirestoreService _firestoreService = FirestoreService();
 
-  // Trạng thái ẩn/hiện số dư
-  bool _isBalanceVisible = true;
+  // MẶC ĐỊNH LÀ FALSE: Mới vào sẽ ẩn số dư ngay
+  bool _isBalanceVisible = false;
 
   @override
   Widget build(BuildContext context) {
-    // Tính toán ngân sách từ mock data
+    // Ngân sách tạm thời lấy từ Mock (Sau này Thúy có thể sửa thành Stream từ Firebase luôn nhé)
     final updatedBudgets = BudgetService.getMonthlyBudgetStatus(
-      transactions: MockTransactions.items,
+      transactions: [], // Để trống vì mình sẽ dùng dữ liệu thật từ Firebase bên dưới
       budgets: MockBudgets.items,
       month: 3,
       year: 2026,
@@ -39,40 +44,40 @@ class _HomePageState extends State<HomePage> {
         stream: _firestoreService.getTransactions(),
         builder: (context, snapshot) {
           if (snapshot.hasError) return const Center(child: Text("Đã có lỗi xảy ra"));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          final docs = snapshot.data?.docs ?? [];
+          // 1. CHUYỂN ĐỔI DỮ LIỆU TỪ FIREBASE SANG LIST MODEL
+          final List<TransactionModel> transactions = snapshot.data?.docs.map((doc) {
+            return TransactionModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+          }).toList() ?? [];
 
-          // TÍNH TOÁN REAL-TIME: Quét qua TOÀN BỘ giao dịch
+          // 2. TÍNH TOÁN TỔNG THU / TỔNG CHI / SỐ DƯ
           double totalIncome = 0;
           double totalExpense = 0;
 
-          for (var doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final amount = (data['amount'] ?? 0).toDouble();
-            final type = data['type'] ?? 'expense';
-
-            if (type == 'income') {
-              totalIncome += amount;
+          for (var tx in transactions) {
+            if (tx.type == 'income') {
+              totalIncome += tx.amount;
             } else {
-              totalExpense += amount;
+              totalExpense += tx.amount;
             }
           }
 
           final balance = totalIncome - totalExpense;
-
           final oCcy = NumberFormat('#,###', 'en_US');
 
-          // Xử lý chuỗi ẩn/hiện cho cả Tổng dư, Thu nhập và Chi tiêu
+          // Xử lý chuỗi hiển thị dựa trên trạng thái _isBalanceVisible
           String formattedBalance = _isBalanceVisible ? "${oCcy.format(balance).replaceAll(',', '.')} đ" : "****** đ";
           String formattedIncome = _isBalanceVisible ? "${oCcy.format(totalIncome).replaceAll(',', '.')} đ" : "****** đ";
           String formattedExpense = _isBalanceVisible ? "${oCcy.format(totalExpense).replaceAll(',', '.')} đ" : "****** đ";
 
           return ListView(
-            padding: const EdgeInsets.only(top: 0, bottom: 100), // top: 0 để dải màu dính sát mép trên
+            padding: const EdgeInsets.only(top: 0, bottom: 100),
             physics: const BouncingScrollPhysics(),
             children: [
-              // --- 1. KHỐI HEADER XANH TÍCH HỢP 2 Ô THU CHI ---
+              // --- 1. KHỐI HEADER XANH ---
               Container(
                 padding: const EdgeInsets.only(top: 50, left: 20, right: 20, bottom: 30),
                 decoration: const BoxDecoration(
@@ -89,7 +94,6 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Hàng 1: Lời chào và Nút Đăng xuất
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -99,10 +103,14 @@ class _HomePageState extends State<HomePage> {
                             const Text("Xin chào,", style: TextStyle(color: Colors.white70, fontSize: 14)),
                             const SizedBox(height: 4),
                             Row(
-                              children: const [
-                                Text("Nguyễn Văn An", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                                SizedBox(width: 8),
-                                Text("👋", style: TextStyle(fontSize: 20)),
+                              children: [
+                                // Lấy tên User thật từ Firebase Auth nếu có
+                                Text(
+                                    FirebaseAuth.instance.currentUser?.displayName ?? "Nguyễn Văn An",
+                                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
+                                ),
+                                const SizedBox(width: 8),
+                                const Text("👋", style: TextStyle(fontSize: 20)),
                               ],
                             ),
                           ],
@@ -112,7 +120,7 @@ class _HomePageState extends State<HomePage> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                              child: Row(children: const [Icon(Icons.wifi, color: Colors.greenAccent, size: 14), SizedBox(width: 4), Text("Online", style: TextStyle(color: Colors.white, fontSize: 12))]),
+                              child: const Row(children: [Icon(Icons.wifi, color: Colors.greenAccent, size: 14), SizedBox(width: 4), Text("Online", style: TextStyle(color: Colors.white, fontSize: 12))]),
                             ),
                             const SizedBox(width: 16),
                             GestureDetector(
@@ -124,8 +132,6 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                     const SizedBox(height: 30),
-
-                    // Hàng 2: Số dư
                     const Text("Tổng số dư khả dụng", style: TextStyle(color: Colors.white70, fontSize: 15)),
                     const SizedBox(height: 8),
                     Row(
@@ -133,19 +139,19 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(formattedBalance, style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         GestureDetector(
                           onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
                           behavior: HitTestBehavior.opaque,
-                          child: Icon(_isBalanceVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.white70, size: 24),
+                          child: Icon(
+                              _isBalanceVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              color: Colors.white70,
+                              size: 28
+                          ),
                         ),
                       ],
                     ),
-
-                    // ĐÃ XÓA DÒNG CHỮ "CẬP NHẬT TOÀN THỜI GIAN" Ở ĐÂY
                     const SizedBox(height: 30),
-
-                    // Hàng 3: Khôi phục 2 Thẻ Thu nhập và Chi tiêu (Có icon trend)
                     Row(
                       children: [
                         Expanded(child: _buildGlassCard("Thu nhập", "+$formattedIncome", Icons.trending_up, Colors.greenAccent)),
@@ -153,37 +159,6 @@ class _HomePageState extends State<HomePage> {
                         Expanded(child: _buildGlassCard("Chi tiêu", "-$formattedExpense", Icons.trending_down, Colors.redAccent)),
                       ],
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // --- 2. AI ASSISTANT BANNER ---
-              Container(
-                height: 92,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF8B3DFF), Color(0xFFD91CFF)]),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(radius: 22, backgroundColor: Color(0x33FFFFFF), child: Text('🤖', style: TextStyle(fontSize: 22))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('AI Financial Assistant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                          SizedBox(height: 4),
-                          Text('Bạn đã chi quá 71% ngân sách ăn uống', style: TextStyle(fontSize: 13, color: Colors.white)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.white, size: 28),
                   ],
                 ),
               ),
@@ -210,15 +185,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              if (docs.isEmpty)
+              if (transactions.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
                   child: Center(child: Text("Bạn chưa có chi tiêu nào. Hãy thêm ngay!")),
                 )
               else
-                ...docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final isExpense = (data['type'] ?? 'expense') == 'expense';
+                ...transactions.take(5).map((tx) {
+                  final isExpense = tx.type == 'expense';
 
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -230,13 +204,13 @@ class _HomePageState extends State<HomePage> {
                           backgroundColor: const Color(0xFFF0F2FF),
                           child: Icon(isExpense ? Icons.receipt_long : Icons.payments, color: Colors.blue)
                       ),
-                      title: Text(data['categoryId'] ?? 'Không tên', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text("${data['category'] ?? ''} - ${data['note'] ?? ''}"),
+                      title: Text(tx.categoryId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+                      subtitle: Text(tx.note),
                       trailing: Text(
-                          "${isExpense ? '-' : '+'}${oCcy.format(data['amount'] ?? 0).replaceAll(',', '.')} đ",
+                          "${isExpense ? '-' : '+'}${oCcy.format(tx.amount).replaceAll(',', '.')} đ",
                           style: TextStyle(color: isExpense ? Colors.red : Colors.green, fontWeight: FontWeight.bold)
                       ),
-                      onLongPress: () => _firestoreService.deleteTransaction(doc.id),
+                      onLongPress: () => _firestoreService.deleteTransaction(tx.id),
                     ),
                   );
                 }).toList(),
@@ -247,7 +221,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Hàm hỗ trợ vẽ thẻ Kính mờ (Glassmorphism)
   Widget _buildGlassCard(String title, String amount, IconData icon, Color iconColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),

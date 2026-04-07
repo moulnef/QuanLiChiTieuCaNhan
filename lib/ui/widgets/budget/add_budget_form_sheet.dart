@@ -23,7 +23,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
 
   String? _selectedCategoryId;
   String? _selectedCategoryName;
-  String? _selectedIcon;
+  IconData? _selectedIcon; // ĐÃ SỬA TỪ String? THÀNH IconData?
 
   late int _selectedMonth;
   late int _selectedYear;
@@ -69,7 +69,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       userId: widget.userId,
       categoryId: _selectedCategoryId!,
       categoryName: _selectedCategoryName!,
-      icon: _selectedIcon!,
+      // Chuyển IconData thành String codePoint để lưu vào Budget nếu Budget model vẫn nhận String
+      // Nếu Budget model đã sửa icon thành IconData hoặc lưu int, bạn cần đổi lại cho khớp nhé!
+      icon: _selectedIcon!.codePoint.toString(),
       month: _selectedMonth,
       year: _selectedYear,
       limitAmount: limitAmount,
@@ -141,7 +143,14 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                 items: expenseCategories.map((item) {
                   return DropdownMenuItem<String>(
                     value: item.id,
-                    child: Text('${item.icon} ${item.name}'),
+                    // ĐÃ SỬA: Dùng Row để hiển thị IconData đàng hoàng thay vì nối chuỗi
+                    child: Row(
+                      children: [
+                        Icon(item.icon, color: item.color, size: 20),
+                        const SizedBox(width: 8),
+                        Text(item.name),
+                      ],
+                    ),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -151,7 +160,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   setState(() {
                     _selectedCategoryId = selected.id;
                     _selectedCategoryName = selected.name;
-                    _selectedIcon = selected.icon;
+                    _selectedIcon = selected.icon; // Lúc này selected.icon là IconData
                   });
                 },
                 decoration: InputDecoration(

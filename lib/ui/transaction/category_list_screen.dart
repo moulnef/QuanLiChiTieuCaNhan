@@ -24,9 +24,6 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   List<CategoryModel> _frequentCategories = [];
   bool _isLoadingFrequent = true;
 
-  final ScrollController _scrollController = ScrollController();
-  final Map<String, GlobalKey> _itemKeys = {};
-
   @override
   void initState() {
     super.initState();
@@ -34,56 +31,34 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         ? CategoryData.getExpenseCategories()
         : CategoryData.getIncomeCategories();
     _loadRealFrequentCategories();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToSelectedCategory();
-    });
-  }
-
-  void _scrollToSelectedCategory() {
-    if (widget.selectedCategoryName != null && _itemKeys.containsKey(widget.selectedCategoryName)) {
-      final context = _itemKeys[widget.selectedCategoryName]!.currentContext;
-      if (context != null) {
-        Scrollable.ensureVisible(
-          context,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-          alignment: 0.3,
-        );
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadRealFrequentCategories() async {
     try {
       final controller = ref.read(transactionControllerProvider);
-      if (controller.transactions.isEmpty) await controller.fetchAllTransactions();
-
+      if (controller.transactions.isEmpty) {
+        // Giả sử có hàm fetch ở controller, nếu không có bạn có thể bỏ qua dòng này
+        // await controller.fetchAllTransactions();
+      }
       final filteredTransactions = controller.transactions.where((tx) => tx.type == widget.transactionType).toList();
-
       Map<String, int> counts = {};
       for (var tx in filteredTransactions) {
         counts[tx.categoryId] = (counts[tx.categoryId] ?? 0) + 1;
       }
-
       var sortedEntries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
       var topIds = sortedEntries.take(4).map((e) => e.key).toList();
-
       List<CategoryModel> topCategories = [];
       for (var id in topIds) {
         var match = _allCategories.where((cat) => cat.name == id).firstOrNull;
         if (match != null) topCategories.add(match);
       }
-
       if (topCategories.isEmpty) topCategories = _allCategories.take(4).toList();
-
-      if (mounted) setState(() { _frequentCategories = topCategories; _isLoadingFrequent = false; });
+      if (mounted) {
+        setState(() {
+          _frequentCategories = topCategories;
+          _isLoadingFrequent = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoadingFrequent = false);
     }
@@ -97,11 +72,12 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   @override
   Widget build(BuildContext context) {
     final filteredList = _allCategories.where((cat) => cat.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-
     Map<String, List<CategoryModel>> groupedCategories = {};
     for (var cat in filteredList) {
       String groupName = cat.group ?? "Khác";
-      if (!groupedCategories.containsKey(groupName)) groupedCategories[groupName] = [];
+      if (!groupedCategories.containsKey(groupName)) {
+        groupedCategories[groupName] = [];
+      }
       groupedCategories[groupName]!.add(cat);
     }
 
@@ -122,12 +98,11 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
           _buildSearchBox(),
           Expanded(
             child: SingleChildScrollView(
-              controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               child: Column(
                 children: [
                   if (_searchQuery.isEmpty) _buildFrequentSection(),
-                  ...groupedCategories.keys.map((group) => _buildGroupSection(group, groupedCategories[group]!)).toList(),
+                  ...groupedCategories.keys.map((group) => _buildGroupSection(group, groupedCategories[group]!)),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -173,7 +148,13 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         children: [
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text("Hay dùng", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            child: Row(
+              children: [
+                Icon(Icons.favorite, color: Colors.black87, size: 22),
+                SizedBox(width: 8),
+                Text("Hay dùng", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           _isLoadingFrequent
@@ -200,12 +181,9 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Icon(_getGroupIcon(name), color: Colors.grey.shade700, size: 22),
+                Icon(_getGroupIcon(name), color: Colors.black87, size: 22),
                 const SizedBox(width: 8),
-                Text(
-                  _capitalizeFirstLetter(name),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-                ),
+                Text(_capitalizeFirstLetter(name), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
               ],
             ),
           ),
@@ -221,62 +199,36 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
 
   Widget _buildGridItem(CategoryModel cat) {
     bool isSelected = cat.name == widget.selectedCategoryName;
-    _itemKeys[cat.name] ??= GlobalKey();
-
-    return Theme(
-      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: Colors.blue.shade50, splashColor: Colors.transparent),
-      child: InkWell(
-        key: _itemKeys[cat.name],
-        onTap: () => Navigator.pop(context, cat),
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width / 4,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    Container(
-                      width: 46, height: 46,
-                      decoration: BoxDecoration(
-                        color: cat.color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      // 💡 ĐÃ SỬA: Quay về dùng Icon chuẩn của thư viện Flutter
-                      child: Center(
-                        child: Icon(
-                          cat.iconData ?? Icons.category, // Sử dụng iconData có sẵn
-                          color: cat.color,
-                          size: 24,
-                        ),
-                      ),
+    return InkWell(
+      onTap: () => Navigator.pop(context, cat),
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width / 4,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            children: [
+              Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Container(
+                    width: 46, height: 46,
+                    decoration: BoxDecoration(
+                      color: cat.color.withValues(alpha: 0.12), // Fix linter warning
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    if (isSelected)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        padding: const EdgeInsets.all(2),
-                        child: const Icon(Icons.check, color: Colors.white, size: 10),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                      cat.name,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
-                      textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis
+                    child: Icon(cat.icon, color: cat.color, size: 24),
                   ),
-                ),
-              ],
-            ),
+                  if (isSelected)
+                    Container(
+                      decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(2),
+                      child: const Icon(Icons.check, color: Colors.white, size: 10),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(cat.name, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 1),
+            ],
           ),
         ),
       ),
@@ -285,11 +237,33 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
 
   IconData _getGroupIcon(String groupName) {
     String lowerGroup = groupName.toLowerCase();
-    if (lowerGroup.contains('ăn')) return Icons.restaurant_menu;
-    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) return Icons.house_outlined;
-    if (lowerGroup.contains('di chuyển')) return Icons.directions_car_filled_outlined;
-    if (lowerGroup.contains('mua sắm')) return Icons.shopping_bag_outlined;
-    if (lowerGroup.contains('thu nhập')) return Icons.account_balance_wallet_outlined;
-    return Icons.folder_outlined;
+
+    // Icon cho nhóm Vay
+    if (lowerGroup.contains('vay')) {
+      return Icons.account_balance_wallet_rounded;
+    }
+
+    if (lowerGroup.contains('đi lại') || lowerGroup.contains('di chuyển')) return Icons.directions_car_filled;
+    if (lowerGroup.contains('ngân hàng') || lowerGroup.contains('tài chính')) return Icons.account_balance;
+    if (lowerGroup.contains('thời trang') || lowerGroup.contains('trang phục')) return Icons.checkroom;
+    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('chăm sóc')) return Icons.spa;
+    if (lowerGroup.contains('con cái') || lowerGroup.contains('em bé')) return Icons.child_care;
+    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('lễ nghĩa')) return Icons.card_giftcard;
+    if (lowerGroup.contains('nhà cửa')) return Icons.house_outlined;
+    if (lowerGroup.contains('phát triển bản thân')) return Icons.auto_stories;
+    if (lowerGroup.contains('sức khỏe')) return Icons.health_and_safety_rounded;
+
+    if (lowerGroup.contains('ăn')) return Icons.restaurant;
+    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) return Icons.home_repair_service;
+    if (lowerGroup.contains('mua sắm')) return Icons.shopping_bag;
+    if (lowerGroup.contains('thu nhập')) return Icons.payments;
+    if (lowerGroup.contains('giáo dục')) return Icons.school;
+    if (lowerGroup.contains('giải trí')) return Icons.sports_esports;
+
+    if (lowerGroup.contains('khác')) {
+      return Icons.more_horiz;
+    }
+
+    return Icons.grid_view_rounded;
   }
 }

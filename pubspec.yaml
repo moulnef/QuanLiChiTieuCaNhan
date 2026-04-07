@@ -43,6 +43,10 @@ dependencies:
   # Bộ icon đa dạng từ nhiều nguồn
   iconify_flutter: ^0.0.7
 
+  # Voice
+  speech_to_text: ^7.3.0
+  flutter_tts: ^4.2.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,3 +58,4 @@ flutter:
 
   assets:
     - lib/assets/translations/
+    - lib/ui/ai_chat/robot.gif

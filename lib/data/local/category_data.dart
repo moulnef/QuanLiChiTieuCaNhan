@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import '../../domain/model/category_model.dart';
 
 class CategoryData {
-  // 1. DANH SÁCH CHI TIÊU (EXPENSE) - ĐẦY ĐỦ THEO YÊU CẦU
+  // 1. DANH SÁCH CHI TIÊU (EXPENSE)
   static List<CategoryModel> getExpenseCategories() {
     return [
       // --- Nhóm: Ăn uống ---
       _cat('e1', 'Cafe', Icons.coffee, Colors.brown, 'Ăn uống'),
       _cat('e2', 'Ăn sáng', Icons.wb_sunny_outlined, Colors.orange, 'Ăn uống'),
-      _cat('e3', 'Ăn tiệm', Icons.restaurant, Colors.red, 'Ăn uống'),
       _cat('e4', 'Đi chợ/Siêu thị', Icons.shopping_basket_outlined, Colors.green, 'Ăn uống'),
       _cat('e5', 'Ăn trưa', Icons.lunch_dining, Colors.amber, 'Ăn uống'),
       _cat('e6', 'Ăn tối', Icons.dinner_dining, Colors.deepOrange, 'Ăn uống'),
@@ -72,12 +71,16 @@ class CategoryData {
       _cat('e44', 'Thuốc men', Icons.medication, Colors.green, 'Sức khỏe'),
       _cat('e45', 'Thể thao', Icons.fitness_center, Colors.orange, 'Sức khỏe'),
 
+      // --- Nhóm: Vay ---
+      _cat('e47', 'Vay online', Icons.phonelink_ring_outlined, Colors.blueAccent, 'Vay'),
+      _cat('e48', 'Vay offline', Icons.handshake_outlined, Colors.deepOrangeAccent, 'Vay'),
+
       // --- Nhóm khác ---
       _cat('e46', 'Tiền ra', Icons.outbox_outlined, Colors.redAccent, 'Khác'),
     ];
   }
 
-// 2. DANH SÁCH THU NHẬP (INCOME) - ĐẦY ĐỦ THEO YÊU CẦU
+  // 2. DANH SÁCH THU NHẬP (INCOME)
   static List<CategoryModel> getIncomeCategories() {
     return [
       _cat('i1', 'Lương', Icons.payments_outlined, Colors.green, 'Thu nhập chính'),
@@ -100,7 +103,7 @@ class CategoryData {
     return CategoryModel(
       id: id,
       name: name,
-      iconData: icon,
+      icon: icon,
       color: color,
       type: id.startsWith('e') ? 'expense' : 'income',
       group: group,
