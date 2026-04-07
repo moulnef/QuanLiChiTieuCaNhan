@@ -27,7 +27,7 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
   bool _speechInitialized = false;
   String _text = "Sẵn sàng lắng nghe và trò chuyện...";
 
-  final String githubToken = 'YOUR_TOKEN';
+  //final String githubToken = 'MA_GIT';
 
   static final List<Map<String, dynamic>> _voiceHistory = [];
 
