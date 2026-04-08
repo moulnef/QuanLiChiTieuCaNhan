@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/finance_action_button.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/bank_interest.dart';
 
 // Helper formatters
 String formatCurrency(num amount) => NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(amount);
@@ -19,7 +19,6 @@ class DebtTabPage extends StatefulWidget {
 class _DebtTabPageState extends State<DebtTabPage> {
   // Logic thanh toán nợ
   Future<void> _handlePay(FinanceDebtItem item) async {
-    // 1. Lấy reference của Provider trước khi mở Dialog để đảm bảo an toàn
     final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
 
     final amount = await _showAmountDialog(
@@ -30,8 +29,6 @@ class _DebtTabPageState extends State<DebtTabPage> {
 
     if (amount == null) return;
 
-    // 2. Sử dụng microtask để đẩy việc xử lý sang frame tiếp theo, 
-    // tránh xung đột với quá trình Navigator.pop() trên Web
     Future.microtask(() async {
       try {
         await financeProvider.payDebt(item.id, amount);
@@ -56,7 +53,6 @@ class _DebtTabPageState extends State<DebtTabPage> {
     });
   }
 
-  // Dialog nhập số tiền thanh toán
   Future<int?> _showAmountDialog({
     required String title,
     required String actionLabel,
@@ -125,12 +121,11 @@ class _DebtTabPageState extends State<DebtTabPage> {
   }
 
   Future<void> _openCreateSheet() async {
-    // KHÔNG dùng ChangeNotifierProvider.value vì Provider đã có ở root (main.dart)
     final created = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AddDebtSheet(),
+      builder: (_) => const _AddLoanSheet(),
     );
 
     if (!mounted) return;
@@ -159,7 +154,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
           onRefresh: provider.loadFinanceData,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 20, bottom: 100),
             itemCount: items.length + 1,
             itemBuilder: (context, index) {
               if (index == items.length) return _buildAddButton();
@@ -395,106 +390,88 @@ class _CardButton extends StatelessWidget {
   }
 }
 
-class _AddDebtSheet extends StatefulWidget {
-  const _AddDebtSheet();
+class _AddLoanSheet extends StatefulWidget {
+  const _AddLoanSheet();
   @override
-  State<_AddDebtSheet> createState() => _AddDebtSheetState();
+  State<_AddLoanSheet> createState() => _AddLoanSheetState();
 }
 
-class _AddDebtSheetState extends State<_AddDebtSheet> {
+class _AddLoanSheetState extends State<_AddLoanSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  final _lenderController = TextEditingController();
-  final _totalController = TextEditingController();
-  final _monthlyController = TextEditingController();
-  final _interestController = TextEditingController();
-  final _dateController = TextEditingController();
-  DateTime? _selectedDueDate;
+  final _amountController = TextEditingController();
+  
+  BankInterest? selectedBank;
+  int? selectedTerm;
+  double monthlyAmount = 0;
+  DateTime? nextDueDate;
+
+  void _calculateLoan() {
+    final amountText = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (selectedBank != null && selectedTerm != null && amountText.isNotEmpty) {
+      double principal = double.tryParse(amountText) ?? 0;
+      double rate = selectedBank!.rates[selectedTerm!]!;
+      
+      setState(() {
+        monthlyAmount = context.read<FinanceProvider>().calculateMonthlyPayment(
+          principal, rate, selectedTerm!
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _lenderController.dispose();
-    _totalController.dispose();
-    _monthlyController.dispose();
-    _interestController.dispose();
-    _dateController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 30),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 30),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 20),
-              const Text('Khoản vay mới', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 20),
-              _buildInput(controller: _titleController, label: 'Tên khoản vay'),
-              const SizedBox(height: 16),
-              _buildInput(controller: _lenderController, label: 'Nguồn vay / Người cho vay'),
-              const SizedBox(height: 16),
-              _buildInput(controller: _totalController, label: 'Tổng số tiền', isNumber: true),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: _buildInput(controller: _monthlyController, label: 'Trả mỗi tháng', isNumber: true)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildInput(controller: _interestController, label: 'Lãi suất')),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                tileColor: const Color(0xFFF8FAFC),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                title: const Text('Ngày đến hạn tiếp theo', style: TextStyle(fontSize: 14)),
-                trailing: Text(_selectedDueDate == null ? 'Chọn ngày' : formatDate(_selectedDueDate!), style: const TextStyle(fontWeight: FontWeight.bold)),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context, 
-                    initialDate: DateTime.now().add(const Duration(days: 30)), 
-                    firstDate: DateTime.now(), 
-                    lastDate: DateTime(2100)
-                  );
-                  if (picked != null) setState(() => _selectedDueDate = picked);
-                },
-              ),
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              
+              const Text('Khoản vay mới', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate() && _selectedDueDate != null) {
-                      await context.read<FinanceProvider>().addDebtRecord(
-                        title: _titleController.text,
-                        lender: _lenderController.text,
-                        totalAmount: int.parse(_totalController.text),
-                        monthlyPayment: int.parse(_monthlyController.text),
-                        dueDate: _selectedDueDate!,
-                        interestText: _interestController.text,
-                      );
-                      if (mounted) Navigator.pop(context, true);
-                    }
-                  },
-                  child: const Text('Lưu khoản vay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
+
+              _buildTextField(_titleController, 'Tên khoản vay (ví dụ: Vay mua xe)'),
+              const SizedBox(height: 16),
+
+              _buildBankDropdown(),
+              const SizedBox(height: 16),
+
+              _buildTextField(
+                _amountController, 
+                'Tổng số tiền vay', 
+                isNumber: true,
+                onChanged: (_) => _calculateLoan()
               ),
+              const SizedBox(height: 16),
+
+              if (selectedBank != null) ...[
+                _buildTermDropdown(),
+                const SizedBox(height: 16),
+              ],
+
+              if (monthlyAmount > 0) _buildLoanSummary(),
+
+              const SizedBox(height: 16),
+              _buildDatePicker(context),
+
+              const SizedBox(height: 24),
+              _buildSubmitButton(),
             ],
           ),
         ),
@@ -502,17 +479,139 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
     );
   }
 
-  Widget _buildInput({required TextEditingController controller, required String label, bool isNumber = false}) {
+  Widget _buildLoanSummary() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        children: [
+          _rowInfo('Lãi suất áp dụng', '${selectedBank!.rates[selectedTerm!]}% / năm'),
+          const Divider(),
+          _rowInfo('Trả mỗi tháng (Gốc + Lãi)', formatCurrency(monthlyAmount), isBold: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankDropdown() {
+    return DropdownButtonFormField<BankInterest>(
+      decoration: _inputDecoration('Ngân hàng cho vay'),
+      items: loanBankData.map((bank) => DropdownMenuItem(
+        value: bank,
+        child: Text(bank.name),
+      )).toList(),
+      onChanged: (value) {
+        setState(() {
+          selectedBank = value;
+          selectedTerm = null;
+          monthlyAmount = 0;
+        });
+      },
+    );
+  }
+
+  Widget _buildTermDropdown() {
+    return DropdownButtonFormField<int>(
+      decoration: _inputDecoration('Kỳ hạn vay'),
+      items: selectedBank!.rates.keys.map((term) => DropdownMenuItem(
+        value: term,
+        child: Text('$term tháng'),
+      )).toList(),
+      onChanged: (value) {
+        setState(() {
+          selectedTerm = value;
+          _calculateLoan();
+        });
+      },
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+    );
+  }
+
+  Widget _rowInfo(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Color(0xFF64748B))),
+          Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: const Color(0xFF1E293B))),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDatePicker(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 30)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime(2100),
+        );
+        if (picked != null) setState(() => nextDueDate = picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(nextDueDate == null ? 'Ngày đến hạn tiếp theo' : 'Ngày đến hạn: ${formatDate(nextDueDate!)}'),
+            const Icon(Icons.calendar_today, size: 20, color: Colors.blue),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, {bool isNumber = false, ValueChanged<String>? onChanged}) {
     return TextFormField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-      ),
+      decoration: _inputDecoration(label),
+      onChanged: onChanged,
       validator: (v) => v!.isEmpty ? 'Vui lòng nhập' : null,
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2563EB),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
+        ),
+        onPressed: () async {
+          if (_formKey.currentState!.validate() && selectedBank != null && selectedTerm != null && nextDueDate != null) {
+            await context.read<FinanceProvider>().addDebtRecord(
+              title: _titleController.text,
+              lender: selectedBank!.name,
+              totalAmount: (monthlyAmount * selectedTerm!).round(),
+              monthlyPayment: monthlyAmount.round(),
+              dueDate: nextDueDate!,
+              interestText: '${selectedBank!.rates[selectedTerm!]}%/năm',
+            );
+            if (mounted) Navigator.pop(context, true);
+          }
+        },
+        child: const Text('Lưu khoản vay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+      ),
     );
   }
 }

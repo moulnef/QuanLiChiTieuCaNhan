@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
@@ -49,6 +50,20 @@ class FinanceProvider extends ChangeNotifier {
     if (!_isDisposed) {
       super.notifyListeners();
     }
+  }
+
+  double calculateMonthlyPayment(double principal, double annualRate, int months) {
+    if (annualRate == 0) return principal / months;
+    
+    double monthlyRate = (annualRate / 100) / 12;
+    // Công thức: P * r * (1+r)^n / ((1+r)^n - 1)
+    return (principal * monthlyRate * pow(1 + monthlyRate, months)) / 
+           (pow(1 + monthlyRate, months) - 1);
+  }
+
+  double calculateTotalInterest(double principal, double annualRate, int months) {
+    double monthlyPayment = calculateMonthlyPayment(principal, annualRate, months);
+    return (monthlyPayment * months) - principal;
   }
 
   String? get primaryAlertMessage {
@@ -276,6 +291,31 @@ class FinanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addInstallment({
+    required String name,
+    required double amount,
+    required String bankName,
+    required double interestRate,
+    required int months,
+    required double monthlyPayment,
+  }) {
+    // Logic lưu vào Firebase/Local database (Sử dụng list local hiện tại)
+    final newItem = FinanceInstallmentItem(
+      id: DateTime.now().millisecondsSinceEpoch,
+      icon: '🏦',
+      title: '$name ($bankName)',
+      totalAmount: (monthlyPayment * months).round(),
+      paidAmount: 0,
+      currentPeriod: 0,
+      totalPeriods: months,
+      monthlyPayment: monthlyPayment.round(),
+      nextDueDate: DateTime.now().add(const Duration(days: 30)),
+      color: AppColors.blue,
+    );
+    _installments.insert(0, newItem);
+    notifyListeners();
+  }
+
   Future<void> payInstallment(int id, int amount) async {
     if (amount <= 0) {
       throw Exception('Số tiền thanh toán phải lớn hơn 0.');
@@ -311,7 +351,7 @@ class FinanceProvider extends ChangeNotifier {
       await _recordTransaction(
         amount: amount.toDouble(),
         type: 'expense',
-        categoryId: 'e48',
+        categoryId: 'e44', // Update category for installment
         categoryName: 'Thanh toán trả góp',
         note: 'Thanh toán trả góp "${current.title}"',
       );
@@ -372,7 +412,7 @@ class FinanceProvider extends ChangeNotifier {
       await _recordTransaction(
         amount: amount.toDouble(),
         type: 'expense',
-        categoryId: 'e49',
+        categoryId: 'e45', // Update category for debt payment
         categoryName: 'Trả nợ',
         note: 'Thanh toán khoản vay "${current.title}"',
       );

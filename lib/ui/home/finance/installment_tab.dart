@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/finance_action_button.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/bank_interest.dart';
 
 // Helper formatters
 String formatCurrency(num amount) => NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(amount);
@@ -118,7 +118,7 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
         if (items.isEmpty) return _buildEmptyState();
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 20, bottom: 100), // Tăng bottom padding
           itemCount: items.length + 1,
           itemBuilder: (context, index) {
             if (index == items.length) return _buildAddButton();
@@ -331,10 +331,26 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _totalController = TextEditingController();
-  final _periodController = TextEditingController();
-  final _monthlyController = TextEditingController();
-  final _dateController = TextEditingController();
-  DateTime? _selectedDueDate;
+
+  BankInterest? selectedBank;
+  int? selectedTerm;
+  double monthlyAmount = 0;
+
+  void _calculateMonthly() {
+    final amountText = _totalController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (selectedBank != null && selectedTerm != null && amountText.isNotEmpty) {
+      double principal = double.tryParse(amountText) ?? 0;
+      double rate = selectedBank!.rates[selectedTerm!]!;
+      
+      setState(() {
+        monthlyAmount = context.read<FinanceProvider>().calculateMonthlyPayment(
+            principal,
+            rate,
+            selectedTerm!
+        );
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -346,55 +362,146 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
       padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 30),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            const Text('Kế hoạch trả góp mới', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 20),
-            _buildInput(controller: _titleController, label: 'Tên khoản trả góp'),
-            const SizedBox(height: 16),
-            _buildInput(controller: _totalController, label: 'Tổng số tiền', isNumber: true),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildInput(controller: _periodController, label: 'Số kỳ', isNumber: true)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildInput(controller: _monthlyController, label: 'Mỗi kỳ', isNumber: true)),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                onPressed: () async {
-                  if (_formKey.currentState!.validate()) {
-                    await context.read<FinanceProvider>().addInstallmentPlan(
-                      title: _titleController.text,
-                      totalAmount: int.parse(_totalController.text),
-                      totalPeriods: int.parse(_periodController.text),
-                      monthlyPayment: int.parse(_monthlyController.text),
-                    );
-                    if (mounted) Navigator.pop(context, true);
-                  }
-                },
-                child: const Text('Lưu kế hoạch', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 20),
+              const Text('Kế hoạch trả góp mới', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 20),
+              _buildInput(controller: _titleController, label: 'Tên vật phẩm/Khoản trả góp'),
+              const SizedBox(height: 16),
+              _buildInput(
+                controller: _totalController,
+                label: 'Số tiền gốc',
+                isNumber: true,
+                onChanged: (_) => _calculateMonthly(),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // CHỌN NGÂN HÀNG
+              DropdownButtonFormField<BankInterest>(
+                decoration: _dropdownDecoration('Chọn ngân hàng'),
+                value: selectedBank,
+                items: bankData.map((bank) => DropdownMenuItem(
+                  value: bank,
+                  child: Text(bank.name, style: const TextStyle(fontSize: 15)),
+                )).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedBank = value;
+                    selectedTerm = null; // Reset kỳ hạn khi đổi ngân hàng
+                    monthlyAmount = 0;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // CHỌN KỲ HẠN
+              if (selectedBank != null)
+                DropdownButtonFormField<int>(
+                  decoration: _dropdownDecoration('Kỳ hạn trả góp'),
+                  value: selectedTerm,
+                  items: selectedBank!.rates.keys.map((term) => DropdownMenuItem(
+                    value: term,
+                    child: Text('$term tháng (Lãi ${selectedBank!.rates[term]}%/năm)'),
+                  )).toList(),
+                  onChanged: (value) {
+                    setState(() => selectedTerm = value);
+                    _calculateMonthly();
+                  },
+                ),
+
+              // HIỂN THỊ KẾT QUẢ TỰ ĐỘNG
+              if (monthlyAmount > 0) ...[
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildResultRow('Lãi suất áp dụng:', '${selectedBank!.rates[selectedTerm!]}%/năm'),
+                      const Divider(height: 20),
+                      _buildResultRow(
+                        'Số tiền mỗi kỳ (ước tính):', 
+                        formatCurrency(monthlyAmount),
+                        isBold: true, 
+                        color: const Color(0xFF2563EB)
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    if (_formKey.currentState!.validate() && selectedBank != null && selectedTerm != null) {
+                      context.read<FinanceProvider>().addInstallment(
+                        name: _titleController.text,
+                        amount: double.tryParse(_totalController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+                        bankName: selectedBank!.name,
+                        interestRate: selectedBank!.rates[selectedTerm!]!,
+                        months: selectedTerm!,
+                        monthlyPayment: monthlyAmount,
+                      );
+                      Navigator.pop(context, true);
+                    }
+                  },
+                  child: const Text('Lưu kế hoạch', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildInput({required TextEditingController controller, required String label, bool isNumber = false}) {
+  InputDecoration _dropdownDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    );
+  }
+
+  Widget _buildResultRow(String label, String value, {bool isBold = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+        Text(value, style: TextStyle(
+          fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          fontSize: isBold ? 16 : 14,
+          color: color ?? const Color(0xFF1E293B),
+        )),
+      ],
+    );
+  }
+
+  Widget _buildInput({
+    required TextEditingController controller,
+    required String label,
+    bool isNumber = false,
+    ValueChanged<String>? onChanged,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
@@ -404,6 +511,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
       ),
+      onChanged: onChanged,
       validator: (v) => v!.isEmpty ? 'Vui lòng nhập' : null,
     );
   }
