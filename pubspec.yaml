@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  image_picker: ^1.0.7        # Để chụp ảnh hoặc chọn ảnh từ thư viện
+  google_mlkit_text_recognition: ^0.11.0 # Để nhận diện chữ viết từ ảnh
+  permission_handler: ^11.3.0
   # --- QUẢN LÝ TRẠNG THÁI (STATE MANAGEMENT) ---
   # Dùng cho TransactionController (ChangeNotifier)
   provider: ^6.1.2

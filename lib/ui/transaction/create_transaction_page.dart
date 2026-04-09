@@ -12,7 +12,15 @@ import 'category_list_screen.dart';
 
 class CreateTransactionPage extends ConsumerStatefulWidget {
   final TransactionModel? editData;
-  const CreateTransactionPage({super.key, this.editData});
+  final double? initialAmount;
+  final String? initialNote;
+
+  const CreateTransactionPage({
+    super.key,
+    this.editData,
+    this.initialAmount,
+    this.initialNote
+  });
 
   @override
   ConsumerState<CreateTransactionPage> createState() => _CreateTransactionPageState();
@@ -46,7 +54,14 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       _selectedCategory = allCategories.where((c) => c.name == _categoryId).firstOrNull;
       _isNumpadVisible = false;
     }
-
+    else {
+      if (widget.initialAmount != null) {
+        _amountString = widget.initialAmount!.toStringAsFixed(0);
+      }
+      if (widget.initialNote != null) {
+        _noteInput.text = widget.initialNote!;
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadFrequentCategories();
     });
