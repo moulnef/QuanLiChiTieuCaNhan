@@ -107,9 +107,9 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFF0F5FF),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAFAFA),
+        backgroundColor: const Color(0xFFF0F5FF),
         elevation: 0,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
@@ -117,10 +117,10 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Color(0xFF1A1A2E)),
+            child: const Icon(Icons.arrow_back_ios_new, size: 18, color: Color(0xFF1E293B)),
           ),
         ),
       ),
@@ -147,15 +147,26 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 32),
 
-                // Icon
+                // Icon Gradient
                 Container(
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0F4FF),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6D28D9).withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
                   ),
-                  child: const Icon(Icons.mark_email_read_outlined, size: 28, color: Color(0xFF4F7FFF)),
+                  child: const Icon(Icons.mark_email_read_outlined, size: 28, color: Colors.white),
                 ),
                 const SizedBox(height: 24),
 
@@ -163,8 +174,8 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                   "Xác minh email",
                   style: TextStyle(
                     fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A2E),
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E293B),
                     letterSpacing: -0.5,
                     height: 1.2,
                   ),
@@ -172,13 +183,13 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                 const SizedBox(height: 10),
                 RichText(
                   text: TextSpan(
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), height: 1.6),
+                    style: const TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.6),
                     children: [
                       const TextSpan(text: "Mã OTP đã được gửi đến\n"),
                       TextSpan(
                         text: widget.email,
                         style: const TextStyle(
-                          color: Color(0xFF1A1A2E),
+                          color: Color(0xFF1E293B),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -203,20 +214,20 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF4F7FFF)),
+                          Icon(Icons.refresh_rounded, size: 18, color: Color(0xFF6D28D9)),
                           SizedBox(width: 6),
                           Text(
                             "Gửi lại mã",
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF4F7FFF),
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6D28D9),
                             ),
                           ),
                         ],
@@ -226,13 +237,13 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                       : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text("Gửi lại sau ", style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF))),
+                      const Text("Gửi lại sau ", style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8))),
                       Text(
                         "$_countdown giây",
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A2E),
+                          color: Color(0xFF1E293B),
                         ),
                       ),
                     ],
@@ -241,17 +252,32 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                 const SizedBox(height: 36),
 
                 // Verify button
-                SizedBox(
+                Container(
                   width: double.infinity,
-                  height: 54,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _isLoading
+                          ? [const Color(0xFF94A3B8), const Color(0xFF94A3B8)]
+                          : [const Color(0xFF1D4ED8), const Color(0xFF6D28D9)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: _isLoading ? [] : [
+                      BoxShadow(
+                        color: const Color(0xFF6D28D9).withValues(alpha: 0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _verify,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A1A2E),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      disabledBackgroundColor: const Color(0xFF9CA3AF),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     child: _isLoading
                         ? const SizedBox(
@@ -259,8 +285,8 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
                         : const Text(
-                      "Xác minh",
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.3),
+                      "XÁC MINH",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
                     ),
                   ),
                 ),
@@ -273,31 +299,40 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOtpBox(int i) {
-    return SizedBox(
+    return Container(
       width: 50,
       height: 58,
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: TextField(
         controller: _controllers[i],
         focusNode: _focusNodes[i],
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         maxLength: 1,
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
         decoration: InputDecoration(
           counterText: '',
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 2),
+            borderSide: const BorderSide(color: Color(0xFF6D28D9), width: 2),
           ),
         ),
         onChanged: (val) {
@@ -316,13 +351,13 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     Color bg = done
         ? const Color(0xFF10B981)
         : active
-        ? const Color(0xFF1A1A2E)
+        ? const Color(0xFF1D4ED8)
         : Colors.white;
     Color border = done
         ? const Color(0xFF10B981)
         : active
-        ? const Color(0xFF1A1A2E)
-        : const Color(0xFFE5E7EB);
+        ? const Color(0xFF1D4ED8)
+        : const Color(0xFFE2E8F0);
     return Container(
       width: 28,
       height: 28,
@@ -330,13 +365,13 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
       child: Center(
         child: done
             ? const Icon(Icons.check, size: 14, color: Colors.white)
-            : Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-            color: active ? Colors.white : const Color(0xFF9CA3AF))),
+            : Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold,
+            color: active ? Colors.white : const Color(0xFF94A3B8))),
       ),
     );
   }
 
   Widget _stepLine() {
-    return Expanded(child: Container(height: 1.5, color: const Color(0xFFE5E7EB)));
+    return Expanded(child: Container(height: 2, color: const Color(0xFFE2E8F0)));
   }
 }

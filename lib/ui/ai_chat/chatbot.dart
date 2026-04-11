@@ -22,7 +22,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
 
-  //final String githubToken = 'MA_GIT';
+  final String githubToken = 'MA_GIT';
   final formatCurrency = NumberFormat('#,###', 'vi_VN');
 
   @override

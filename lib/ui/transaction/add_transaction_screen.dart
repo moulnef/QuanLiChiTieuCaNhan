@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:top_snackbar_flutter/top_snack_bar.dart'; // Thêm thư viện này
+import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import '../../data/remote/firestore_service.dart';
 
 class AddTransactionScreen extends StatefulWidget {
@@ -25,7 +25,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     'Khác',
   ];
 
-  // --- HÀM VẼ THÔNG BÁO NHỎ GỌN TRÊN TOPBAR ---
+  bool _isSaving = false;
+
   void _showTopNotification(String message, Color bgColor, IconData icon) {
     showTopSnackBar(
       Overlay.of(context),
@@ -34,11 +35,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Align(
           alignment: Alignment.topCenter,
           child: Container(
-            width: MediaQuery.of(context).size.width * 0.7, // Bằng 2/3 màn hình
+            width: MediaQuery.of(context).size.width * 0.75,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(30), // Bo tròn mềm mại
+              borderRadius: BorderRadius.circular(30),
               boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
             ),
             child: Row(
@@ -64,15 +65,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _saveTransaction() async {
+    if (_isSaving) return;
+
     final title = _titleController.text.trim();
     final amountText = _amountController.text.trim();
     final amount = double.tryParse(amountText);
 
     if (title.isEmpty || amount == null) {
-      // Thông báo cảnh báo màu cam
       _showTopNotification("Vui lòng nhập tên và số tiền hợp lệ", Colors.orange, Icons.warning_amber_rounded);
       return;
     }
+
+    setState(() => _isSaving = true);
 
     try {
       await _firestoreService.addTransaction(
@@ -83,17 +87,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         note: _noteController.text.trim(),
       );
       if (mounted) {
-        // --- THÔNG BÁO THÀNH CÔNG: XANH LÁ + DẤU TICK ---
         _showTopNotification("Đã lưu chi tiêu thành công!", const Color(0xFF10B981), Icons.check_circle_outline);
-
-        // Đợi 800 mili-giây cho người dùng kịp nhìn thông báo rồi mới thoát trang
         Future.delayed(const Duration(milliseconds: 800), () {
           if (mounted) Navigator.pop(context);
         });
       }
     } catch (e) {
       if (mounted) {
-        // Thông báo lỗi màu đỏ
+        setState(() => _isSaving = false);
         _showTopNotification("Lỗi khi lưu: $e", Colors.red, Icons.error_outline);
       }
     }
@@ -110,75 +111,102 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB), // Thêm nền xám nhạt cho đồng bộ thiết kế
+      backgroundColor: const Color(0xFFF0F5FF), // Galaxy Nhạt
       appBar: AppBar(
-        title: const Text("Thêm chi tiêu", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
+        title: const Text("Thêm chi tiêu", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white, letterSpacing: 0.5)),
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+          ),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              const SizedBox(height: 10),
+              _buildInputBox(
                 child: TextField(
                   controller: _titleController,
-                  decoration: const InputDecoration(labelText: "Nội dung chi tiêu (VD: Ăn phở)", border: InputBorder.none),
+                  decoration: const InputDecoration(labelText: "Nội dung chi tiêu (VD: Ăn phở)", border: InputBorder.none, labelStyle: TextStyle(color: Color(0xFF94A3B8))),
+                  style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500),
                 ),
               ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              const SizedBox(height: 16),
+              _buildInputBox(
                 child: TextField(
                   controller: _amountController,
-                  decoration: const InputDecoration(labelText: "Số tiền (VNĐ)", border: InputBorder.none),
+                  decoration: const InputDecoration(labelText: "Số tiền (VNĐ)", border: InputBorder.none, labelStyle: TextStyle(color: Color(0xFF94A3B8))),
                   keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 18),
                 ),
               ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              const SizedBox(height: 16),
+              _buildInputBox(
                 child: DropdownButtonFormField<String>(
                   value: _selectedCategory,
-                  items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                  items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontWeight: FontWeight.w500)))).toList(),
                   onChanged: (val) => setState(() => _selectedCategory = val!),
-                  decoration: const InputDecoration(labelText: "Danh mục", border: InputBorder.none),
+                  decoration: const InputDecoration(labelText: "Danh mục", border: InputBorder.none, labelStyle: TextStyle(color: Color(0xFF94A3B8))),
                 ),
               ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              const SizedBox(height: 16),
+              _buildInputBox(
                 child: TextField(
                   controller: _noteController,
-                  decoration: const InputDecoration(labelText: "Ghi chú (không bắt buộc)", border: InputBorder.none),
+                  decoration: const InputDecoration(labelText: "Ghi chú thêm (không bắt buộc)", border: InputBorder.none, labelStyle: TextStyle(color: Color(0xFF94A3B8))),
+                  style: const TextStyle(color: Color(0xFF1E293B)),
                 ),
               ),
-              const SizedBox(height: 30),
-              SizedBox(
+              const SizedBox(height: 36),
+              Container(
                 width: double.infinity,
-                height: 50,
+                height: 56,
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: const Color(0xFF6D28D9).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                ),
                 child: ElevatedButton(
                   onPressed: _saveTransaction,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Bo góc nút
-                    elevation: 0,
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: const Text("LƯU CHI TIÊU", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: _isSaving
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                      : const Text("LƯU CHI TIÊU", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white, letterSpacing: 0.5)),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInputBox({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]
+      ),
+      child: child,
     );
   }
 }

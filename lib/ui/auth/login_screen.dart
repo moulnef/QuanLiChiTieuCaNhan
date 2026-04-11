@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register_screen.dart';
 import '../../utils/snackbar_utils.dart';
+import 'success_transition_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -50,11 +51,19 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         barrierDismissible: false,
         builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
       );
+
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
       if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SuccessTransitionScreen()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.pop(context);
       String msg = e.message ?? "Đã có lỗi xảy ra";
@@ -70,7 +79,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F5FF), // Đổi màu nền giống trang Home
+      backgroundColor: const Color(0xFFF0F5FF),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -83,7 +92,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                 children: [
                   const SizedBox(height: 52),
 
-                  // Brand mark - Thay bằng Gradient mượt mà
+                  // Brand mark
                   Container(
                     width: 56,
                     height: 56,
@@ -116,7 +125,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B), // Màu chữ Dark Slate sang trọng
+                      color: Color(0xFF1E293B),
                       height: 1.2,
                       letterSpacing: -0.5,
                     ),
@@ -163,7 +172,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         "Quên mật khẩu?",
                         style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF6D28D9), // Màu tím gradient
+                          color: Color(0xFF6D28D9),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -171,7 +180,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   ),
                   const SizedBox(height: 36),
 
-                  // Login button - Dùng Gradient Button
+                  // Login button
                   _buildPrimaryButton("ĐĂNG NHẬP", login),
                   const SizedBox(height: 28),
 
@@ -200,7 +209,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     children: [
                       Expanded(
                         child: _buildSocialButton(
-                          iconPath: 'lib/ui/ai_chat/google_logo.png', // Nếu có logo, thay đường dẫn, không thì dùng Icon mặc định dưới
+                          iconPath: 'lib/ui/ai_chat/google_logo.png',
                           icon: Icons.g_mobiledata_rounded,
                           label: "Google",
                           onTap: () {},
@@ -337,7 +346,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent, // Để lộ lớp gradient
+          backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
@@ -379,7 +388,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 26, color: const Color(0xFF334155)), // Chỉnh size icon to hơn chút
+            Icon(icon, size: 26, color: const Color(0xFF334155)),
             const SizedBox(width: 8),
             Text(
               label,

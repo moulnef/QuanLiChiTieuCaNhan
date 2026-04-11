@@ -1,16 +1,40 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 
 class FinanceProvider extends ChangeNotifier {
+  static const String _demoUserId = 'user_001';
+
+  FinanceProvider([FinanceRepository? repository])
+      : _repository = repository ?? FinanceRepository();
+
+  final FinanceRepository _repository;
+
   bool _isLoading = false;
   String? _errorMessage;
+  double _totalBalance = 0;
+  double _totalIncome = 0;
+  double _totalExpense = 0;
+  int _transactionCount = 0;
 
   final List<FinanceSavingItem> _savings = [];
   final List<FinanceInstallmentItem> _installments = [];
   final List<FinanceDebtItem> _debts = [];
+  final List<TransactionModel> _recentTransactions = [];
+  String _activeUserId = _demoUserId;
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  double get totalBalance => _totalBalance;
+  double get totalIncome => _totalIncome;
+  double get totalExpense => _totalExpense;
+  int get transactionCount => _transactionCount;
+  double get cashBalance => _totalIncome - _totalExpense;
+  List<TransactionModel> get recentTransactions =>
+      List.unmodifiable(_recentTransactions);
 
   List<FinanceSavingItem> get savings => List.unmodifiable(_savings);
   List<FinanceInstallmentItem> get installments =>
@@ -26,94 +50,97 @@ class FinanceProvider extends ChangeNotifier {
   int get totalDebtRemaining =>
       _debts.fold(0, (sum, item) => sum + item.remainingAmount);
 
-  Future<void> loadFinanceData() async {
+  Future<void> refreshFinancialSummary(String userId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await Future.delayed(const Duration(milliseconds: 200));
+      var transactions = await _repository.getAllTransactionsByUserId(userId);
 
-      if (_savings.isEmpty && _installments.isEmpty && _debts.isEmpty) {
-        _seedMockData();
+      // Local seeded SQLite data uses demo userId by default.
+      if (transactions.isEmpty && userId != _demoUserId) {
+        transactions = await _repository.getAllTransactionsByUserId(
+          _demoUserId,
+        );
       }
+
+      _applyFinancialSummary(transactions);
+      _updateFinancialBalance();
     } catch (e) {
       _errorMessage = 'Không tải được dữ liệu tài chính: $e';
+      debugPrint('Lỗi khi tải dữ liệu thực tế: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  void _seedMockData() {
-    _savings.addAll([
-      FinanceSavingItem(
-        id: 1,
-        icon: '🏍️',
-        title: 'Mua xe máy mới',
-        currentAmount: 18500000,
-        targetAmount: 35000000,
-        deadline: DateTime.now().add(const Duration(days: 281)),
-        color: AppColors.blue,
-      ),
-      FinanceSavingItem(
-        id: 2,
-        icon: '🗾',
-        title: 'Du lịch Nhật Bản',
-        currentAmount: 8000000,
-        targetAmount: 25000000,
-        deadline: DateTime.now().add(const Duration(days: 433)),
-        color: AppColors.purple,
-      ),
-      FinanceSavingItem(
-        id: 3,
-        icon: '🛡️',
-        title: 'Quỹ khẩn cấp',
-        currentAmount: 32000000,
-        targetAmount: 50000000,
-        deadline: DateTime.now().add(const Duration(days: 97)),
-        color: AppColors.teal,
-      ),
-    ]);
+  void _applyFinancialSummary(List<TransactionModel> transactions) {
+    double income = 0;
+    double expense = 0;
 
-    _installments.addAll([
-      FinanceInstallmentItem(
-        id: 1,
-        icon: '📱',
-        title: 'Điện thoại iPhone 15',
-        totalAmount: 27500000,
-        paidAmount: 9000000,
-        currentPeriod: 4,
-        totalPeriods: 12,
-        nextDueDate: DateTime.now().add(const Duration(days: 8)),
-        color: AppColors.blue,
-      ),
-      FinanceInstallmentItem(
-        id: 2,
-        icon: '💻',
-        title: 'Máy tính xách tay',
-        totalAmount: 19260000,
-        paidAmount: 14260000,
-        currentPeriod: 11,
-        totalPeriods: 12,
-        nextDueDate: DateTime.now().add(const Duration(days: 13)),
-        color: AppColors.purple,
-      ),
-    ]);
+    for (final transaction in transactions) {
+      if (transaction.type == 'income') {
+        income += transaction.amount;
+      } else {
+        expense += transaction.amount;
+      }
+    }
 
-    _debts.addAll([
-      FinanceDebtItem(
-        id: 1,
-        icon: '💳',
-        title: 'Vay mua xe đạp điện',
-        lender: 'Ngân hàng ACB',
-        totalAmount: 12000000,
-        paidAmount: 4500000,
-        dueDate: DateTime.now().add(const Duration(days: 4)),
-        interestText: '8.5%/năm',
-        color: AppColors.safe,
-      ),
-    ]);
+    _totalIncome = income;
+    _totalExpense = expense;
+    _totalBalance = income - expense;
+    _transactionCount = transactions.length;
+    _recentTransactions
+      ..clear()
+      ..addAll(transactions.take(20));
+  }
+
+  Future<void> loadFinanceData([String? userId]) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      var effectiveUserId = userId ?? _demoUserId;
+      if (effectiveUserId.isEmpty) {
+        effectiveUserId = _demoUserId;
+      }
+      _activeUserId = effectiveUserId;
+
+      var savings = await _repository.getSavingsByUserId(effectiveUserId);
+      var installments = await _repository.getInstallmentsByUserId(
+        effectiveUserId,
+      );
+      var debts = await _repository.getDebtsByUserId(effectiveUserId);
+
+      if (savings.isEmpty &&
+          installments.isEmpty &&
+          debts.isEmpty &&
+          effectiveUserId != _demoUserId) {
+        savings = await _repository.getSavingsByUserId(_demoUserId);
+        installments = await _repository.getInstallmentsByUserId(_demoUserId);
+        debts = await _repository.getDebtsByUserId(_demoUserId);
+      }
+
+      _savings
+        ..clear()
+        ..addAll(savings);
+      _installments
+        ..clear()
+        ..addAll(installments);
+      _debts
+        ..clear()
+        ..addAll(debts);
+
+      _updateFinancialBalance();
+    } catch (e) {
+      _errorMessage = 'Không tải được dữ liệu tài chính: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> addSavingGoal({
@@ -123,18 +150,20 @@ class FinanceProvider extends ChangeNotifier {
     String icon = '🎯',
     Color color = AppColors.financeGreen,
   }) async {
-    final newItem = FinanceSavingItem(
-      id: DateTime.now().millisecondsSinceEpoch,
-      icon: icon,
-      title: title,
-      currentAmount: 0,
-      targetAmount: targetAmount,
-      deadline: deadline,
-      color: color,
-    );
-
-    _savings.insert(0, newItem);
-    notifyListeners();
+    try {
+      await _repository.addSavingGoal(
+        userId: _activeUserId,
+        title: title,
+        targetAmount: targetAmount,
+        deadline: deadline,
+        icon: icon,
+        color: color,
+      );
+      await loadFinanceData(_activeUserId);
+    } catch (e) {
+      _errorMessage = 'Không thể lưu mục tiêu tiết kiệm: $e';
+      rethrow;
+    }
   }
 
   Future<void> depositToSavingGoal(int id, int amount) async {
@@ -152,6 +181,7 @@ class FinanceProvider extends ChangeNotifier {
       currentAmount: current.currentAmount + amount,
     );
 
+    _updateFinancialBalance();
     notifyListeners();
   }
 
@@ -174,6 +204,7 @@ class FinanceProvider extends ChangeNotifier {
       currentAmount: current.currentAmount - amount,
     );
 
+    _updateFinancialBalance();
     notifyListeners();
   }
 
@@ -185,20 +216,58 @@ class FinanceProvider extends ChangeNotifier {
     String icon = '🧾',
     Color color = AppColors.blue,
   }) async {
-    final newItem = FinanceInstallmentItem(
-      id: DateTime.now().millisecondsSinceEpoch,
-      icon: icon,
-      title: title,
-      totalAmount: totalAmount,
-      paidAmount: 0,
-      currentPeriod: 0,
-      totalPeriods: totalPeriods,
-      nextDueDate: nextDueDate ?? DateTime.now().add(const Duration(days: 30)),
-      color: color,
-    );
+    try {
+      await _repository.addInstallmentPlan(
+        userId: _activeUserId,
+        title: title,
+        totalAmount: totalAmount,
+        totalPeriods: totalPeriods,
+        nextDueDate:
+        nextDueDate ?? DateTime.now().add(const Duration(days: 30)),
+        icon: icon,
+        color: color,
+      );
+      await loadFinanceData(_activeUserId);
+    } catch (e) {
+      _errorMessage = 'Không thể lưu kế hoạch trả góp: $e';
+      rethrow;
+    }
+  }
 
-    _installments.insert(0, newItem);
-    notifyListeners();
+  double calculateMonthlyPayment(double principal, double annualRate, int months) {
+    if (principal <= 0 || months <= 0) return 0;
+
+    final monthlyRate = annualRate / 100 / 12;
+    if (monthlyRate == 0) {
+      return principal / months;
+    }
+
+    final powFactor = math.pow(1 + monthlyRate, months).toDouble();
+    return principal * monthlyRate * powFactor / (powFactor - 1);
+  }
+
+  Future<void> addInstallment({
+    required String name,
+    required double amount,
+    required String bankName,
+    required double interestRate,
+    required int months,
+    required double monthlyPayment,
+  }) async {
+    final normalizedMonthlyPayment = monthlyPayment > 0
+        ? monthlyPayment
+        : calculateMonthlyPayment(amount, interestRate, months);
+    final totalAmount = amount > 0
+        ? amount.round()
+        : (normalizedMonthlyPayment * months).round();
+    final normalizedTitle = bankName.trim().isEmpty ? name : '$name - $bankName';
+
+    await addInstallmentPlan(
+      title: normalizedTitle,
+      totalAmount: totalAmount,
+      totalPeriods: months,
+      nextDueDate: DateTime.now().add(const Duration(days: 30)),
+    );
   }
 
   Future<void> payInstallment(int id, int amount) async {
@@ -229,6 +298,7 @@ class FinanceProvider extends ChangeNotifier {
           : current.nextDueDate.add(const Duration(days: 30)),
     );
 
+    _updateFinancialBalance();
     notifyListeners();
   }
 
@@ -236,25 +306,29 @@ class FinanceProvider extends ChangeNotifier {
     required String title,
     required String lender,
     required int totalAmount,
+    int monthlyPayment = 0,
     required DateTime dueDate,
     String icon = '💰',
     String interestText = 'Chưa cập nhật lãi suất',
     Color color = AppColors.safe,
   }) async {
-    final newItem = FinanceDebtItem(
-      id: DateTime.now().millisecondsSinceEpoch,
-      icon: icon,
-      title: title,
-      lender: lender,
-      totalAmount: totalAmount,
-      paidAmount: 0,
-      dueDate: dueDate,
-      interestText: interestText,
-      color: color,
-    );
-
-    _debts.insert(0, newItem);
-    notifyListeners();
+    try {
+      await _repository.addDebtRecord(
+        userId: _activeUserId,
+        title: title,
+        lender: lender,
+        totalAmount: totalAmount,
+        monthlyPayment: monthlyPayment,
+        dueDate: dueDate,
+        interestText: interestText,
+        icon: icon,
+        color: color,
+      );
+      await loadFinanceData(_activeUserId);
+    } catch (e) {
+      _errorMessage = 'Không thể lưu khoản vay: $e';
+      rethrow;
+    }
   }
 
   Future<void> payDebt(int id, int amount) async {
@@ -272,11 +346,17 @@ class FinanceProvider extends ChangeNotifier {
       throw Exception('Không thể thanh toán vượt số nợ còn lại.');
     }
 
-    _debts[index] = current.copyWith(
-      paidAmount: current.paidAmount + amount,
-    );
+    _debts[index] = current.copyWith(paidAmount: current.paidAmount + amount);
 
+    _updateFinancialBalance();
     notifyListeners();
+  }
+
+  void _updateFinancialBalance() {
+    _totalBalance =
+        totalSavingAmount.toDouble() -
+            totalInstallmentRemaining.toDouble() -
+            totalDebtRemaining.toDouble();
   }
 }
 
@@ -298,6 +378,8 @@ class FinanceSavingItem {
     required this.deadline,
     required this.color,
   });
+
+  int get daysLeft => deadline.difference(DateTime.now()).inDays;
 
   FinanceSavingItem copyWith({
     int? id,
@@ -377,6 +459,7 @@ class FinanceDebtItem {
   final String lender;
   final int totalAmount;
   final int paidAmount;
+  final int monthlyPayment;
   final DateTime dueDate;
   final String interestText;
   final Color color;
@@ -388,12 +471,14 @@ class FinanceDebtItem {
     required this.lender,
     required this.totalAmount,
     required this.paidAmount,
+    required this.monthlyPayment,
     required this.dueDate,
     required this.interestText,
     required this.color,
   });
 
   int get remainingAmount => (totalAmount - paidAmount).clamp(0, totalAmount);
+  int get daysLeft => dueDate.difference(DateTime.now()).inDays;
 
   FinanceDebtItem copyWith({
     int? id,
@@ -402,6 +487,7 @@ class FinanceDebtItem {
     String? lender,
     int? totalAmount,
     int? paidAmount,
+    int? monthlyPayment,
     DateTime? dueDate,
     String? interestText,
     Color? color,
@@ -413,6 +499,7 @@ class FinanceDebtItem {
       lender: lender ?? this.lender,
       totalAmount: totalAmount ?? this.totalAmount,
       paidAmount: paidAmount ?? this.paidAmount,
+      monthlyPayment: monthlyPayment ?? this.monthlyPayment,
       dueDate: dueDate ?? this.dueDate,
       interestText: interestText ?? this.interestText,
       color: color ?? this.color,

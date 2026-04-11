@@ -36,29 +36,27 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   Future<void> _loadRealFrequentCategories() async {
     try {
       final controller = ref.read(transactionControllerProvider);
-      if (controller.transactions.isEmpty) {
-        // Giả sử có hàm fetch ở controller, nếu không có bạn có thể bỏ qua dòng này
-        // await controller.fetchAllTransactions();
-      }
+      if (controller.transactions.isEmpty) await controller.fetchAllTransactions();
+
       final filteredTransactions = controller.transactions.where((tx) => tx.type == widget.transactionType).toList();
+
       Map<String, int> counts = {};
       for (var tx in filteredTransactions) {
         counts[tx.categoryId] = (counts[tx.categoryId] ?? 0) + 1;
       }
+
       var sortedEntries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
       var topIds = sortedEntries.take(4).map((e) => e.key).toList();
+
       List<CategoryModel> topCategories = [];
       for (var id in topIds) {
         var match = _allCategories.where((cat) => cat.name == id).firstOrNull;
         if (match != null) topCategories.add(match);
       }
+
       if (topCategories.isEmpty) topCategories = _allCategories.take(4).toList();
-      if (mounted) {
-        setState(() {
-          _frequentCategories = topCategories;
-          _isLoadingFrequent = false;
-        });
-      }
+
+      if (mounted) setState(() { _frequentCategories = topCategories; _isLoadingFrequent = false; });
     } catch (e) {
       if (mounted) setState(() => _isLoadingFrequent = false);
     }
@@ -72,26 +70,35 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   @override
   Widget build(BuildContext context) {
     final filteredList = _allCategories.where((cat) => cat.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+
     Map<String, List<CategoryModel>> groupedCategories = {};
     for (var cat in filteredList) {
       String groupName = cat.group ?? "Khác";
-      if (!groupedCategories.containsKey(groupName)) {
-        groupedCategories[groupName] = [];
-      }
+      if (!groupedCategories.containsKey(groupName)) groupedCategories[groupName] = [];
       groupedCategories[groupName]!.add(cat);
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: const Color(0xFFF0F5FF), // Nền Galaxy nhạt
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
         title: Text(
             widget.transactionType == 'expense' ? "Chọn hạng mục chi" : "Chọn hạng mục thu",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, letterSpacing: 0.5)
         ),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -99,12 +106,16 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
           Expanded(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  if (_searchQuery.isEmpty) _buildFrequentSection(),
-                  ...groupedCategories.keys.map((group) => _buildGroupSection(group, groupedCategories[group]!)),
-                  const SizedBox(height: 40),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    if (_searchQuery.isEmpty) _buildFrequentSection(),
+                    ...groupedCategories.keys.map((group) => _buildGroupSection(group, groupedCategories[group]!)),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),
@@ -115,22 +126,23 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
 
   Widget _buildSearchBox() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      color: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: TextField(
           onChanged: (v) => setState(() => _searchQuery = v),
+          style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500),
           decoration: const InputDecoration(
             hintText: "Tìm kiếm theo tên hạng mục",
-            hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
-            prefixIcon: Icon(Icons.search, color: Colors.grey),
+            hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+            prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF6D28D9)),
             border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 14),
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
           ),
         ),
       ),
@@ -140,27 +152,30 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   Widget _buildFrequentSection() {
     return Container(
       width: double.infinity,
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(Icons.favorite, color: Colors.black87, size: 22),
-                SizedBox(width: 8),
-                Text("Hay dùng", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-              ],
-            ),
+          const Row(
+            children: [
+              Icon(Icons.favorite_rounded, color: Color(0xFFEF4444), size: 22),
+              SizedBox(width: 8),
+              Text("Hay dùng", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           _isLoadingFrequent
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+              ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6D28D9)))
               : Wrap(
             alignment: WrapAlignment.start,
+            spacing: 0,
+            runSpacing: 16,
             children: _frequentCategories.map((cat) => _buildGridItem(cat)).toList(),
           ),
         ],
@@ -171,25 +186,35 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   Widget _buildGroupSection(String name, List<CategoryModel> items) {
     return Container(
       width: double.infinity,
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(_getGroupIcon(name), color: Colors.black87, size: 22),
-                const SizedBox(width: 8),
-                Text(_capitalizeFirstLetter(name), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-              ],
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                child: Icon(_getGroupIcon(name), color: const Color(0xFF64748B), size: 18),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _capitalizeFirstLetter(name),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Wrap(
             alignment: WrapAlignment.start,
+            spacing: 0,
+            runSpacing: 16,
             children: items.map((cat) => _buildGridItem(cat)).toList(),
           ),
         ],
@@ -199,35 +224,53 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
 
   Widget _buildGridItem(CategoryModel cat) {
     bool isSelected = cat.name == widget.selectedCategoryName;
-    return InkWell(
-      onTap: () => Navigator.pop(context, cat),
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width / 4,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+
+    return Theme(
+      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: const Color(0xFFF0F5FF), splashColor: Colors.transparent),
+      child: InkWell(
+        onTap: () => Navigator.pop(context, cat),
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: (MediaQuery.of(context).size.width - 72) / 4, // Chia 4 cột đều nhau, trừ padding
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 alignment: Alignment.bottomRight,
                 children: [
                   Container(
-                    width: 46, height: 46,
+                    width: 48, height: 48,
                     decoration: BoxDecoration(
-                      color: cat.color.withValues(alpha: 0.12), // Fix linter warning
-                      borderRadius: BorderRadius.circular(14),
+                      color: cat.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(cat.icon, color: cat.color, size: 24),
+                    child: Icon(cat.iconData, color: cat.color, size: 24),
                   ),
                   if (isSelected)
                     Container(
-                      decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
                       padding: const EdgeInsets.all(2),
-                      child: const Icon(Icons.check, color: Colors.white, size: 10),
+                      child: const Icon(Icons.check, color: Colors.white, size: 12),
                     ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(cat.name, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                    cat.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF334155),
+                    ),
+                    textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis
+                ),
+              ),
             ],
           ),
         ),
@@ -235,35 +278,29 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
     );
   }
 
+  // ĐÃ CẬP NHẬT: Bổ sung icon cho tất cả các nhóm hạng mục
   IconData _getGroupIcon(String groupName) {
     String lowerGroup = groupName.toLowerCase();
 
-    // Icon cho nhóm Vay
-    if (lowerGroup.contains('vay')) {
-      return Icons.account_balance_wallet_rounded;
-    }
+    // --- Các nhóm Chi tiêu ---
+    if (lowerGroup.contains('ăn')) return Icons.restaurant_menu_rounded;
+    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) return Icons.electrical_services_rounded;
+    if (lowerGroup.contains('di chuyển') || lowerGroup.contains('đi lại')) return Icons.directions_car_rounded;
+    if (lowerGroup.contains('trang phục') || lowerGroup.contains('mua sắm')) return Icons.checkroom_rounded;
+    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('giải trí')) return Icons.celebration_rounded;
+    if (lowerGroup.contains('con cái')) return Icons.child_care_rounded;
+    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('biếu tặng')) return Icons.card_giftcard_rounded;
+    if (lowerGroup.contains('nhà cửa')) return Icons.home_rounded;
+    if (lowerGroup.contains('phát triển') || lowerGroup.contains('học')) return Icons.psychology_rounded;
+    if (lowerGroup.contains('sức khỏe') || lowerGroup.contains('y tế')) return Icons.medical_services_rounded;
+    if (lowerGroup.contains('ngân hàng')) return Icons.account_balance_rounded;
+    if (lowerGroup.contains('vay') || lowerGroup.contains('nợ')) return Icons.credit_score_rounded;
 
-    if (lowerGroup.contains('đi lại') || lowerGroup.contains('di chuyển')) return Icons.directions_car_filled;
-    if (lowerGroup.contains('ngân hàng') || lowerGroup.contains('tài chính')) return Icons.account_balance;
-    if (lowerGroup.contains('thời trang') || lowerGroup.contains('trang phục')) return Icons.checkroom;
-    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('chăm sóc')) return Icons.spa;
-    if (lowerGroup.contains('con cái') || lowerGroup.contains('em bé')) return Icons.child_care;
-    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('lễ nghĩa')) return Icons.card_giftcard;
-    if (lowerGroup.contains('nhà cửa')) return Icons.house_outlined;
-    if (lowerGroup.contains('phát triển bản thân')) return Icons.auto_stories;
-    if (lowerGroup.contains('sức khỏe')) return Icons.health_and_safety_rounded;
+    // --- Các nhóm Thu nhập ---
+    if (lowerGroup.contains('thu nhập')) return Icons.monetization_on_rounded;
+    if (lowerGroup.contains('đầu tư')) return Icons.trending_up_rounded;
 
-    if (lowerGroup.contains('ăn')) return Icons.restaurant;
-    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) return Icons.home_repair_service;
-    if (lowerGroup.contains('mua sắm')) return Icons.shopping_bag;
-    if (lowerGroup.contains('thu nhập')) return Icons.payments;
-    if (lowerGroup.contains('giáo dục')) return Icons.school;
-    if (lowerGroup.contains('giải trí')) return Icons.sports_esports;
-
-    if (lowerGroup.contains('khác')) {
-      return Icons.more_horiz;
-    }
-
-    return Icons.grid_view_rounded;
+    // Mặc định cho nhóm "Khác"
+    return Icons.category_rounded;
   }
 }

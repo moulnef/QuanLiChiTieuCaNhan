@@ -146,7 +146,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                     // ĐÃ SỬA: Dùng Row để hiển thị IconData đàng hoàng thay vì nối chuỗi
                     child: Row(
                       children: [
-                        Icon(item.icon, color: item.color, size: 20),
+                        Icon(item.iconData, color: item.color, size: 20),
                         const SizedBox(width: 8),
                         Text(item.name),
                       ],
@@ -160,7 +160,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   setState(() {
                     _selectedCategoryId = selected.id;
                     _selectedCategoryName = selected.name;
-                    _selectedIcon = selected.icon; // Lúc này selected.icon là IconData
+                    _selectedIcon = selected.iconData; // Lúc này selected.icon là IconData
                   });
                 },
                 decoration: InputDecoration(

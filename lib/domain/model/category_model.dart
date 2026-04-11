@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class CategoryModel {
   final String id;
   final String name;
-  final IconData icon; // CHỈ SỬ DỤNG 1 BIẾN ICON KIỂU IconData
+  final String? icon;
+  final IconData? iconData;
   final Color color;
   final String type;
   final String? group;
@@ -13,7 +14,8 @@ class CategoryModel {
   CategoryModel({
     this.id = '',
     required this.name,
-    required this.icon,
+    this.icon,
+    this.iconData,
     required this.color,
     required this.type,
     this.group,
@@ -27,7 +29,8 @@ class CategoryModel {
     return {
       'id': id,
       'name': name,
-      'iconCodePoint': icon.codePoint, // Lưu code của Icon xuống
+      'icon': icon,
+      'iconCodePoint': iconData?.codePoint,
       'colorHex': colorHex,
       'type': type,
       'group': group,
@@ -40,7 +43,8 @@ class CategoryModel {
     return CategoryModel(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
-      icon: _iconDataFromMap(map['iconCodePoint']) ?? Icons.category, // Cung cấp icon mặc định nếu lỗi
+      icon: map['icon'],
+      iconData: _iconDataFromMap(map['iconCodePoint']),
       color: _colorFromHex(map['colorHex']),
       type: map['type'] ?? 'expense',
       group: map['group'],
@@ -52,7 +56,8 @@ class CategoryModel {
   CategoryModel copyWith({
     String? id,
     String? name,
-    IconData? icon,
+    String? icon,
+    IconData? iconData,
     Color? color,
     String? type,
     String? group,
@@ -63,6 +68,7 @@ class CategoryModel {
       id: id ?? this.id,
       name: name ?? this.name,
       icon: icon ?? this.icon,
+      iconData: iconData ?? this.iconData,
       color: color ?? this.color,
       type: type ?? this.type,
       group: group ?? this.group,

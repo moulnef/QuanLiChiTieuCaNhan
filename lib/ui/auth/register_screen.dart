@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/config/otp_service.dart';
-import '../../utils/snackbar_utils.dart';
 import 'otp_screen.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -83,9 +82,9 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFF0F5FF),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAFAFA),
+        backgroundColor: const Color(0xFFF0F5FF),
         elevation: 0,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
@@ -93,10 +92,10 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Color(0xFF1A1A2E)),
+            child: const Icon(Icons.arrow_back_ios_new, size: 18, color: Color(0xFF1E293B)),
           ),
         ),
       ),
@@ -129,8 +128,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                     "Tạo tài khoản",
                     style: TextStyle(
                       fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E),
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
                       letterSpacing: -0.5,
                       height: 1.2,
                     ),
@@ -138,7 +137,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                   const SizedBox(height: 8),
                   const Text(
                     "Thông tin của bạn được bảo mật tuyệt đối",
-                    style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), height: 1.5),
+                    style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
                   ),
                   const SizedBox(height: 36),
 
@@ -185,17 +184,32 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                   const SizedBox(height: 36),
 
                   // Submit button
-                  SizedBox(
+                  Container(
                     width: double.infinity,
-                    height: 54,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: _isLoading
+                            ? [const Color(0xFF94A3B8), const Color(0xFF94A3B8)]
+                            : [const Color(0xFF1D4ED8), const Color(0xFF6D28D9)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: _isLoading ? [] : [
+                        BoxShadow(
+                          color: const Color(0xFF6D28D9).withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : signUp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        disabledBackgroundColor: const Color(0xFF9CA3AF),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       child: _isLoading
                           ? const SizedBox(
@@ -204,8 +218,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
                           : const Text(
-                        "Gửi mã OTP",
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.3),
+                        "GỬI MÃ OTP",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
                       ),
                     ),
                   ),
@@ -222,7 +236,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   Widget _buildLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151), letterSpacing: 0.2),
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF334155), letterSpacing: 0.3),
     );
   }
 
@@ -238,10 +252,9 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: TextFormField(
@@ -249,17 +262,17 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
         obscureText: isPassword && obscure,
         keyboardType: keyboardType,
         validator: validator,
-        style: const TextStyle(fontSize: 15, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500),
+        style: const TextStyle(fontSize: 15, color: Color(0xFF1E293B), fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 14),
+          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           suffixIcon: isPassword
               ? IconButton(
             icon: Icon(
-              obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: const Color(0xFF9CA3AF),
+              obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              color: const Color(0xFF94A3B8),
               size: 20,
             ),
             onPressed: toggleObscure,
@@ -272,9 +285,6 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   Widget _buildPasswordHints() {
     final password = _passwordController.text;
-    final hasLength = password.length >= 8;
-    final hasUpper = password.contains(RegExp(r'[A-Z]'));
-    final hasNumber = password.contains(RegExp(r'\d'));
     return ValueListenableBuilder(
       valueListenable: _passwordController,
       builder: (_, __, ___) {
@@ -293,24 +303,24 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   Widget _hintChip(String label, bool met) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: met ? const Color(0xFFECFDF5) : const Color(0xFFF9FAFB),
+        color: met ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: met ? const Color(0xFF10B981) : const Color(0xFFE5E7EB)),
+        border: Border.all(color: met ? const Color(0xFF10B981) : const Color(0xFFE2E8F0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(met ? Icons.check_circle_outline : Icons.radio_button_unchecked,
-              size: 12, color: met ? const Color(0xFF10B981) : const Color(0xFF9CA3AF)),
+              size: 14, color: met ? const Color(0xFF10B981) : const Color(0xFF94A3B8)),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: met ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: met ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
             ),
           ),
         ],
@@ -323,10 +333,10 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        color: active ? const Color(0xFF1A1A2E) : Colors.white,
+        color: active ? const Color(0xFF1D4ED8) : Colors.white,
         shape: BoxShape.circle,
         border: Border.all(
-          color: active ? const Color(0xFF1A1A2E) : const Color(0xFFE5E7EB),
+          color: active ? const Color(0xFF1D4ED8) : const Color(0xFFE2E8F0),
         ),
       ),
       child: Center(
@@ -334,8 +344,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
           label,
           style: TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : const Color(0xFF9CA3AF),
+            fontWeight: FontWeight.bold,
+            color: active ? Colors.white : const Color(0xFF94A3B8),
           ),
         ),
       ),
@@ -344,7 +354,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   Widget _stepLine() {
     return Expanded(
-      child: Container(height: 1.5, color: const Color(0xFFE5E7EB)),
+      child: Container(height: 2, color: const Color(0xFFE2E8F0)),
     );
   }
 }

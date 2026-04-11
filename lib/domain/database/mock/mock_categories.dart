@@ -6,7 +6,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_food',
       name: 'Ăn uống',
-      icon: Icons.restaurant, // Đã đổi từ '🍜'
+      iconData: Icons.restaurant, // Đã đổi từ '🍜'
       color: const Color(0xFFF97316),
       type: 'expense',
       group: 'Ăn uống',
@@ -16,7 +16,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_transport',
       name: 'Di chuyển',
-      icon: Icons.directions_car_filled, // Đã đổi từ '🚗'
+      iconData: Icons.directions_car_filled, // Đã đổi từ '🚗'
       color: const Color(0xFF22C55E),
       type: 'expense',
       group: 'Đi lại',
@@ -26,7 +26,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_shopping',
       name: 'Mua sắm',
-      icon: Icons.shopping_bag, // Đã đổi từ '🛍️'
+      iconData: Icons.shopping_bag, // Đã đổi từ '🛍️'
       color: const Color(0xFFEF4444),
       type: 'expense',
       group: 'Mua sắm',
@@ -36,7 +36,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_entertainment',
       name: 'Giải trí',
-      icon: Icons.sports_esports, // Đã đổi từ '🎮'
+      iconData: Icons.sports_esports, // Đã đổi từ '🎮'
       color: const Color(0xFF8B5CF6),
       type: 'expense',
       group: 'Giải trí',
@@ -46,7 +46,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_bill',
       name: 'Hóa đơn',
-      icon: Icons.receipt_long, // Đã đổi từ '⚡'
+      iconData: Icons.receipt_long, // Đã đổi từ '⚡'
       color: const Color(0xFFF59E0B),
       type: 'expense',
       group: 'Dịch vụ sinh hoạt',
@@ -56,7 +56,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_health',
       name: 'Sức khỏe',
-      icon: Icons.medical_services, // Đã đổi từ '💊'
+      iconData: Icons.medical_services, // Đã đổi từ '💊'
       color: const Color(0xFFEC4899),
       type: 'expense',
       group: 'Sức khỏe',
@@ -66,7 +66,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_education',
       name: 'Giáo dục',
-      icon: Icons.school, // Đã đổi từ '📚'
+      iconData: Icons.school, // Đã đổi từ '📚'
       color: const Color(0xFF3B82F6),
       type: 'expense',
       group: 'Giáo dục',
@@ -76,7 +76,7 @@ class MockCategories {
     CategoryModel(
       id: 'cat_travel',
       name: 'Du lịch',
-      icon: Icons.flight_takeoff, // Đã đổi từ '✈️'
+      iconData: Icons.flight_takeoff, // Đã đổi từ '✈️'
       color: const Color(0xFF06B6D4),
       type: 'expense',
       group: 'Hưởng thụ',

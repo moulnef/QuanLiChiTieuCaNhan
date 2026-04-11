@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import '../../domain/model/transaction_model.dart';
+// Đã sửa lại đường dẫn ocr_service cho đúng chuẩn dự án của Thúy
+import '../../domain/services/ocr_service.dart';
+import '../../ui/ai_chat/chatbot.dart';
 import '../../ui/home/home_screen.dart';
-import '../../ui/transaction/transaction_list_page.dart';
-// 💡 ĐÃ VÁ: Tạm thời comment các trang bị thiếu để hết lỗi đỏ
-// import '../../ui/stats/stats_screen.dart';
-// import '../../ui/settings/profile_screen.dart';
-import '../../ui/transaction/create_transaction_page.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/ai_chat/chatbot.dart';
 import '../../ui/home/voice_assistant.dart';
+import '../../ui/settings/profile_screen.dart';
+import '../../ui/stats/stats_screen.dart';
+import '../../ui/transaction/create_transaction_page.dart';
+import '../../ui/transaction/transaction_list_page.dart';
 
 class TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   final Widget rootPage;
 
-  const TabNavigator({super.key, required this.navigatorKey, required this.rootPage});
+  const TabNavigator({
+    super.key,
+    required this.navigatorKey,
+    required this.rootPage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,11 +41,17 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen>
+    with SingleTickerProviderStateMixin {
+  static const double _chatbotIconSize = 78;
+  static const double _chatbotMinTop = 80;
+  static const double _chatbotBottomReserve = 120;
+
   int _selectedIndex = 0;
   bool _isMenuOpen = false;
   late AnimationController _animationController;
   late Animation<double> _rotationAnimation;
+  Offset? _chatbotOffset;
 
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
@@ -46,11 +61,18 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     GlobalKey<NavigatorState>(),
   ];
 
+  final OCRService _ocrService = OCRService();
+
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    _rotationAnimation = Tween<double>(begin: 0.0, end: 0.125).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _rotationAnimation = Tween<double>(begin: 0.0, end: 0.125).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -60,8 +82,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 
   void _toggleMenu() {
-    if (_isMenuOpen) _animationController.reverse();
-    else _animationController.forward();
+    if (_isMenuOpen) {
+      _animationController.reverse();
+    } else {
+      _animationController.forward();
+    }
     setState(() => _isMenuOpen = !_isMenuOpen);
   }
 
@@ -71,152 +96,350 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     setState(() => _selectedIndex = index);
   }
 
-  void _openCreateTransaction() {
-    _navigatorKeys[_selectedIndex].currentState!.push(
-        MaterialPageRoute(builder: (_) => const CreateTransactionPage())
-    );
+  Future<void> _pushInCurrentTab(Widget page) async {
+    if (_isMenuOpen) {
+      _toggleMenu();
+    }
+
+    final currentNav = _navigatorKeys[_selectedIndex].currentState;
+    if (currentNav != null) {
+      await currentNav.push(MaterialPageRoute(builder: (_) => page));
+      return;
+    }
+
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  void _openChatbot() {
+    _pushInCurrentTab(const ChatbotScreen());
+  }
+
+  Future<void> _handleInvoiceScan() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      if (!mounted) return;
+      _toggleMenu();
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
+      );
+
+      final result = await _ocrService.scanReceiptPath(image.path);
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      if (result != null && result['amount'] != null) {
+        _pushInCurrentTab(
+          CreateTransactionPage(
+            editData: TransactionModel(
+              amount: (result['amount'] as num).toDouble(),
+              categoryId: '',
+              type: 'expense',
+              transactionDate: DateTime.now(),
+              note: 'Quét từ hóa đơn',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không tìm thấy số tiền hợp lệ trong ảnh!'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    final bool hideAssistiveOverlays = isKeyboardVisible;
+
     return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _selectedIndex,
+      backgroundColor: const Color(0xFFF0F5FF),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          _chatbotOffset ??= Offset(
+            constraints.maxWidth - _chatbotIconSize - 10,
+            constraints.maxHeight - _chatbotIconSize - _chatbotBottomReserve,
+          );
+          _chatbotOffset = _clampChatbotOffset(_chatbotOffset!, constraints);
+
+          return Stack(
             children: [
-              TabNavigator(navigatorKey: _navigatorKeys[0], rootPage: const HomePage()),
-              TabNavigator(navigatorKey: _navigatorKeys[1], rootPage: const TransactionListPage()),
-              const SizedBox.shrink(),
-              TabNavigator(navigatorKey: _navigatorKeys[3], rootPage: const Scaffold(body: Center(child: Text("Màn hình Thống kê")))),
-              TabNavigator(navigatorKey: _navigatorKeys[4], rootPage: const Scaffold(body: Center(child: Text("Màn hình Hồ sơ")))),
-            ],
-          ),
-          if (_isMenuOpen) GestureDetector(onTap: _toggleMenu, child: Container(color: Colors.black54)),
-          if (_isMenuOpen)
-            Positioned(
-              bottom: 32,
-              left: 0, right: 0,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              IndexedStack(
+                index: _selectedIndex,
                 children: [
-                  _buildMenuOption(icon: Icons.document_scanner_outlined, iconColor: Colors.orange, bgColor: Colors.orange.shade50, label: "Quét hóa đơn", onTap: () {}),
-                  _buildMenuOption(
-                      icon: Icons.mic_none,
-                      iconColor: Colors.deepPurple,
-                      bgColor: Colors.deepPurple.shade50,
-                      label: "Nhập giọng nói",
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-                          builder: (context) => const VoiceAssistant(),
-                        );
-                      }
+                  TabNavigator(
+                    navigatorKey: _navigatorKeys[0],
+                    rootPage: const HomePage(),
                   ),
-                  _buildMenuOption(
-                    icon: Icons.edit_outlined,
-                    iconColor: Colors.blue,
-                    bgColor: Colors.blue.shade50,
-                    label: "Thêm thủ công",
-                    onTap: _openCreateTransaction,
-                    bottomMargin: 0,
+                  TabNavigator(
+                    navigatorKey: _navigatorKeys[1],
+                    rootPage: const TransactionListPage(),
+                  ),
+                  const SizedBox.shrink(),
+                  TabNavigator(
+                    navigatorKey: _navigatorKeys[3],
+                    rootPage: const StatsPage(),
+                  ),
+                  TabNavigator(
+                    navigatorKey: _navigatorKeys[4],
+                    rootPage: const ProfilePage(),
                   ),
                 ],
-
               ),
-            ),
-          Positioned(
-            bottom: 20, // Giảm xuống một chút vì con robot to hơn, để nó không bị quá cao so với thanh dưới
-            right: 16,  // Giữ nguyên bên phải
-            child: GestureDetector(
-              onTap: () {
-                // Vẫn giữ nguyên lệnh mở Chatbot
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ChatbotScreen()),
-                );
-              },
-              child: SizedBox( // Chuyển từ Container sang SizedBox để chỉ định kích thước mà không có nền/đổ bóng
-                width: 90,  // Tăng kích thước chiều rộng lên 90 (cũ là 65)
-                height: 90, // Tăng kích thước chiều cao lên 90 (cũ là 65)
-                child: Image.asset(
-                  'lib/ui/ai_chat/robot.gif', // Đường dẫn file gif của Thúy
-                  fit: BoxFit.contain, // Sử dụng BoxFit.contain để con robot hiện đầy đủ, không bị cắt mất
-                  errorBuilder: (context, error, stackTrace) {
-                    // Tăng kích thước icon lỗi lên cho tương xứng
-                    return const Icon(Icons.smart_toy, color: Colors.purple, size: 50);
-                  },
+              if (!hideAssistiveOverlays && _isMenuOpen)
+                GestureDetector(
+                  onTap: _toggleMenu,
+                  child: Container(color: Colors.black.withValues(alpha: 0.4)),
+                ),
+              if (!hideAssistiveOverlays)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutBack,
+                  bottom: _isMenuOpen ? 130 : 50,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    ignoring: !_isMenuOpen,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: _isMenuOpen ? 1.0 : 0.0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          _buildIconOption(
+                            icon: Icons.document_scanner_rounded,
+                            bgColor: Colors.orange.shade50,
+                            iconColor: Colors.orange,
+                            onTap: _handleInvoiceScan,
+                          ),
+                          const SizedBox(width: 24),
+                          _buildIconOption(
+                            icon: Icons.mic_rounded,
+                            bgColor: Colors.blue.shade50,
+                            iconColor: Colors.blue,
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(30),
+                                  ),
+                                ),
+                                builder: (context) => const VoiceAssistant(),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 24),
+                          _buildIconOption(
+                            icon: Icons.edit_rounded,
+                            bgColor: Colors.green.shade50,
+                            iconColor: Colors.green,
+                            onTap: () {
+                              _toggleMenu();
+                              _pushInCurrentTab(const CreateTransactionPage());
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                bottom: 30,
+                left: 20,
+                right: 20,
+                child: SafeArea(
+                  child: Container(
+                    height: 65,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(40),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          spreadRadius: 1,
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildNavItem(0, Icons.home_outlined, Icons.home_rounded),
+                        _buildNavItem(1, Icons.receipt_long_outlined, Icons.receipt_long_rounded),
+                        const SizedBox(width: 60),
+                        _buildNavItem(
+                          3,
+                          Icons.bar_chart_outlined,
+                          Icons.bar_chart_rounded,
+                        ),
+                        _buildNavItem(
+                          4,
+                          Icons.person_outline_rounded,
+                          Icons.person_rounded,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
-
-      ),
-
-      floatingActionButton: GestureDetector(
-        onTap: _toggleMenu,
-        child: Container(
-          width: 56, height: 56,
-          decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 4))]),
-          child: RotationTransition(turns: _rotationAnimation, child: const Icon(Icons.add, color: Colors.white, size: 32)),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(), notchMargin: 8.0,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildNavItem(0, Icons.home_outlined, Icons.home, 'Trang chủ'),
-              _buildNavItem(1, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
-              const SizedBox(width: 48),
-              _buildNavItem(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Thống kê'),
-              _buildNavItem(4, Icons.person_outline, Icons.person, 'Hồ sơ'),
+              if (!hideAssistiveOverlays)
+                Positioned(
+                  left: _chatbotOffset!.dx,
+                  top: _chatbotOffset!.dy,
+                  child: GestureDetector(
+                    onTap: _openChatbot,
+                    onPanUpdate: (details) {
+                      setState(() {
+                        _chatbotOffset = _clampChatbotOffset(
+                          _chatbotOffset! + details.delta,
+                          constraints,
+                        );
+                      });
+                    },
+                    child: SizedBox(
+                      width: _chatbotIconSize,
+                      height: _chatbotIconSize,
+                      child: Image.asset(
+                        'lib/ui/ai_chat/robot.gif',
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            child: const Icon(
+                              Icons.smart_toy_rounded,
+                              color: Color(0xFF6D28D9),
+                              size: 50,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              if (!hideAssistiveOverlays)
+                Positioned(
+                  bottom: 50,
+                  left: 0,
+                  right: 0,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Transform.scale(
+                      scale: 1.1,
+                      child: GestureDetector(
+                        onTap: _toggleMenu,
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            // THAY ĐỔI: Màu Gradient Galaxy cho nút dấu (+)
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF6D28D9).withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                )
+                              ]
+                          ),
+                          child: RotationTransition(
+                            turns: _rotationAnimation,
+                            child: const Icon(
+                              Icons.add_rounded,
+                              size: 32,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildMenuOption({required IconData icon, required Color iconColor, required Color bgColor, required String label, required VoidCallback onTap, double bottomMargin = 16}) {
+  Offset _clampChatbotOffset(Offset value, BoxConstraints constraints) {
+    final double minX = 0;
+    final double maxX = (constraints.maxWidth - _chatbotIconSize).clamp(
+      0,
+      double.infinity,
+    );
+    final double minY = _chatbotMinTop;
+    final double maxY =
+    (constraints.maxHeight - _chatbotIconSize - _chatbotBottomReserve)
+        .clamp(_chatbotMinTop, double.infinity);
+
+    return Offset(value.dx.clamp(minX, maxX), value.dy.clamp(minY, maxY));
+  }
+
+  Widget _buildIconOption({
+    required IconData icon,
+    required Color bgColor,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
-      onTap: () { _toggleMenu(); onTap(); },
+      onTap: onTap,
       child: Container(
-        margin: EdgeInsets.only(bottom: bottomMargin),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))]),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle), child: Icon(icon, color: iconColor, size: 22)),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
+        child: Icon(icon, color: iconColor, size: 28),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {
-    bool isSelected = _selectedIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _onItemTapped(index),
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(isSelected ? activeIcon : icon, color: isSelected ? Colors.blue : Colors.grey),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: isSelected ? Colors.blue : Colors.grey, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-          ],
+  Widget _buildNavItem(int index, IconData outlineIcon, IconData filledIcon) {
+    final bool isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return ScaleTransition(scale: animation, child: child);
+          },
+          child: Icon(
+            isSelected ? filledIcon : outlineIcon,
+            key: ValueKey<bool>(isSelected),
+            // THAY ĐỔI: Màu Tím Galaxy khi tab được chọn
+            color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF94A3B8),
+            size: 28,
+          ),
         ),
       ),
     );

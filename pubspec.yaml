@@ -34,18 +34,21 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # --- BIỂU ĐỒ (CHARTS) ---
+  fl_chart: ^0.69.0
+
   # --- TIỆN ÍCH & GIAO DIỆN (UTILS & UI) ---
   intl: ^0.20.1
   http: ^1.6.0
   cupertino_icons: ^1.0.8
+  image_picker: ^1.1.2
+  speech_to_text: ^7.3.0
+  flutter_tts: ^4.2.5
+  google_mlkit_text_recognition: ^0.15.0
   # Hiển thị thông báo đẹp ở phía trên màn hình
   top_snackbar_flutter: ^3.3.0
   # Bộ icon đa dạng từ nhiều nguồn
   iconify_flutter: ^0.0.7
-
-  # Voice
-  speech_to_text: ^7.3.0
-  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
@@ -57,5 +60,10 @@ flutter:
   generate: true
 
   assets:
+    # Khai báo cả thư mục translations để dùng easy_localization
     - lib/assets/translations/
+    # Hoặc khai báo chi tiết từng file nếu bạn muốn chắc chắn
+    - lib/assets/translations/en.json
+    - lib/assets/translations/vi.json
     - lib/ui/ai_chat/robot.gif
+    - lib/ui/ai_chat/hello.gif

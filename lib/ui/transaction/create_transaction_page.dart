@@ -60,9 +60,13 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         child: Align(
           alignment: Alignment.topCenter,
           child: Container(
-            width: MediaQuery.of(context).size.width * 0.66,
+            width: MediaQuery.of(context).size.width * 0.75,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(30), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))]),
+            decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))]
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -271,8 +275,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       setState(() { _isSaving = false; _isSuccess = true; _isNumpadVisible = false; });
       _showCompactNotification(
           widget.editData != null ? "Cập nhật thành công!" : "Lưu giao dịch thành công!",
-          Colors.green,
-          Icons.check_circle
+          const Color(0xFF10B981),
+          Icons.check_circle_outline
       );
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) Navigator.pop(context);
@@ -284,34 +288,38 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       context: context,
       builder: (BuildContext ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           backgroundColor: Colors.white,
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(28.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.warning_rounded, color: Colors.orange, size: 60),
-                const SizedBox(height: 16),
-                const Text("Chú ý!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.warning_rounded, color: Colors.red, size: 48),
+                ),
+                const SizedBox(height: 20),
+                const Text("Xóa giao dịch này?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
                 const SizedBox(height: 12),
                 const Text(
-                  "Dữ liệu bị xóa sẽ không thể khôi phục lại được. Bạn có muốn tiếp tục?",
+                  "Dữ liệu bị xóa sẽ không thể khôi phục lại được. Bạn có chắc chắn muốn tiếp tục?",
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: Colors.black54, height: 1.4),
+                  style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(ctx),
                         style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            side: BorderSide(color: Colors.grey.shade300)
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)
                         ),
-                        child: const Text("Không", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: const Text("Hủy", style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -322,12 +330,12 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                           _handleDelete();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: const Color(0xFFEF4444),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text("Có", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: const Text("Xóa", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                   ],
@@ -369,19 +377,19 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
                         child: Row(
                           children: [
-                            Expanded(child: GestureDetector(onTap: () => setDialogState(() => isSelectingDate = true), child: Center(child: Text(DateFormat('dd/MM/yyyy').format(tempDate), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isSelectingDate ? Colors.blue : Colors.grey.shade400))))),
-                            Container(width: 1, height: 24, color: Colors.grey.shade300),
-                            Expanded(child: GestureDetector(onTap: () => setDialogState(() => isSelectingDate = false), child: Center(child: Text('${tempTime.hour.toString().padLeft(2, '0')}:${tempTime.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: !isSelectingDate ? Colors.blue : Colors.grey.shade400))))),
+                            Expanded(child: GestureDetector(onTap: () => setDialogState(() => isSelectingDate = true), child: Center(child: Text(DateFormat('dd/MM/yyyy').format(tempDate), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isSelectingDate ? const Color(0xFF6D28D9) : const Color(0xFF94A3B8)))))),
+                            Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
+                            Expanded(child: GestureDetector(onTap: () => setDialogState(() => isSelectingDate = false), child: Center(child: Text('${tempTime.hour.toString().padLeft(2, '0')}:${tempTime.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: !isSelectingDate ? const Color(0xFF6D28D9) : const Color(0xFF94A3B8)))))),
                           ],
                         ),
                       ),
                       const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
                         child: Column(
                           children: [
                             SizedBox(
@@ -390,12 +398,20 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                   ? CalendarDatePicker(initialDate: tempDate, firstDate: DateTime(2000), lastDate: DateTime(2100), onDateChanged: (date) { setDialogState(() { tempDate = date; isSelectingDate = false; }); })
                                   : CupertinoDatePicker(mode: CupertinoDatePickerMode.time, initialDateTime: DateTime(tempDate.year, tempDate.month, tempDate.day, tempTime.hour, tempTime.minute), use24hFormat: true, onDateTimeChanged: (DateTime newDateTime) { setDialogState(() => tempTime = TimeOfDay.fromDateTime(newDateTime)); }),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 16),
                             Row(
                               children: [
-                                Expanded(child: OutlinedButton(onPressed: () { setDialogState(() { tempDate = DateTime.now(); tempTime = TimeOfDay.now(); }); }, style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), side: const BorderSide(color: Colors.blue), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text("Hôm nay", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)))),
+                                Expanded(child: OutlinedButton(onPressed: () { setDialogState(() { tempDate = DateTime.now(); tempTime = TimeOfDay.now(); }); }, style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: const BorderSide(color: Color(0xFF6D28D9)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Hôm nay", style: TextStyle(color: Color(0xFF6D28D9), fontWeight: FontWeight.bold, fontSize: 15)))),
                                 const SizedBox(width: 12),
-                                Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, DateTime(tempDate.year, tempDate.month, tempDate.day, tempTime.hour, tempTime.minute)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 12), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text("Xong", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+                                Expanded(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ElevatedButton(onPressed: () => Navigator.pop(context, DateTime(tempDate.year, tempDate.month, tempDate.day, tempTime.hour, tempTime.minute)), style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Xong", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -403,8 +419,6 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                       ),
                     ],
                   ),
-                  Positioned(top: 45, left: 60, child: Container(width: 5, height: 20, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(5)))),
-                  Positioned(top: 45, right: 60, child: Container(width: 5, height: 20, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(5)))),
                 ],
               );
             },
@@ -414,20 +428,36 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     );
   }
 
+  // ĐÃ SỬA: Thay đổi cat.iconData thành cat.icon
   Widget _renderSmartIcon(CategoryModel? cat, double size) {
     if (cat == null) {
-      return Icon(Icons.add_circle_outline, color: Colors.red, size: size);
+      return Icon(Icons.add_circle_outline, color: const Color(0xFF94A3B8), size: size);
     }
-    // Vì bây giờ cat.icon chắc chắn là IconData, nên ta gọi thẳng luôn:
-    return Icon(cat.icon, color: cat.color, size: size);
+    return Icon(cat.iconData, color: cat.color, size: size);
   }
 
   @override
   Widget build(BuildContext context) {
     bool isEditing = widget.editData != null;
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
-      appBar: AppBar(backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0, centerTitle: false, titleSpacing: 0, title: Text(isEditing ? "Chi tiết giao dịch" : "Thêm giao dịch", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20))),
+      backgroundColor: const Color(0xFFF0F5FF),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(isEditing ? "Chi tiết giao dịch" : "Thêm giao dịch", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white, letterSpacing: 0.5)),
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+          ),
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -435,7 +465,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               onTap: () { if (_isNumpadVisible) setState(() => _isNumpadVisible = false); FocusScope.of(context).unfocus(); },
               behavior: HitTestBehavior.opaque,
               child: ListView(
-                physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(16),
+                physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(20),
                 children: [
                   _buildToggleType(), const SizedBox(height: 20),
                   _buildAmountBox(), const SizedBox(height: 16),
@@ -458,7 +488,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   Widget _buildToggleType() {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.grey.shade300)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Row(
         children: [
           _buildToggleOption('expense', 'Chi tiêu'),
@@ -484,11 +514,12 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             _loadFrequentCategories();
           }
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(color: isSelected ? Colors.blue : Colors.transparent, borderRadius: BorderRadius.circular(26)),
+          decoration: BoxDecoration(color: isSelected ? const Color(0xFF6D28D9) : Colors.transparent, borderRadius: BorderRadius.circular(26)),
           alignment: Alignment.center,
-          child: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, fontSize: 15)),
+          child: Text(label, style: TextStyle(color: isSelected ? Colors.white : const Color(0xFF64748B), fontWeight: isSelected ? FontWeight.bold : FontWeight.w600, fontSize: 15)),
         ),
       ),
     );
@@ -498,14 +529,21 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     return GestureDetector(
       onTap: () => setState(() => _isNumpadVisible = true),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text("Số tiền", style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500)),
+            const Text("Số tiền", style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            Text("${_getFormattedAmount()} đ", style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: _currentType == 'expense' ? const Color(0xFFEF4444) : const Color(0xFF10B981))),
+            Text(
+                "${_getFormattedAmount()} đ",
+                style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: _currentType == 'expense' ? const Color(0xFFEF4444) : const Color(0xFF10B981)
+                )
+            ),
           ],
         ),
       ),
@@ -515,7 +553,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   Widget _buildCategoryBox() {
     bool hasValue = _selectedCategory != null;
     return Theme(
-      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: Colors.red.shade50, splashColor: Colors.transparent),
+      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: const Color(0xFFF0F5FF), splashColor: Colors.transparent),
       child: InkWell(
         onTap: () async {
           final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryListScreen(transactionType: _currentType, selectedCategoryName: _selectedCategory?.name)));
@@ -524,15 +562,19 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
           child: Row(
             children: [
-              _renderSmartIcon(_selectedCategory, 24),
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: (hasValue ? _selectedCategory!.color : Colors.grey).withValues(alpha: 0.1), shape: BoxShape.circle),
+                child: _renderSmartIcon(_selectedCategory, 22),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: Text(hasValue ? _selectedCategory!.name : "Chọn hạng mục", style: TextStyle(fontSize: 16, color: hasValue ? Colors.black87 : Colors.red, fontWeight: FontWeight.w500))),
-              const Text("Tất cả", style: TextStyle(color: Colors.grey, fontSize: 13)),
+              Expanded(child: Text(hasValue ? _selectedCategory!.name : "Chọn hạng mục", style: TextStyle(fontSize: 16, color: hasValue ? const Color(0xFF1E293B) : const Color(0xFF94A3B8), fontWeight: FontWeight.w600))),
+              const Text("Tất cả", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500)),
               const SizedBox(width: 4),
-              const Icon(Icons.chevron_right, color: Colors.black38),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1)),
             ],
           ),
         ),
@@ -542,24 +584,30 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
   Widget _buildFrequentCategoryBox() {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Column(
         children: [
           Theme(
-            data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: Colors.blue.shade50, splashColor: Colors.transparent),
+            data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: const Color(0xFFF0F5FF), splashColor: Colors.transparent),
             child: InkWell(
               onTap: () => setState(() => _isFrequentExpanded = !_isFrequentExpanded),
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Hay dùng", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87)), Icon(_isFrequentExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.black54)]),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Hạng mục thường dùng", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                      Icon(_isFrequentExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: const Color(0xFF64748B))
+                    ]
+                ),
               ),
             ),
           ),
           if (_isFrequentExpanded) ...[
-            const Divider(height: 1, color: Color(0xFFF4F7FB)),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
             Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                 child: Wrap(
                   spacing: 12, runSpacing: 12,
                   children: _frequentCategories.map((cat) {
@@ -567,14 +615,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     return GestureDetector(
                       onTap: () { setState(() { _selectedCategory = cat; _categoryId = cat.name; _isFrequentExpanded = false; }); },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(color: isCatSelected ? Colors.blue.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: isCatSelected ? Colors.blue : Colors.transparent)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                            color: isCatSelected ? const Color(0xFF6D28D9).withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: isCatSelected ? const Color(0xFF6D28D9) : const Color(0xFFE2E8F0))
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _renderSmartIcon(cat, 16),
-                            const SizedBox(width: 6),
-                            Text(cat.name, style: TextStyle(fontSize: 13, color: isCatSelected ? Colors.blue : Colors.black87, fontWeight: isCatSelected ? FontWeight.bold : FontWeight.normal)),
+                            _renderSmartIcon(cat, 18),
+                            const SizedBox(width: 8),
+                            Text(cat.name, style: TextStyle(fontSize: 13, color: isCatSelected ? const Color(0xFF6D28D9) : const Color(0xFF334155), fontWeight: isCatSelected ? FontWeight.bold : FontWeight.w500)),
                           ],
                         ),
                       ),
@@ -592,7 +644,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     List<String> weekdays = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
     String weekday = weekdays[_selectedDate.weekday == 7 ? 0 : _selectedDate.weekday];
     return Theme(
-      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: Colors.blue.shade50, splashColor: Colors.transparent),
+      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: const Color(0xFFF0F5FF), splashColor: Colors.transparent),
       child: InkWell(
         onTap: () async {
           final picked = await _showCustomDateTimePicker(context, _selectedDate);
@@ -601,13 +653,21 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
           child: Row(
             children: [
-              const Icon(Icons.calendar_today_outlined, color: Colors.black54, size: 22),
-              const SizedBox(width: 12),
-              Expanded(child: Text("$weekday - ${DateFormat('dd/MM/yyyy').format(_selectedDate)}", style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w500))),
-              Text(DateFormat('HH:mm').format(_selectedDate), style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w500)),
+              Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(color: const Color(0xFF1D4ED8).withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF1D4ED8), size: 22)
+              ),
+              const SizedBox(width: 16),
+              Expanded(child: Text("$weekday, ${DateFormat('dd/MM/yyyy').format(_selectedDate)}", style: const TextStyle(fontSize: 15, color: Color(0xFF1E293B), fontWeight: FontWeight.w600))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                child: Text(DateFormat('HH:mm').format(_selectedDate), style: const TextStyle(fontSize: 14, color: Color(0xFF334155), fontWeight: FontWeight.bold)),
+              )
             ],
           ),
         ),
@@ -617,29 +677,88 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
   Widget _buildNoteBox() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: TextField(controller: _noteInput, onTap: () => setState(() => _isNumpadVisible = false), decoration: const InputDecoration(icon: Icon(Icons.notes, color: Colors.black87), hintText: "Ghi chú...", hintStyle: TextStyle(color: Colors.black38), border: InputBorder.none), style: const TextStyle(color: Colors.black87, fontSize: 16)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: TextField(
+          controller: _noteInput,
+          onTap: () => setState(() => _isNumpadVisible = false),
+          decoration: const InputDecoration(
+              icon: Icon(Icons.notes_rounded, color: Color(0xFF94A3B8), size: 24),
+              hintText: "Ghi chú thêm...",
+              hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+              border: InputBorder.none
+          ),
+          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 15, fontWeight: FontWeight.w500)
+      ),
     );
   }
 
   Widget _buildSaveButtonOnly() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))]),
-      child: SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _handleSaveData, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Lưu giao dịch", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)))),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, -4))]),
+      child: Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: const Color(0xFF6D28D9).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))]
+          ),
+          child: ElevatedButton(
+              onPressed: _handleSaveData,
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+              ),
+              child: const Text("LƯU GIAO DỊCH", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+          )
+      ),
     );
   }
 
   Widget _buildEditButtons() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))]),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, -4))]),
       child: Row(
         children: [
-          Expanded(child: OutlinedButton(onPressed: _showDeleteConfirmDialog, style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: const BorderSide(color: Colors.red, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Xóa", style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 1,
+              child: SizedBox(
+                height: 56,
+                child: OutlinedButton(
+                    onPressed: _showDeleteConfirmDialog,
+                    style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                    ),
+                    child: const Text("XÓA", style: TextStyle(color: Color(0xFFEF4444), fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+                ),
+              )
+          ),
           const SizedBox(width: 16),
-          Expanded(child: ElevatedButton(onPressed: _handleSaveData, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Lưu lại", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 2,
+              child: Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: const Color(0xFF6D28D9).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                  ),
+                  child: ElevatedButton(
+                      onPressed: _handleSaveData,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                      ),
+                      child: const Text("LƯU LẠI", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+                  )
+              )
+          ),
         ],
       ),
     );
@@ -647,109 +766,98 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
   Widget _buildNumpad() {
     return Container(
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(children: [
-            Expanded(child: _buildKey('C')),
-            Expanded(child: _buildKey('÷')),
-            Expanded(child: _buildKey('x')),
-            Expanded(child: _buildKey('Xóa')),
-          ]),
-          Row(children: [
-            Expanded(child: _buildKey('7')),
-            Expanded(child: _buildKey('8')),
-            Expanded(child: _buildKey('9')),
-            Expanded(child: _buildKey('+')),
-          ]),
-          Row(children: [
-            Expanded(child: _buildKey('4')),
-            Expanded(child: _buildKey('5')),
-            Expanded(child: _buildKey('6')),
-            Expanded(child: _buildKey('-')),
-          ]),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    children: [
-                      Row(children: [
-                        Expanded(child: _buildKey('1')),
-                        Expanded(child: _buildKey('2')),
-                        Expanded(child: _buildKey('3')),
-                      ]),
-                      Row(children: [
-                        Expanded(child: _buildKey('0')),
-                        Expanded(child: _buildKey('000')),
-                        Expanded(child: _buildKey('.')),
-                      ]),
-                    ],
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4))],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24))
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [ Expanded(child: _buildKey('C')), Expanded(child: _buildKey('÷')), Expanded(child: _buildKey('x')), Expanded(child: _buildKey('Xóa')) ]),
+            const SizedBox(height: 8),
+            Row(children: [ Expanded(child: _buildKey('7')), Expanded(child: _buildKey('8')), Expanded(child: _buildKey('9')), Expanded(child: _buildKey('+')) ]),
+            const SizedBox(height: 8),
+            Row(children: [ Expanded(child: _buildKey('4')), Expanded(child: _buildKey('5')), Expanded(child: _buildKey('6')), Expanded(child: _buildKey('-')) ]),
+            const SizedBox(height: 8),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      children: [
+                        Row(children: [ Expanded(child: _buildKey('1')), Expanded(child: _buildKey('2')), Expanded(child: _buildKey('3')) ]),
+                        const SizedBox(height: 8),
+                        Row(children: [ Expanded(child: _buildKey('0')), Expanded(child: _buildKey('000')), Expanded(child: _buildKey('.')) ]),
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: _buildKey('Xong', isTall: true),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded( flex: 1, child: _buildKey('Xong', isTall: true) ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // 💡 ĐÃ SỬA: Phân bổ màu sắc nền và chữ theo yêu cầu
   Widget _buildKey(String val, {bool isTall = false}) {
     bool isAction = val == 'C' || val == 'Xóa' || val == 'Xong' || val == '+' || val == '-' || val == 'x' || val == '÷';
 
-    Color bgColor = Colors.white;
-    Color textColor = Colors.black87;
+    BoxDecoration boxDeco;
+    Color textColor;
 
-    // Nút Xong màu xanh chữ trắng
     if (val == 'Xong') {
-      bgColor = Colors.blue;
+      boxDeco = BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: const Color(0xFF6D28D9).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))]
+      );
       textColor = Colors.white;
     }
-    // Các phím hành động khác ở hàng trên và cột phải: nền xám nhạt
     else if (isAction) {
-      bgColor = Colors.grey.shade100;
-      textColor = Colors.black87;
+      boxDeco = BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      );
+      textColor = const Color(0xFF334155);
+    }
+    else {
+      boxDeco = BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))]
+      );
+      textColor = const Color(0xFF1E293B);
     }
 
     Widget content = Container(
-      decoration: BoxDecoration(
-          color: bgColor,
-          border: Border.all(color: Colors.grey.shade200, width: 0.5) // Viền đậm hơn 1 xíu để phân tách các ô xám
-      ),
+      margin: EdgeInsets.only(right: val != 'Xong' && val != 'Xóa' && val != '+' && val != '-' ? 8 : 0),
+      decoration: boxDeco,
       child: Center(
-        child: Text(
-          val,
-          style: TextStyle(
-            // Chữ số to ra xíu cho dễ bấm, ký hiệu toán học nhỏ lại cho tinh tế
-            fontSize: isAction ? 20 : 26,
-            fontWeight: isAction ? FontWeight.bold : FontWeight.w500,
-            color: textColor,
-          ),
-        ),
+        child: val == 'Xóa'
+            ? const Icon(Icons.backspace_rounded, color: Color(0xFF334155), size: 24)
+            : Text(val, style: TextStyle(fontSize: isAction ? 20 : 24, fontWeight: isAction ? FontWeight.bold : FontWeight.w600, color: textColor)),
       ),
     );
 
     Widget button = Theme(
-      data: Theme.of(context).copyWith(
-          hoverColor: Colors.transparent,
-          highlightColor: val == 'Xong' ? Colors.blue.shade700 : Colors.grey.shade300,
-          splashColor: Colors.transparent
-      ),
+      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: val == 'Xong' ? Colors.white24 : Colors.grey.shade200, splashColor: Colors.transparent),
       child: InkWell(
         onTap: () => _onNumpadTap(val),
+        borderRadius: BorderRadius.circular(val == 'Xong' ? 16 : 12),
         child: content,
       ),
     );
 
-    return isTall ? button : AspectRatio(aspectRatio: 1.3, child: button);
+    return isTall ? button : AspectRatio(aspectRatio: 1.35, child: button);
   }
 }

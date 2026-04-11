@@ -103,7 +103,7 @@ class CategoryData {
     return CategoryModel(
       id: id,
       name: name,
-      icon: icon,
+      iconData: icon,
       color: color,
       type: id.startsWith('e') ? 'expense' : 'income',
       group: group,
