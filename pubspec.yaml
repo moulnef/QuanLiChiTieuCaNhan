@@ -1,5 +1,5 @@
 name: ai_quan_ly_chi_tieu_ca_nhan
-description: "A new Flutter project."
+description: "Dự án quản lý chi tiêu cá nhân tích hợp AI và Firebase."
 publish_to: "none"
 
 version: 1.0.0+1
@@ -11,26 +11,43 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase
+  # --- QUẢN LÝ TRẠNG THÁI (STATE MANAGEMENT) ---
+  # Dùng cho TransactionController (ChangeNotifier)
+  provider: ^6.1.2
+  # Dùng cho các màn hình sử dụng ConsumerWidget/ConsumerState
+  flutter_riverpod: ^2.6.1
+
+  # --- DỮ LIỆU LOCAL (DATABASE) ---
+  # Cơ sở dữ liệu SQLite
+  sqflite: ^2.4.2
+  # Tìm đường dẫn thư mục lưu trữ trên điện thoại (Cần thiết cho sqflite)
+  path: ^1.9.1
+  path_provider: ^2.1.2
+
+  # --- HỆ SINH THÁI FIREBASE (BACKEND) ---
   firebase_core: ^3.11.0
   firebase_auth: ^5.4.1
   cloud_firestore: ^5.0.2
 
-  # Localization
+  # --- ĐA NGÔN NGỮ (LOCALIZATION) ---
   easy_localization: ^3.0.8
   flutter_localizations:
     sdk: flutter
 
-  # Utils
-  cupertino_icons: ^1.0.8
-  path: ^1.9.1
+  # --- BIỂU ĐỒ (CHARTS) ---
+  fl_chart: ^0.69.0
+
+  # --- TIỆN ÍCH & GIAO DIỆN (UTILS & UI) ---
   intl: ^0.20.1
   http: ^1.6.0
-
-  path_provider: ^2.1.2
-  top_snackbar_flutter: ^3.1.0
-  sqflite: ^2.4.2
-  flutter_riverpod: ^3.3.1
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.1.2
+  speech_to_text: ^7.3.0
+  flutter_tts: ^4.2.5
+  google_mlkit_text_recognition: ^0.15.0
+  # Hiển thị thông báo đẹp ở phía trên màn hình
+  top_snackbar_flutter: ^3.3.0
+  # Bộ icon đa dạng từ nhiều nguồn
   iconify_flutter: ^0.0.7
 
 dev_dependencies:
@@ -43,4 +60,10 @@ flutter:
   generate: true
 
   assets:
+    # Khai báo cả thư mục translations để dùng easy_localization
     - lib/assets/translations/
+    # Hoặc khai báo chi tiết từng file nếu bạn muốn chắc chắn
+    - lib/assets/translations/en.json
+    - lib/assets/translations/vi.json
+    - lib/ui/ai_chat/robot.gif
+    - lib/ui/ai_chat/hello.gif

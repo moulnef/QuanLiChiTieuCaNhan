@@ -1,23 +1,60 @@
-import '../../domain/model/transaction_model.dart';
-import '../remote/firestore_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 
 class TransactionRepository {
-  final FirestoreService _firestoreService = FirestoreService();
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // 1. LẤY DANH SÁCH GIAO DỊCH
+  String? get _userId => _auth.currentUser?.uid;
+
   Future<List<TransactionModel>> getTransactions() async {
-    // Không dùng .first nữa vì _firestoreService.getTransactions()
-    // giờ đã trả về thẳng Future<List<TransactionModel>> rồi
-    return await _firestoreService.getTransactions();
+    final userId = _userId;
+    if (userId == null) return [];
+
+    final snapshot = await _db
+        .collection('users')
+        .doc(userId)
+        .collection('transactions')
+        .orderBy('date', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => TransactionModel.fromMap(doc.data(), doc.id))
+        .toList();
   }
 
-  // 2. THÊM HOẶC CẬP NHẬT GIAO DỊCH
-  Future<void> addTransaction(TransactionModel transaction) async {
-    await _firestoreService.createOrUpdateTransaction(transaction);
+  Future<void> addTransaction(TransactionModel tx) async {
+    final userId = _userId;
+    if (userId == null) return;
+
+    final payload = tx.toMap();
+    final docRef = _db
+        .collection('users')
+        .doc(userId)
+        .collection('transactions')
+        .doc(tx.id.isEmpty ? null : tx.id);
+
+    if (tx.id.isEmpty) {
+      await _db
+          .collection('users')
+          .doc(userId)
+          .collection('transactions')
+          .add(payload);
+    } else {
+      await docRef.set(payload, SetOptions(merge: true));
+    }
   }
 
-  // 3. XÓA GIAO DỊCH
-  Future<void> deleteTransaction(String transactionId) async {
-    await _firestoreService.deleteTransaction(transactionId);
+  Future<void> deleteTransaction(String id) async {
+    final userId = _userId;
+    if (userId == null || id.isEmpty) return;
+
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('transactions')
+        .doc(id)
+        .delete();
   }
 }
