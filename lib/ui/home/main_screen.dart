@@ -3,7 +3,6 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
 import '../../domain/model/transaction_model.dart';
-// Đã sửa lại đường dẫn ocr_service cho đúng chuẩn dự án của Thúy
 import '../../domain/services/ocr_service.dart';
 import '../../ui/ai_chat/chatbot.dart';
 import '../../ui/home/home_screen.dart';
@@ -222,6 +221,7 @@ class _MainScreenState extends State<MainScreen>
                             bgColor: Colors.orange.shade50,
                             iconColor: Colors.orange,
                             onTap: _handleInvoiceScan,
+
                           ),
                           const SizedBox(width: 24),
                           _buildIconOption(
@@ -229,6 +229,7 @@ class _MainScreenState extends State<MainScreen>
                             bgColor: Colors.blue.shade50,
                             iconColor: Colors.blue,
                             onTap: () {
+                              _toggleMenu();
                               showModalBottomSheet(
                                 context: context,
                                 isScrollControlled: true,

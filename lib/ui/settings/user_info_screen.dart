@@ -68,7 +68,6 @@ class _UserInfoPageState extends State<UserInfoPage> {
             : DateFormat('dd/MM/yyyy').format(parsedDob);
       });
     } catch (_) {
-      // Keep Firebase fallback values when local profile is unavailable.
     }
   }
 

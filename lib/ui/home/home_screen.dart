@@ -64,6 +64,14 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final oCcy = NumberFormat('#,###', 'vi_VN');
 
+    // 👉 ĐOẠN CODE MỚI THÊM ĐỂ LẤY TÊN NGƯỜI DÙNG
+    final user = FirebaseAuth.instance.currentUser;
+    final String fullName = (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
+        ? user.displayName!.trim()
+        : "bạn";
+    final String firstName = fullName.split(' ').last;
+    // ---------------------------------------------
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF), // Nền xanh nhạt chuẩn Galaxy
       body: Consumer2<FinanceProvider, BudgetProvider>(
@@ -106,11 +114,12 @@ class _HomePageState extends State<HomePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Column(
+                        // 👉 ĐÃ SỬA CHỖ NÀY THÀNH TÊN ĐỘNG
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Xin chào,", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                            Text("Thúy Phạm 👋", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                            const Text("Xin chào,", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                            Text("$firstName 👋", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                           ],
                         ),
                         Container(

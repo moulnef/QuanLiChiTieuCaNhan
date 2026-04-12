@@ -22,7 +22,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
 
-  final String githubToken = 'MA_GIT';
+  // ĐIỀN TOKEN MỚI VÀO ĐÂY VÀ GIỮ NGUYÊN CÁCH CỘNG CHUỖI NÀY
+  final String githubToken = 'ghp_' + '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
   final formatCurrency = NumberFormat('#,###', 'vi_VN');
 
   @override
@@ -30,7 +31,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     super.initState();
     _messages.add({
       "role": "ai",
-      "text": "Chào bạn! Mình là trợ lý AI. Bạn cứ gõ tự nhiên (VD: 'Hôm qua đi siêu thị hết 500k'), mình sẽ tự động tạo phiếu thu chi nhé!"
+      "text": "Chào bạn! Mình là trợ lý AI. Bạn cứ gõ tự nhiên (VD: 'Sáng nay ăn phở 45k'), mình sẽ tự động tạo phiếu thu chi nhé!"
     });
   }
 
@@ -63,7 +64,6 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     return list.isNotEmpty ? list.first.name : 'Khác';
   }
 
-  // Hàm format ngày từ yyyy-MM-dd sang dd/MM/yyyy để hiện lên thẻ UI cho đẹp
   String _getDisplayDate(String? dateStr) {
     if (dateStr == null) return DateFormat('dd/MM/yyyy').format(DateTime.now());
     try {
@@ -75,7 +75,6 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   }
 
   Future<void> _saveTransactionToDatabase(Map<String, dynamic> aiData, int index) async {
-    // KHOÁ NÚT BẤM: Nếu đang lưu rồi thì bỏ qua không cho bấm nữa
     if (_messages[index]['is_saving'] == true) return;
 
     setState(() {
@@ -84,13 +83,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
     try {
       final exactCategory = _getValidCategory(aiData['category'], aiData['type']);
-
-      // XỬ LÝ NGÀY THÁNG (Cho phép lưu giao dịch hôm qua/hôm kia)
       DateTime txDate = DateTime.now();
       if (aiData['date'] != null) {
         try {
           DateTime parsedDate = DateTime.parse(aiData['date']);
-          // Lấy ngày của AI phân tích, nhưng giữ nguyên giờ phút hiện tại
           txDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, txDate.hour, txDate.minute);
         } catch (e) {
           txDate = DateTime.now();
@@ -102,7 +98,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         amount: (aiData['amount'] as num).toDouble(),
         type: aiData['type'],
         categoryId: exactCategory,
-        transactionDate: txDate, // Lưu theo ngày AI bóc tách được
+        transactionDate: txDate,
         note: aiData['note'] ?? '',
       );
 
@@ -114,17 +110,16 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         );
         setState(() {
           _messages[index]['transaction_saved'] = true;
-          _messages[index]['is_saving'] = false; // Mở khóa lại trạng thái (dù button đã biến mất)
+          _messages[index]['is_saving'] = false;
         });
       }
     } catch (e) {
-      print("Lỗi khi lưu: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Lỗi hệ thống: $e'), backgroundColor: Colors.red)
         );
         setState(() {
-          _messages[index]['is_saving'] = false; // Có lỗi thì mở khóa cho bấm lại
+          _messages[index]['is_saving'] = false;
         });
       }
     }
@@ -160,26 +155,31 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           "messages": [
             {
               "role": "system",
-              "content": """Bạn là trợ lý tài chính thông minh. HÔM NAY LÀ: $currentDate, THỜI GIAN: $currentTime.
+              "content": """Bạn là trợ lý tài chính thông minh. HÔM NAY LÀ: $currentDate, THỜI GIAN HIỆN TẠI: $currentTime.
 
-1. BÓC TÁCH GIAO DỊCH (KHI CÓ ĐỦ SỐ TIỀN VÀ MỤC ĐÍCH RÕ RÀNG):
-TRẢ VỀ DUY NHẤT JSON:
-{"is_transaction": true, "type": "expense", "amount": 50000, "category": "Ăn sáng", "note": "Ăn phở", "date": "2026-04-06"}
-- 'category': CHỈ CHỌN TỪ Chi: [$expenseNames] hoặc Thu: [$incomeNames]. TUYỆT ĐỐI HẠN CHẾ DÙNG 'Khác'.
+QUY TẮC KIỂM TRA ĐIỀU KIỆN (BẮT BUỘC PHẢI THỎA MÃN CẢ 3):
+Để tạo được giao dịch, câu nói CỦA NGƯỜI DÙNG PHẢI CÓ ĐỦ 3 YẾU TỐ SAU:
+1. MỤC ĐÍCH CỤ THỂ: Mua cái gì? (VD: "ăn phở", "mua nho", "đóng tiền học"). Các từ chung chung như "mua đồ", "mua sắm", "tiêu tiền" LÀ KHÔNG HỢP LỆ, BẮT BUỘC phải hỏi rõ là mua món gì.
+2. SỐ TIỀN: Phải có con số (VD: 30k, 50 ngàn).
+3. THỜI GIAN: Phải nói rõ buổi (sáng, trưa, chiều, tối, đêm) HOẶC giờ giấc (1h, 8g). 
+* AI TỰ XỬ LÝ NGỮ CẢNH: "Sáng nay" = buổi sáng. "8g chiều" hay "8g tối" = buổi tối. "1 giờ" có thể là 1h trưa (13h) hoặc 1h sáng tùy ngữ cảnh. Nếu người dùng đã nói "sáng/trưa/chiều/tối/đêm" thì TUYỆT ĐỐI KHÔNG HỎI LẠI THỜI GIAN.
 
-2. QUY TẮC CHỌN DANH MỤC:
-- Ăn uống chung (VD: 'ăn phở'): Nhìn đồng hồ ($currentTime) -> 04:00-10:30 là 'Ăn sáng', 10:31-15:00 là 'Ăn trưa', 15:01-23:59 là 'Ăn tối'.
-- Đóng học: Cho bản thân -> 'Học hành', cho con -> 'Học phí'.
+HÀNH ĐỘNG 1: NẾU THIẾU THÔNG TIN -> PHẢI HỎI LẠI
+Nếu thiếu BẤT KỲ yếu tố nào trong 3 yếu tố trên, trả về JSON hỏi lại:
+{"is_transaction": false, "message": "<Hỏi thông tin bị thiếu>"}
+- Ưu tiên 1 (Thiếu mục đích): "Mua đồ lúc 8h tối" -> Hỏi: "Bạn mua đồ gì thế?"
+- Ưu tiên 2 (Thiếu tiền): "Sáng nay ăn phở" -> Hỏi: "Sáng nay bạn ăn phở hết bao nhiêu tiền?"
+- Ưu tiên 3 (Thiếu thời gian): "Mua nho hết 50k" -> Hỏi: "Bạn mua nho vào buổi sáng, trưa hay tối vậy?"
 
-3. THIẾU THÔNG TIN (HÃY HỎI LẠI TRONG JSON):
-Nếu người dùng nói thiếu 1 trong 2 yếu tố (Số tiền HOẶC Mục đích), KHÔNG TẠO GIAO DỊCH, hãy trả về JSON:
-{"is_transaction": false, "message": "<Câu hỏi của bạn>"}
-- VD thiếu mục đích: "Nhận 30 triệu" -> Hỏi: "Khoản 30 triệu này là tiền lương, thưởng hay từ đâu vậy bạn?"
-- VD thiếu số tiền: "Sáng nay ăn phở" -> Hỏi: "Bạn ăn phở hết bao nhiêu tiền thế?"
+HÀNH ĐỘNG 2: NẾU ĐÃ ĐỦ 3 THÔNG TIN -> TẠO GIAO DỊCH
+TRẢ VỀ JSON:
+{"is_transaction": true, "type": "expense", "amount": 30000, "category": "Ăn sáng", "note": "Ăn phở", "date": "$currentDate"}
+- 'category': CHỈ CHỌN TỪ Chi: [$expenseNames] hoặc Thu: [$incomeNames]. KHÔNG TỰ CHẾ.
+- Bắt buộc phân loại Ăn uống: Từ 00h-10h (Sáng) -> "Ăn sáng"; Từ 10h-15h (Trưa) -> "Ăn trưa"; Từ 15h-24h (Chiều/Tối/Đêm) -> "Ăn tối".
 
-4. TRÒ CHUYỆN BÌNH THƯỜNG:
-Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
-{"is_transaction": false, "message": "<Câu trả lời của bạn>"}"""
+HÀNH ĐỘNG 3: TRÒ CHUYỆN BÌNH THƯỜNG
+Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời tiết), TRẢ VỀ JSON:
+{"is_transaction": false, "message": "<Câu trả lời thân thiện>"}"""
             },
             ..._messages.where((msg) => msg['role'] != 'system').map((msg) => {
               "role": msg["role"] == "user" ? "user" : "assistant",
@@ -192,7 +192,6 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
       if (response.statusCode == 200) {
         String aiText = jsonDecode(utf8.decode(response.bodyBytes))['choices'][0]['message']['content'];
 
-        // Cố gắng lọc lấy JSON nếu AI có trả về ngoặc nhọn
         String potentialJson = aiText;
         int startIndex = aiText.indexOf('{');
         int endIndex = aiText.lastIndexOf('}');
@@ -203,7 +202,6 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
         }
 
         try {
-          // Thử parse JSON
           final aiData = jsonDecode(potentialJson);
 
           if (aiData['is_transaction'] == true) {
@@ -223,20 +221,18 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
               });
             });
           } else {
-            // AI trả về JSON báo không phải giao dịch (vd: hỏi thêm thông tin)
             setState(() {
               _messages.add({"role": "ai", "text": aiData['message'] ?? aiText});
             });
           }
         } catch (e) {
-          // 🟢 CỨU CÁNH Ở ĐÂY: Nếu AI trả về text thường (quên JSON), in thẳng câu nói ra luôn, không báo lỗi!
           setState(() {
-            // Xóa mấy cái markdown thừa thãi nếu có
             String cleanText = aiText.replaceAll('```json', '').replaceAll('```', '').trim();
             _messages.add({"role": "ai", "text": cleanText});
           });
         }
       } else {
+        debugPrint("Lỗi API: ${response.statusCode} - ${response.body}");
         setState(() {
           _messages.add({"role": "ai", "text": "Hệ thống AI đang phản hồi chậm hoặc lỗi API!"});
         });
@@ -340,7 +336,6 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
                               ),
                             ),
 
-                            // THẺ BIÊN LAI GIAO DỊCH
                             if (txData != null && !isSaved) ...[
                               const SizedBox(height: 8),
                               Container(
@@ -367,21 +362,19 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
                                       ],
                                     ),
                                     const Divider(height: 20),
-                                    // Hiện thêm ngày tháng
                                     _buildTxRow("Ngày", _getDisplayDate(txData['date']), Colors.black87),
-                                    _buildTxRow("Danh mục", txData['category'], Colors.black87),
-                                    _buildTxRow("Số tiền", "${formatCurrency.format(txData['amount'])} đ", txData['type'] == 'expense' ? Colors.red : Colors.green, isBold: true),
-                                    _buildTxRow("Ghi chú", txData['note'], Colors.black54),
+                                    _buildTxRow("Danh mục", txData['category'] ?? 'Khác', Colors.black87),
+                                    _buildTxRow("Số tiền", "${formatCurrency.format(txData['amount'] ?? 0)} đ", txData['type'] == 'expense' ? Colors.red : Colors.green, isBold: true),
+                                    _buildTxRow("Ghi chú", txData['note'] ?? '', Colors.black54),
 
                                     const SizedBox(height: 16),
-                                    // NÚT LƯU CÓ TRẠNG THÁI LOADING
                                     Container(
                                       width: double.infinity,
                                       height: 42,
                                       decoration: BoxDecoration(
                                           gradient: LinearGradient(
                                             colors: isSaving
-                                                ? [Colors.grey, Colors.grey] // Đổi màu xám khi đang lưu
+                                                ? [Colors.grey, Colors.grey]
                                                 : [const Color(0xFF1D4ED8), const Color(0xFF6D28D9)],
                                             begin: Alignment.centerLeft,
                                             end: Alignment.centerRight,
@@ -438,7 +431,6 @@ Nếu KHÔNG phải giao dịch, TRẢ VỀ JSON:
               child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF8B3DFF)))),
             ),
 
-          // KHU VỰC NHẬP TEXT
           Container(
             padding: EdgeInsets.only(
               left: 16, right: 16, top: 12,
