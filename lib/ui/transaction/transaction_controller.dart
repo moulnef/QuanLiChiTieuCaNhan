@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // 💡 ĐÃ SỬA: Chỉ cần import gói chính này
+import 'package:firebase_auth/firebase_auth.dart';
 
 // Đảm bảo đường dẫn import đúng với cấu trúc dự án của bạn
 import '../../domain/model/transaction_model.dart';
 import '../../data/repository/transaction_repository.dart';
 
 class TransactionController extends ChangeNotifier {
+  static const String _demoUserId = 'user_001';
+
   final TransactionRepository _repository = TransactionRepository();
   List<TransactionModel> transactions = [];
 
+  String _resolveUserId() {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null && currentUid.isNotEmpty) {
+      return currentUid;
+    }
+    return _demoUserId;
+  }
+
   // 1. LẤY DANH SÁCH GIAO DỊCH
-  Future<void> fetchAllTransactions() async {
+  Future<void> fetchAllTransactions([String? userId]) async {
     try {
-      transactions = await _repository.getTransactions();
+      final effectiveUserId = userId ?? _resolveUserId();
+      transactions = await _repository.getTransactions(effectiveUserId);
       notifyListeners(); // Thông báo cho UI cập nhật lại danh sách
     } catch (e) {
       debugPrint("Lỗi khi lấy danh sách: $e");
@@ -21,11 +33,11 @@ class TransactionController extends ChangeNotifier {
 
   // 2. KIỂM TRA TÍNH HỢP LỆ (Validation)
   String? checkValidation(
-      double amount,
-      String categoryId,
-      String type,
-      String? person,
-      ) {
+    double amount,
+    String categoryId,
+    String type,
+    String? person,
+  ) {
     if (amount <= 0) return "Số tiền không được để trống hoặc bằng 0.";
     if (categoryId.isEmpty) return "Hạng mục không được để trống.";
     if ((type == 'borrow' || type == 'lend') &&
@@ -38,8 +50,12 @@ class TransactionController extends ChangeNotifier {
   // 3. THÊM HOẶC CẬP NHẬT GIAO DỊCH
   Future<void> createOrUpdateTransaction(TransactionModel tx) async {
     try {
-      await _repository.addTransaction(tx);
-      await fetchAllTransactions(); // Cập nhật lại dữ liệu mới nhất
+      final effectiveUserId = _resolveUserId();
+      final normalizedTx = tx.copyWith(userId: effectiveUserId);
+      await _repository.addTransaction(normalizedTx, effectiveUserId);
+      await fetchAllTransactions(
+        effectiveUserId,
+      ); // Cập nhật lại dữ liệu mới nhất
     } catch (e) {
       debugPrint("Lỗi khi lưu giao dịch: $e");
       rethrow;
@@ -49,8 +65,9 @@ class TransactionController extends ChangeNotifier {
   // 4. XÓA GIAO DỊCH
   Future<void> deleteTransaction(String transactionId) async {
     try {
-      await _repository.deleteTransaction(transactionId);
-      await fetchAllTransactions();
+      final effectiveUserId = _resolveUserId();
+      await _repository.deleteTransaction(transactionId, effectiveUserId);
+      await fetchAllTransactions(effectiveUserId);
     } catch (e) {
       debugPrint("Lỗi khi xóa giao dịch: $e");
       rethrow;
@@ -60,6 +77,6 @@ class TransactionController extends ChangeNotifier {
 
 // 💡 ĐÃ VÁ: Khai báo Provider sử dụng gói flutter_riverpod chuẩn
 final transactionControllerProvider =
-ChangeNotifierProvider<TransactionController>((ref) {
-  return TransactionController();
-});
+    ChangeNotifierProvider<TransactionController>((ref) {
+      return TransactionController();
+    });

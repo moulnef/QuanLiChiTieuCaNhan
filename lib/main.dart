@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
@@ -14,6 +15,21 @@ import 'ui/providers/finance_provider.dart';
 void main() async {
   // 1. Khởi tạo binding cho Flutter
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Giữ status bar + navigation bar hiển thị theo kiểu edge-to-edge,
+  // tránh bị vùng đen ở đáy trên một số thiết bị Android.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
 
   // 2. Khởi tạo Firebase với cấu hình chuẩn
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);

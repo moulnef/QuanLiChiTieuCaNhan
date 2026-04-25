@@ -15,21 +15,58 @@ import '../../ui/transaction/transaction_list_page.dart';
 class TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   final Widget rootPage;
+  final NavigatorObserver? navigatorObserver;
 
   const TabNavigator({
     super.key,
     required this.navigatorKey,
     required this.rootPage,
+    this.navigatorObserver,
   });
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
       key: navigatorKey,
+      observers: navigatorObserver == null
+          ? const <NavigatorObserver>[]
+          : <NavigatorObserver>[navigatorObserver!],
       onGenerateRoute: (routeSettings) {
         return MaterialPageRoute(builder: (context) => rootPage);
       },
     );
+  }
+}
+
+class _TabRouteObserver extends NavigatorObserver {
+  _TabRouteObserver({required this.onChanged});
+
+  final VoidCallback onChanged;
+
+  void _notifyChanged() => onChanged();
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    _notifyChanged();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    _notifyChanged();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    _notifyChanged();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    _notifyChanged();
   }
 }
 
@@ -48,9 +85,12 @@ class _MainScreenState extends State<MainScreen>
 
   int _selectedIndex = 0;
   bool _isMenuOpen = false;
+  bool _hideOverlaysForRoute = false;
+  bool _isNestedRouteActive = false;
   late AnimationController _animationController;
   late Animation<double> _rotationAnimation;
   Offset? _chatbotOffset;
+  late final List<_TabRouteObserver> _tabRouteObservers;
 
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
@@ -65,6 +105,10 @@ class _MainScreenState extends State<MainScreen>
   @override
   void initState() {
     super.initState();
+    _tabRouteObservers = List<_TabRouteObserver>.generate(
+      _navigatorKeys.length,
+      (_) => _TabRouteObserver(onChanged: _updateNestedRouteState),
+    );
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -72,6 +116,9 @@ class _MainScreenState extends State<MainScreen>
     _rotationAnimation = Tween<double>(begin: 0.0, end: 0.125).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateNestedRouteState();
+    });
   }
 
   @override
@@ -103,21 +150,52 @@ class _MainScreenState extends State<MainScreen>
 
     if (_isMenuOpen) _toggleMenu();
     setState(() => _selectedIndex = index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateNestedRouteState();
+    });
   }
 
-  Future<void> _pushInCurrentTab(Widget page) async {
+  void _updateNestedRouteState() {
+    if (!mounted) return;
+    final currentNav = _navigatorKeys[_selectedIndex].currentState;
+    final bool shouldHide = currentNav?.canPop() ?? false;
+    if (_isNestedRouteActive == shouldHide) return;
+    setState(() => _isNestedRouteActive = shouldHide);
+  }
+
+  Future<void> _pushInCurrentTab(
+    Widget page, {
+    bool hideOverlaysWhilePushed = false,
+  }) async {
     if (_isMenuOpen) {
       _toggleMenu();
     }
 
-    final currentNav = _navigatorKeys[_selectedIndex].currentState;
-    if (currentNav != null) {
-      await currentNav.push(MaterialPageRoute(builder: (_) => page));
-      return;
+    if (hideOverlaysWhilePushed && mounted) {
+      setState(() => _hideOverlaysForRoute = true);
     }
 
-    if (!mounted) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    try {
+      final currentNav = _navigatorKeys[_selectedIndex].currentState;
+      if (currentNav != null) {
+        await currentNav.push(MaterialPageRoute(builder: (_) => page));
+        return;
+      }
+
+      if (!mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    } finally {
+      if (hideOverlaysWhilePushed && mounted) {
+        setState(() => _hideOverlaysForRoute = false);
+      }
+    }
+  }
+
+  Future<void> _openCreateTransactionPage({TransactionModel? editData}) {
+    return _pushInCurrentTab(
+      CreateTransactionPage(editData: editData),
+      hideOverlaysWhilePushed: true,
+    );
   }
 
   void _openChatbot() {
@@ -146,15 +224,13 @@ class _MainScreenState extends State<MainScreen>
       Navigator.pop(context);
 
       if (result != null && result['amount'] != null) {
-        _pushInCurrentTab(
-          CreateTransactionPage(
-            editData: TransactionModel(
-              amount: (result['amount'] as num).toDouble(),
-              categoryId: '',
-              type: 'expense',
-              transactionDate: DateTime.now(),
-              note: 'Quét từ hóa đơn',
-            ),
+        _openCreateTransactionPage(
+          editData: TransactionModel(
+            amount: (result['amount'] as num).toDouble(),
+            categoryId: '',
+            type: 'expense',
+            transactionDate: DateTime.now(),
+            note: 'Quét từ hóa đơn',
           ),
         );
       } else {
@@ -171,7 +247,8 @@ class _MainScreenState extends State<MainScreen>
   @override
   Widget build(BuildContext context) {
     final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
-    final bool hideAssistiveOverlays = isKeyboardVisible;
+    final bool hideAssistiveOverlays =
+        isKeyboardVisible || _hideOverlaysForRoute || _isNestedRouteActive;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF),
@@ -191,19 +268,23 @@ class _MainScreenState extends State<MainScreen>
                   TabNavigator(
                     navigatorKey: _navigatorKeys[0],
                     rootPage: const HomePage(),
+                    navigatorObserver: _tabRouteObservers[0],
                   ),
                   TabNavigator(
                     navigatorKey: _navigatorKeys[1],
                     rootPage: const TransactionListPage(),
+                    navigatorObserver: _tabRouteObservers[1],
                   ),
                   const SizedBox.shrink(),
                   TabNavigator(
                     navigatorKey: _navigatorKeys[3],
                     rootPage: const StatsPage(),
+                    navigatorObserver: _tabRouteObservers[3],
                   ),
                   TabNavigator(
                     navigatorKey: _navigatorKeys[4],
                     rootPage: const ProfilePage(),
+                    navigatorObserver: _tabRouteObservers[4],
                   ),
                 ],
               ),
@@ -260,7 +341,7 @@ class _MainScreenState extends State<MainScreen>
                             iconColor: Colors.green,
                             onTap: () {
                               _toggleMenu();
-                              _pushInCurrentTab(const CreateTransactionPage());
+                              _openCreateTransactionPage();
                             },
                           ),
                         ],
@@ -268,54 +349,55 @@ class _MainScreenState extends State<MainScreen>
                     ),
                   ),
                 ),
-              Positioned(
-                bottom: 30,
-                left: 20,
-                right: 20,
-                child: SafeArea(
-                  child: Container(
-                    height: 65,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(40),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          spreadRadius: 1,
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildNavItem(
-                          0,
-                          Icons.home_outlined,
-                          Icons.home_rounded,
-                        ),
-                        _buildNavItem(
-                          1,
-                          Icons.receipt_long_outlined,
-                          Icons.receipt_long_rounded,
-                        ),
-                        const SizedBox(width: 60),
-                        _buildNavItem(
-                          3,
-                          Icons.bar_chart_outlined,
-                          Icons.bar_chart_rounded,
-                        ),
-                        _buildNavItem(
-                          4,
-                          Icons.person_outline_rounded,
-                          Icons.person_rounded,
-                        ),
-                      ],
+              if (!hideAssistiveOverlays)
+                Positioned(
+                  bottom: 30,
+                  left: 20,
+                  right: 20,
+                  child: SafeArea(
+                    child: Container(
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(40),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            spreadRadius: 1,
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildNavItem(
+                            0,
+                            Icons.home_outlined,
+                            Icons.home_rounded,
+                          ),
+                          _buildNavItem(
+                            1,
+                            Icons.receipt_long_outlined,
+                            Icons.receipt_long_rounded,
+                          ),
+                          const SizedBox(width: 60),
+                          _buildNavItem(
+                            3,
+                            Icons.bar_chart_outlined,
+                            Icons.bar_chart_rounded,
+                          ),
+                          _buildNavItem(
+                            4,
+                            Icons.person_outline_rounded,
+                            Icons.person_rounded,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
               if (!hideAssistiveOverlays)
                 Positioned(
                   left: _chatbotOffset!.dx,

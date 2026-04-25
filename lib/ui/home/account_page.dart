@@ -76,6 +76,9 @@ class _AccountPageState extends State<AccountPage> {
           : RefreshIndicator(
               onRefresh: _loadData,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: ClampingScrollPhysics(),
+                ),
                 padding: const EdgeInsets.all(16),
                 children: [
                   Card(

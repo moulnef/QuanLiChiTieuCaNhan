@@ -106,7 +106,9 @@ class _ProfilePageState extends State<ProfilePage> {
         onRefresh: _loadProfileData,
         color: const Color(0xFF6D28D9),
         child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: ClampingScrollPhysics(),
+          ),
           slivers: [
             SliverToBoxAdapter(child: _buildHeader()),
             SliverPadding(

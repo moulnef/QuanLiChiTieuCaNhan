@@ -75,6 +75,11 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
       ),
     );
 
@@ -205,7 +210,7 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
                     _QuickStat(
                       label: 'Tổng thu',
                       value:
-                      '${financeProvider.totalIncome.toStringAsFixed(0)}',
+                          '${financeProvider.totalIncome.toStringAsFixed(0)}',
                       icon: Icons.savings_outlined,
                       iconColor: const Color(0xFF4ADE80),
                     ),
@@ -213,7 +218,7 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
                     _QuickStat(
                       label: 'Tổng chi',
                       value:
-                      '${financeProvider.totalExpense.toStringAsFixed(0)}',
+                          '${financeProvider.totalExpense.toStringAsFixed(0)}',
                       icon: Icons.credit_card_outlined,
                       iconColor: const Color(0xFF93C5FD),
                     ),
@@ -221,7 +226,7 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
                     _QuickStat(
                       label: 'Số dư',
                       value:
-                      '${financeProvider.totalBalance.toStringAsFixed(0)}',
+                          '${financeProvider.totalBalance.toStringAsFixed(0)}',
                       icon: Icons.account_balance_outlined,
                       iconColor: const Color(0xFFFBBF24),
                     ),
@@ -311,18 +316,18 @@ class _HomeTab extends StatelessWidget {
             else if (snapshot.hasError)
               _ErrorCard(message: 'Không thể tải giao dịch')
             else if (docs.isEmpty)
-                _EmptyStateCard(
-                  icon: Icons.receipt_long_outlined,
-                  message: 'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!',
-                )
-              else
-                ...docs.take(5).map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return _TransactionCard(
-                    data: data,
-                    onDelete: () => firestoreService.deleteTransaction(doc.id),
-                  );
-                }),
+              _EmptyStateCard(
+                icon: Icons.receipt_long_outlined,
+                message: 'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!',
+              )
+            else
+              ...docs.take(5).map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return _TransactionCard(
+                  data: data,
+                  onDelete: () => firestoreService.deleteTransaction(doc.id),
+                );
+              }),
           ],
         );
       },
@@ -545,7 +550,7 @@ class _InstallmentTabContent extends StatelessWidget {
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
-            'Kỳ tiếp theo: ${DateFormat('yyyy-MM-dd').format(item.nextDueDate)}',
+                'Kỳ tiếp theo: ${DateFormat('yyyy-MM-dd').format(item.nextDueDate)}',
             alertColor: AppColors.blue,
           );
         }),
@@ -591,7 +596,7 @@ class _DebtTabContent extends StatelessWidget {
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
-            'Kỳ tiếp: ${DateFormat('yyyy-MM-dd').format(item.dueDate)} • ${item.interestText}',
+                'Kỳ tiếp: ${DateFormat('yyyy-MM-dd').format(item.dueDate)} • ${item.interestText}',
             alertColor: AppColors.warning,
           );
         }),
@@ -649,9 +654,9 @@ String _formatCompactMoney(double amount) {
 const double _financeSheetBottomReserve = 128;
 
 Future<void> _openCreateSavingGoalSheet(
-    BuildContext context,
-    FinanceProvider provider,
-    ) async {
+  BuildContext context,
+  FinanceProvider provider,
+) async {
   final titleController = TextEditingController();
   final amountController = TextEditingController();
   DateTime selectedDate = DateTime(2026, 5, 1);
@@ -673,7 +678,7 @@ Future<void> _openCreateSavingGoalSheet(
               right: 20,
               top: 16,
               bottom:
-              MediaQuery.of(sheetContext).viewInsets.bottom +
+                  MediaQuery.of(sheetContext).viewInsets.bottom +
                   _financeSheetBottomReserve,
             ),
             decoration: BoxDecoration(
@@ -771,30 +776,30 @@ Future<void> _openCreateSavingGoalSheet(
                     child: ElevatedButton(
                       onPressed: isValid && !isLoading
                           ? () async {
-                        setState(() => isLoading = true);
-                        try {
-                          await provider.addSavingGoal(
-                            title: title,
-                            targetAmount: amount,
-                            deadline: selectedDate,
-                          );
+                              setState(() => isLoading = true);
+                              try {
+                                await provider.addSavingGoal(
+                                  title: title,
+                                  targetAmount: amount,
+                                  deadline: selectedDate,
+                                );
 
-                          if (context.mounted) {
-                            Navigator.pop(sheetContext);
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            SnackbarUtils.showError(
-                              context,
-                              'Lưu mục tiêu tiết kiệm thất bại: $e',
-                            );
-                          }
-                        } finally {
-                          if (sheetContext.mounted) {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      }
+                                if (context.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  SnackbarUtils.showError(
+                                    context,
+                                    'Lưu mục tiêu tiết kiệm thất bại: $e',
+                                  );
+                                }
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setState(() => isLoading = false);
+                                }
+                              }
+                            }
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isValid && !isLoading
@@ -808,22 +813,22 @@ Future<void> _openCreateSavingGoalSheet(
                       ),
                       child: isLoading
                           ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
                           : const Text(
-                        'Tạo mục tiêu',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                              'Tạo mục tiêu',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -837,9 +842,9 @@ Future<void> _openCreateSavingGoalSheet(
 }
 
 Future<void> _openCreateInstallmentPlanSheet(
-    BuildContext context,
-    FinanceProvider provider,
-    ) async {
+  BuildContext context,
+  FinanceProvider provider,
+) async {
   final titleController = TextEditingController();
   final totalAmountController = TextEditingController();
   final periodsController = TextEditingController();
@@ -856,7 +861,7 @@ Future<void> _openCreateInstallmentPlanSheet(
           right: 20,
           top: 16,
           bottom:
-          MediaQuery.of(sheetContext).viewInsets.bottom +
+              MediaQuery.of(sheetContext).viewInsets.bottom +
               _financeSheetBottomReserve,
         ),
         decoration: const BoxDecoration(
@@ -997,9 +1002,9 @@ Future<void> _openCreateInstallmentPlanSheet(
 }
 
 Future<void> _openCreateLoanSheet(
-    BuildContext context,
-    FinanceProvider provider,
-    ) async {
+  BuildContext context,
+  FinanceProvider provider,
+) async {
   final titleController = TextEditingController();
   final lenderController = TextEditingController();
   final totalAmountController = TextEditingController();
@@ -1020,7 +1025,7 @@ Future<void> _openCreateLoanSheet(
               right: 20,
               top: 16,
               bottom:
-              MediaQuery.of(sheetContext).viewInsets.bottom +
+                  MediaQuery.of(sheetContext).viewInsets.bottom +
                   _financeSheetBottomReserve,
             ),
             decoration: BoxDecoration(
@@ -1171,12 +1176,12 @@ Future<void> _openCreateLoanSheet(
                         final lender = lenderController.text.trim();
                         final totalAmount =
                             int.tryParse(totalAmountController.text.trim()) ??
-                                0;
+                            0;
                         final monthlyPayment =
                             int.tryParse(
                               monthlyPaymentController.text.trim(),
                             ) ??
-                                0;
+                            0;
                         final interest = interestController.text.trim();
 
                         if (title.isEmpty ||
@@ -1187,8 +1192,8 @@ Future<void> _openCreateLoanSheet(
 
                         final interestText = interest.isEmpty
                             ? (monthlyPayment > 0
-                            ? 'Trả mỗi tháng ${_formatMoney(monthlyPayment.toDouble())}'
-                            : 'Chưa cập nhật lãi suất')
+                                  ? 'Trả mỗi tháng ${_formatMoney(monthlyPayment.toDouble())}'
+                                  : 'Chưa cập nhật lãi suất')
                             : 'Lãi suất $interest%';
 
                         await provider.addDebtRecord(

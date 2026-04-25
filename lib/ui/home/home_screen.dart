@@ -117,7 +117,9 @@ class HomePageState extends State<HomePage> {
             onRefresh: _reloadHomeData,
             child: ListView(
               controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics(),
+              ),
               padding: const EdgeInsets.only(bottom: 124),
               children: [
                 _buildHeader(
@@ -777,7 +779,8 @@ class HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const TransactionListPage(),
+                      builder: (_) =>
+                          const TransactionListPage(forceShowBackButton: true),
                     ),
                   );
                 },

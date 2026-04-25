@@ -200,7 +200,6 @@ class _DebtTabPageState extends State<DebtTabPage> {
         ),
       );
     }
-
   }
 
   @override
@@ -217,7 +216,9 @@ class _DebtTabPageState extends State<DebtTabPage> {
         return RefreshIndicator(
           onRefresh: provider.loadFinanceData,
           child: ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics(),
+            ),
             padding: const EdgeInsets.only(
               left: 16,
               right: 16,
@@ -692,7 +693,7 @@ class _AddLoanSheetState extends State<_AddLoanSheet> {
       items: selectedBank!.rates.keys
           .map(
             (term) => DropdownMenuItem(value: term, child: Text('$term tháng')),
-      )
+          )
           .toList(),
       onChanged: (value) {
         setState(() {
@@ -767,11 +768,11 @@ class _AddLoanSheetState extends State<_AddLoanSheet> {
   }
 
   Widget _buildTextField(
-      TextEditingController controller,
-      String label, {
-        bool isNumber = false,
-        ValueChanged<String>? onChanged,
-      }) {
+    TextEditingController controller,
+    String label, {
+    bool isNumber = false,
+    ValueChanged<String>? onChanged,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
@@ -780,7 +781,6 @@ class _AddLoanSheetState extends State<_AddLoanSheet> {
       validator: (v) => v!.isEmpty ? 'Vui lòng nhập' : null,
     );
   }
-
 
   Widget _buildSubmitButton() {
     return SizedBox(

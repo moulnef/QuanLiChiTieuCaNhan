@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import '../../domain/model/transaction_model.dart';
-import '../../data/remote/firestore_service.dart';
 import '../../data/local/category_data.dart';
-
-final firestoreServiceProvider = Provider<FirestoreService>((ref) {
-  return FirestoreService();
-});
+import '../../data/repository/transaction_repository.dart';
 
 class TransactionListState {
   final AsyncValue<List<TransactionModel>> transactions;
@@ -62,10 +60,22 @@ class TransactionListState {
 }
 
 class TransactionListController extends Notifier<TransactionListState> {
+  static const String _demoUserId = 'user_001';
+
+  final TransactionRepository _repository = TransactionRepository();
+
+  String _resolveUserId() {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null && currentUid.isNotEmpty) {
+      return currentUid;
+    }
+    return _demoUserId;
+  }
+
   @override
   TransactionListState build() {
     // Gọi lắng nghe ngay khi Provider được khởi tạo
-    _listenToFirebase();
+    _listenToTransactions();
     return TransactionListState(
       transactions: const AsyncValue.loading(),
       filteredList: [],
@@ -74,26 +84,25 @@ class TransactionListController extends Notifier<TransactionListState> {
     );
   }
 
-  void _listenToFirebase() {
-    final service = ref.read(firestoreServiceProvider);
+  void _listenToTransactions() {
+    final userId = _resolveUserId();
 
-    final sub = service.getTransactions().listen((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => TransactionModel.fromMap(
-        doc.data() as Map<String, dynamic>,
-        doc.id,
-      ))
-          .toList();
+    Future<void> loadCurrentList() async {
+      try {
+        final list = await _repository.getTransactions(userId);
+        state = state.copyWith(transactions: AsyncValue.data(list));
+        _applyFiltersAndSort(list);
+      } catch (e, st) {
+        state = state.copyWith(transactions: AsyncValue.error(e, st));
+      }
+    }
 
-      // Cập nhật transactions TRƯỚC
-      state = state.copyWith(transactions: AsyncValue.data(list));
+    loadCurrentList();
+    final StreamSubscription<void> sub = _repository
+        .watchTransactions(userId)
+        .listen((_) => loadCurrentList());
 
-      // Sau đó chạy filter ngay lập tức trên danh sách 'list' vừa nhận được
-      // Thay vì đợi state cập nhật xong mới chạy _runFilter
-      _applyFiltersAndSort(list);
-    });
-
-    ref.onDispose(() => sub.cancel());
+    ref.onDispose(sub.cancel);
   }
 
   // Tách hàm xử lý Filter ra để dùng chung
@@ -105,13 +114,19 @@ class TransactionListController extends Notifier<TransactionListState> {
 
   // Hàm "Trái tim" của Controller: Xử lý logic lọc và tính toán
   void _applyFiltersAndSort(List<TransactionModel> rawList) {
-    List<TransactionModel> result = List.from(rawList); // Tạo bản sao để tránh lỗi tham chiếu
+    List<TransactionModel> result = List.from(
+      rawList,
+    ); // Tạo bản sao để tránh lỗi tham chiếu
 
     // 1. Lọc Thời gian
     if (state.filterDateRange != null) {
       result = result.where((tx) {
-        return tx.date.isAfter(state.filterDateRange!.start.subtract(const Duration(seconds: 1))) &&
-            tx.date.isBefore(state.filterDateRange!.end.add(const Duration(days: 1)));
+        return tx.date.isAfter(
+              state.filterDateRange!.start.subtract(const Duration(seconds: 1)),
+            ) &&
+            tx.date.isBefore(
+              state.filterDateRange!.end.add(const Duration(days: 1)),
+            );
       }).toList();
     }
 
@@ -139,10 +154,13 @@ class TransactionListController extends Notifier<TransactionListState> {
     // 4. Lọc Tìm kiếm (Note hoặc Category)
     if (state.searchQuery.isNotEmpty) {
       final query = state.searchQuery.toLowerCase();
-      result = result.where((tx) =>
-      tx.note.toLowerCase().contains(query) ||
-          tx.categoryName.toLowerCase().contains(query)
-      ).toList();
+      result = result
+          .where(
+            (tx) =>
+                tx.note.toLowerCase().contains(query) ||
+                tx.categoryName.toLowerCase().contains(query),
+          )
+          .toList();
     }
 
     // 5. Sắp xếp (Sort)
@@ -158,8 +176,10 @@ class TransactionListController extends Notifier<TransactionListState> {
     double income = 0;
     double expense = 0;
     for (var tx in result) {
-      if (tx.type == 'income') income += tx.amount;
-      else expense += tx.amount;
+      if (tx.type == 'income')
+        income += tx.amount;
+      else
+        expense += tx.amount;
     }
 
     // Cập nhật lại state cuối cùng để UI render
@@ -199,6 +219,6 @@ class TransactionListController extends Notifier<TransactionListState> {
 }
 
 final transactionListControllerProvider =
-NotifierProvider<TransactionListController, TransactionListState>(() {
-  return TransactionListController();
-});
+    NotifierProvider<TransactionListController, TransactionListState>(() {
+      return TransactionListController();
+    });
