@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
@@ -8,6 +7,7 @@ import 'core/config/firebase_options.dart';
 import 'data/repository/finance_repository.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/home/main_screen.dart';
+import 'ui/providers/auth_provider.dart';
 import 'ui/providers/budget_provider.dart';
 import 'ui/providers/finance_provider.dart';
 
@@ -26,6 +26,9 @@ void main() async {
     ProviderScope(
       child: provider.MultiProvider(
         providers: [
+          provider.ChangeNotifierProvider<AuthProvider>(
+            create: (_) => AuthProvider(),
+          ),
           provider.Provider<FinanceRepository>(
             create: (_) => FinanceRepository(),
           ),
@@ -69,24 +72,19 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // LOGIC KIỂM TRA ĐĂNG NHẬP REALTIME
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // Trong lúc chờ Firebase phản hồi
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      home: provider.Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          if (authProvider.isLoading) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          // Nếu đã đăng nhập thành công -> Vào thẳng MainScreen
-          if (snapshot.hasData) {
-            return const MainScreen();
+          if (!authProvider.isAuthenticated) {
+            return const LoginPage();
           }
 
-          // Nếu chưa đăng nhập hoặc đã Logout -> Về trang Login
-          return const LoginPage();
+          return const MainScreen();
         },
       ),
     );

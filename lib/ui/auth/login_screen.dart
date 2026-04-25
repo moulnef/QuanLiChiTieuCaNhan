@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:provider/provider.dart';
 import 'register_screen.dart';
+import '../providers/auth_provider.dart';
 import '../../utils/snackbar_utils.dart';
 import 'success_transition_screen.dart';
 
@@ -11,7 +13,8 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage>
+    with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -27,8 +30,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       duration: const Duration(milliseconds: 900),
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -42,29 +47,40 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   Future<void> login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      if (mounted) SnackbarUtils.showError(context, "Vui lòng nhập đầy đủ email và mật khẩu");
+      if (mounted)
+        SnackbarUtils.showError(
+          context,
+          "Vui lòng nhập đầy đủ email và mật khẩu",
+        );
       return;
     }
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+        ),
       );
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final result = await context.read<AuthProvider>().login(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
       );
 
       if (mounted) Navigator.pop(context);
-      if (mounted) {
+      if (!mounted) return;
+
+      if (result == 'admin' || result == 'user') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const SuccessTransitionScreen()),
         );
+        return;
       }
-    } on FirebaseAuthException catch (e) {
+
+      SnackbarUtils.showError(context, result ?? "Đã có lỗi xảy ra");
+    } on fb_auth.FirebaseAuthException catch (e) {
       if (mounted) Navigator.pop(context);
       String msg = e.message ?? "Đã có lỗi xảy ra";
       if (e.code == 'user-not-found') msg = "Không tìm thấy tài khoản này.";
@@ -108,7 +124,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           color: const Color(0xFF6D28D9).withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
-                        )
+                        ),
                       ],
                     ),
                     child: const Icon(
@@ -187,7 +203,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   // Divider
                   Row(
                     children: [
-                      Expanded(child: Divider(color: const Color(0xFFCBD5E1).withValues(alpha: 0.5))),
+                      Expanded(
+                        child: Divider(
+                          color: const Color(0xFFCBD5E1).withValues(alpha: 0.5),
+                        ),
+                      ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
@@ -199,7 +219,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           ),
                         ),
                       ),
-                      Expanded(child: Divider(color: const Color(0xFFCBD5E1).withValues(alpha: 0.5))),
+                      Expanded(
+                        child: Divider(
+                          color: const Color(0xFFCBD5E1).withValues(alpha: 0.5),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -234,12 +258,17 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       children: [
                         const Text(
                           "Chưa có tài khoản? ",
-                          style: TextStyle(fontSize: 15, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                         GestureDetector(
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const RegisterPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const RegisterPage(),
+                            ),
                           ),
                           child: const Text(
                             "Đăng ký ngay",
@@ -307,17 +336,23 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           hintText: hint,
           hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
           prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 22),
           suffixIcon: isPassword
               ? IconButton(
-            icon: Icon(
-              _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              color: const Color(0xFF94A3B8),
-              size: 20,
-            ),
-            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-          )
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    color: const Color(0xFF94A3B8),
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                )
               : null,
         ),
       ),
@@ -340,7 +375,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             color: const Color(0xFF6D28D9).withValues(alpha: 0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: ElevatedButton(
@@ -348,7 +383,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: Text(
           label,
@@ -374,16 +411,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       child: Container(
         height: 54,
         decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              )
-            ]
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

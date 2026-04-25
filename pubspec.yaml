@@ -37,6 +37,10 @@ dependencies:
   # --- BIỂU ĐỒ (CHARTS) ---
   fl_chart: ^0.69.0
 
+  # --- HIỆU ỨNG & ICON ---
+  flutter_animate: ^4.5.2
+  lucide_icons: ^0.257.0
+
   # --- TIỆN ÍCH & GIAO DIỆN (UTILS & UI) ---
   intl: ^0.20.1
   http: ^1.6.0

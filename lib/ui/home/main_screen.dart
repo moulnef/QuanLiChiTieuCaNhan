@@ -91,6 +91,16 @@ class _MainScreenState extends State<MainScreen>
 
   void _onItemTapped(int index) {
     if (index == 2) return;
+
+    if (_selectedIndex == index) {
+      final currentNav = _navigatorKeys[index].currentState;
+      currentNav?.popUntil((route) => route.isFirst);
+      if (index == 0) {
+        HomePageState.scrollToTopActive();
+      }
+      return;
+    }
+
     if (_isMenuOpen) _toggleMenu();
     setState(() => _selectedIndex = index);
   }
@@ -125,7 +135,9 @@ class _MainScreenState extends State<MainScreen>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+        ),
       );
 
       final result = await _ocrService.scanReceiptPath(image.path);
@@ -221,7 +233,6 @@ class _MainScreenState extends State<MainScreen>
                             bgColor: Colors.orange.shade50,
                             iconColor: Colors.orange,
                             onTap: _handleInvoiceScan,
-
                           ),
                           const SizedBox(width: 24),
                           _buildIconOption(
@@ -279,8 +290,16 @@ class _MainScreenState extends State<MainScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildNavItem(0, Icons.home_outlined, Icons.home_rounded),
-                        _buildNavItem(1, Icons.receipt_long_outlined, Icons.receipt_long_rounded),
+                        _buildNavItem(
+                          0,
+                          Icons.home_outlined,
+                          Icons.home_rounded,
+                        ),
+                        _buildNavItem(
+                          1,
+                          Icons.receipt_long_outlined,
+                          Icons.receipt_long_rounded,
+                        ),
                         const SizedBox(width: 60),
                         _buildNavItem(
                           3,
@@ -319,7 +338,10 @@ class _MainScreenState extends State<MainScreen>
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
                             child: const Icon(
                               Icons.smart_toy_rounded,
                               color: Color(0xFF6D28D9),
@@ -347,19 +369,21 @@ class _MainScreenState extends State<MainScreen>
                           height: 56,
                           decoration: BoxDecoration(
                             // THAY ĐỔI: Màu Gradient Galaxy cho nút dấu (+)
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF6D28D9,
+                                ).withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6D28D9).withValues(alpha: 0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                )
-                              ]
+                            ],
                           ),
                           child: RotationTransition(
                             turns: _rotationAnimation,
@@ -389,8 +413,8 @@ class _MainScreenState extends State<MainScreen>
     );
     final double minY = _chatbotMinTop;
     final double maxY =
-    (constraints.maxHeight - _chatbotIconSize - _chatbotBottomReserve)
-        .clamp(_chatbotMinTop, double.infinity);
+        (constraints.maxHeight - _chatbotIconSize - _chatbotBottomReserve)
+            .clamp(_chatbotMinTop, double.infinity);
 
     return Offset(value.dx.clamp(minX, maxX), value.dy.clamp(minY, maxY));
   }
@@ -438,7 +462,9 @@ class _MainScreenState extends State<MainScreen>
             isSelected ? filledIcon : outlineIcon,
             key: ValueKey<bool>(isSelected),
             // THAY ĐỔI: Màu Tím Galaxy khi tab được chọn
-            color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF94A3B8),
+            color: isSelected
+                ? const Color(0xFF6D28D9)
+                : const Color(0xFF94A3B8),
             size: 28,
           ),
         ),
