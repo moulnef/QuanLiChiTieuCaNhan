@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
-import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -9,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'user_info_screen.dart';
 import 'change_password_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../utils/app_localizer.dart';
 
 import '../../modules/admin/admin_dashboard.dart';
 import '../providers/auth_provider.dart';
@@ -28,7 +28,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool _isNotifyEnabled = true;
   bool _isSyncEnabled = true;
-  String _language = 'Tiếng Việt';
 
   String _displayName = 'Người dùng';
   String _email = 'Chưa cập nhật';
@@ -118,7 +117,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 20),
                   _buildStatRow(),
                   const SizedBox(height: 28),
-                  _buildSectionTitle("Tài khoản"),
+                  _buildSectionTitle("Tài khoản".xtr(context)),
                   const SizedBox(height: 10),
                   _buildCard(
                     children: [
@@ -142,7 +141,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  _buildSectionTitle("Thông báo"),
+                  _buildSectionTitle("Thông báo".xtr(context)),
                   const SizedBox(height: 10),
                   _buildCard(
                     children: [
@@ -158,7 +157,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  _buildSectionTitle("Dữ liệu"),
+                  _buildSectionTitle("Dữ liệu".xtr(context)),
                   const SizedBox(height: 10),
                   _buildCard(
                     children: [
@@ -183,7 +182,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   if (authProvider.isAdmin) ...[
                     const SizedBox(height: 20),
-                    _buildSectionTitle("Quản trị"),
+                    _buildSectionTitle("Quản trị".xtr(context)),
                     const SizedBox(height: 10),
                     _buildAdminEntry(),
                   ],
@@ -200,15 +199,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildLanguageItem() {
-    final isEnglish = _language == 'English';
+    final isEnglish = context.locale.languageCode == 'en';
+    final languageLabel = isEnglish ? 'English' : 'Tiếng Việt';
 
     return InkWell(
       onTap: () {
         if (isEnglish) {
-          setState(() => _language = 'Tiếng Việt');
           context.setLocale(const Locale('vi'));
         } else {
-          setState(() => _language = 'English');
           context.setLocale(const Locale('en'));
         }
       },
@@ -235,16 +233,16 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Ngôn ngữ",
-                    style: TextStyle(
+                  Text(
+                    "Ngôn ngữ".xtr(context),
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1E293B),
                     ),
                   ),
                   Text(
-                    _language,
+                    languageLabel,
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF94A3B8),

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'register_screen.dart';
 import '../providers/auth_provider.dart';
 import '../../utils/snackbar_utils.dart';
-import 'success_transition_screen.dart';
+import '../../utils/app_localizer.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -50,14 +50,16 @@ class _LoginPageState extends State<LoginPage>
       if (mounted)
         SnackbarUtils.showError(
           context,
-          "Vui lòng nhập đầy đủ email và mật khẩu",
+          "Vui lòng nhập đầy đủ email và mật khẩu".xtr(context),
         );
       return;
     }
     try {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
       showDialog(
         context: context,
         barrierDismissible: false,
+        useRootNavigator: true,
         builder: (_) => const Center(
           child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
         ),
@@ -68,26 +70,35 @@ class _LoginPageState extends State<LoginPage>
         _passwordController.text.trim(),
       );
 
-      if (mounted) Navigator.pop(context);
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
       if (!mounted) return;
 
-      if (result == 'admin' || result == 'user') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const SuccessTransitionScreen()),
-        );
+      if (result == null) {
+        // MyApp tự chuyển màn theo auth state để tránh race-condition.
         return;
       }
 
-      SnackbarUtils.showError(context, result ?? "Đã có lỗi xảy ra");
+      SnackbarUtils.showError(context, result);
     } on fb_auth.FirebaseAuthException catch (e) {
-      if (mounted) Navigator.pop(context);
-      String msg = e.message ?? "Đã có lỗi xảy ra";
-      if (e.code == 'user-not-found') msg = "Không tìm thấy tài khoản này.";
-      if (e.code == 'wrong-password') msg = "Mật khẩu không chính xác.";
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+      String msg = e.message ?? "Đã có lỗi xảy ra".xtr(context);
+      if (e.code == 'user-not-found') {
+        msg = "Không tìm thấy tài khoản này.".xtr(context);
+      }
+      if (e.code == 'wrong-password') {
+        msg = "Mật khẩu không chính xác.".xtr(context);
+      }
       if (mounted) SnackbarUtils.showError(context, msg);
     } catch (e) {
-      if (mounted) Navigator.pop(context);
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
       if (mounted) SnackbarUtils.showError(context, e.toString());
     }
   }
@@ -136,9 +147,9 @@ class _LoginPageState extends State<LoginPage>
                   const SizedBox(height: 32),
 
                   // Heading
-                  const Text(
-                    "Chào mừng\ntrở lại",
-                    style: TextStyle(
+                  Text(
+                    "Chào mừng\ntrở lại".xtr(context),
+                    style: const TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF1E293B),
@@ -147,9 +158,9 @@ class _LoginPageState extends State<LoginPage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "Đăng nhập để quản lý tài chính của bạn",
-                    style: TextStyle(
+                  Text(
+                    "Đăng nhập để quản lý tài chính của bạn".xtr(context),
+                    style: const TextStyle(
                       fontSize: 15,
                       color: Color(0xFF64748B),
                       height: 1.5,
@@ -169,7 +180,7 @@ class _LoginPageState extends State<LoginPage>
                   const SizedBox(height: 20),
 
                   // Password field
-                  _buildLabel("Mật khẩu"),
+                  _buildLabel("Mật khẩu".xtr(context)),
                   const SizedBox(height: 8),
                   _buildInput(
                     controller: _passwordController,
@@ -184,9 +195,9 @@ class _LoginPageState extends State<LoginPage>
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
                       onTap: () {},
-                      child: const Text(
-                        "Quên mật khẩu?",
-                        style: TextStyle(
+                      child: Text(
+                        "Quên mật khẩu?".xtr(context),
+                        style: const TextStyle(
                           fontSize: 14,
                           color: Color(0xFF6D28D9),
                           fontWeight: FontWeight.w600,
@@ -197,7 +208,7 @@ class _LoginPageState extends State<LoginPage>
                   const SizedBox(height: 36),
 
                   // Login button
-                  _buildPrimaryButton("ĐĂNG NHẬP", login),
+                  _buildPrimaryButton("ĐĂNG NHẬP".xtr(context), login),
                   const SizedBox(height: 28),
 
                   // Divider
@@ -208,11 +219,11 @@ class _LoginPageState extends State<LoginPage>
                           color: const Color(0xFFCBD5E1).withValues(alpha: 0.5),
                         ),
                       ),
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          "hoặc tiếp tục với",
-                          style: TextStyle(
+                          "hoặc tiếp tục với".xtr(context),
+                          style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF94A3B8),
                             fontWeight: FontWeight.w500,
@@ -256,9 +267,9 @@ class _LoginPageState extends State<LoginPage>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          "Chưa có tài khoản? ",
-                          style: TextStyle(
+                        Text(
+                          "Chưa có tài khoản? ".xtr(context),
+                          style: const TextStyle(
                             fontSize: 15,
                             color: Color(0xFF64748B),
                           ),
@@ -270,9 +281,9 @@ class _LoginPageState extends State<LoginPage>
                               builder: (_) => const RegisterPage(),
                             ),
                           ),
-                          child: const Text(
-                            "Đăng ký ngay",
-                            style: TextStyle(
+                          child: Text(
+                            "Đăng ký ngay".xtr(context),
+                            style: const TextStyle(
                               fontSize: 15,
                               color: Color(0xFF1D4ED8),
                               fontWeight: FontWeight.bold,

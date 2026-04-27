@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
 
 import 'transaction_controller.dart';
 import '../../domain/model/transaction_model.dart';
 import '../../domain/model/category_model.dart';
 import '../../data/local/category_data.dart';
+import '../../services/translation_service.dart';
+import '../../utils/app_localizer.dart';
 import 'category_list_screen.dart';
 
 class CreateTransactionPage extends ConsumerStatefulWidget {
@@ -32,7 +36,88 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   bool _isSuccess = false;
   bool _isFrequentExpanded = false;
   List<CategoryModel> _frequentCategories = [];
-  final NumberFormat _compactFormatter = NumberFormat.compact(locale: 'vi');
+  final Map<String, String> _dynamicCategoryTranslations = {};
+  final Set<String> _pendingCategoryTranslations = {};
+
+  String _displayCategoryName(String raw) {
+    final mapped = raw.xtrCategory(context);
+    if (mapped != raw) {
+      return mapped;
+    }
+    return _dynamicCategoryTranslations[raw] ?? raw;
+  }
+
+  void _queueCategoryTranslations([Iterable<String> extra = const []]) {
+    final lang = context.locale.languageCode.toLowerCase();
+    if (lang != 'en') {
+      if (_dynamicCategoryTranslations.isNotEmpty ||
+          _pendingCategoryTranslations.isNotEmpty) {
+        _dynamicCategoryTranslations.clear();
+        _pendingCategoryTranslations.clear();
+      }
+      return;
+    }
+
+    final candidates = <String>{
+      ...extra.map((e) => e.trim()).where((e) => e.isNotEmpty),
+      ..._frequentCategories
+          .map((e) => e.name.trim())
+          .where((e) => e.isNotEmpty),
+    };
+
+    final selectedName = _selectedCategory?.name.trim();
+    if (selectedName != null && selectedName.isNotEmpty) {
+      candidates.add(selectedName);
+    }
+    if (_categoryId.trim().isNotEmpty) {
+      candidates.add(_categoryId.trim());
+    }
+
+    final unresolved = candidates
+        .where((name) {
+          final mapped = name.xtrCategory(context);
+          return mapped == name &&
+              !_dynamicCategoryTranslations.containsKey(name) &&
+              !_pendingCategoryTranslations.contains(name);
+        })
+        .toList(growable: false);
+
+    if (unresolved.isEmpty) {
+      return;
+    }
+
+    _pendingCategoryTranslations.addAll(unresolved);
+
+    Future<void>(() async {
+      try {
+        final translated = await TranslationService.instance.translateMany(
+          sourceTexts: unresolved,
+          targetLanguageCode: 'en',
+        );
+
+        if (!mounted) {
+          return;
+        }
+        if (context.locale.languageCode.toLowerCase() != 'en') {
+          _pendingCategoryTranslations.removeAll(unresolved);
+          return;
+        }
+
+        setState(() {
+          for (var i = 0; i < unresolved.length; i++) {
+            final source = unresolved[i];
+            final target = translated[i].trim();
+            if (target.isNotEmpty && target != source) {
+              _dynamicCategoryTranslations[source] = target;
+            }
+          }
+          _pendingCategoryTranslations.removeAll(unresolved);
+        });
+      } catch (_) {
+        _pendingCategoryTranslations.removeAll(unresolved);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -53,6 +138,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadFrequentCategories();
+      _queueCategoryTranslations();
     });
   }
 
@@ -70,7 +156,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   }
 
   String _quickAmountLabel(int amount) {
-    return '+${_compactFormatter.format(amount)}';
+    final localeCode = context.locale.languageCode == 'en' ? 'en' : 'vi';
+    return '+${NumberFormat.compact(locale: localeCode).format(amount)}';
   }
 
   void _applyQuickAmount(int amount) {
@@ -171,6 +258,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     if (top.isEmpty) top = allCats.take(6).toList();
 
     setState(() => _frequentCategories = top);
+    _queueCategoryTranslations(top.map((e) => e.name));
   }
 
   String _formatNumberPart(String numStr) {
@@ -382,8 +470,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       });
       _showCompactNotification(
         widget.editData != null
-            ? "Cập nhật thành công!"
-            : "Lưu giao dịch thành công!",
+            ? "Cập nhật thành công!".xtr(context)
+            : "Lưu giao dịch thành công!".xtr(context),
         const Color(0xFF10B981),
         Icons.check_circle_outline,
       );
@@ -419,8 +507,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  "Xóa giao dịch này?",
+                Text(
+                  "Xóa giao dịch này?".xtr(context),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -428,8 +516,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  "Dữ liệu bị xóa sẽ không thể khôi phục lại được. Bạn có chắc chắn muốn tiếp tục?",
+                Text(
+                  "Dữ liệu bị xóa sẽ không thể khôi phục lại được. Bạn có chắc chắn muốn tiếp tục?"
+                      .xtr(context),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 15,
@@ -453,8 +542,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                             width: 1.5,
                           ),
                         ),
-                        child: const Text(
-                          "Hủy",
+                        child: Text(
+                          "Hủy".xtr(context),
                           style: TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.bold,
@@ -478,8 +567,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
-                          "Xóa",
+                        child: Text(
+                          "Xóa".xtr(context),
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -504,7 +593,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           .read(transactionControllerProvider)
           .deleteTransaction(widget.editData!.id);
       _showCompactNotification(
-        "Đã xóa giao dịch",
+        "Đã xóa giao dịch".xtr(context),
         Colors.red,
         Icons.delete_outline,
       );
@@ -654,8 +743,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    child: const Text(
-                                      "Hôm nay",
+                                    child: Text(
+                                      "Hôm nay".xtr(context),
                                       style: TextStyle(
                                         color: Color(0xFF6D28D9),
                                         fontWeight: FontWeight.bold,
@@ -748,7 +837,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         elevation: 0,
         centerTitle: true,
         title: Text(
-          isEditing ? "Chi tiết giao dịch" : "Thêm giao dịch",
+          (isEditing ? "Chi tiết giao dịch" : "Thêm giao dịch").xtr(context),
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -920,8 +1009,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              "Số tiền",
+            Text(
+              "Số tiền".xtr(context),
               style: TextStyle(
                 color: Color(0xFF64748B),
                 fontSize: 14,
@@ -1027,6 +1116,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   }
 
   Widget _buildCategoryBox() {
+    _queueCategoryTranslations();
     bool hasValue = _selectedCategory != null;
     return Theme(
       data: Theme.of(context).copyWith(
@@ -1050,6 +1140,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               _selectedCategory = res;
               _categoryId = res.name;
             });
+          if (res != null) {
+            _queueCategoryTranslations([res.name]);
+          }
         },
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -1080,7 +1173,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  hasValue ? _selectedCategory!.name : "Chọn hạng mục",
+                  hasValue
+                      ? _displayCategoryName(_selectedCategory!.name)
+                      : "Chọn hạng mục".xtr(context),
                   style: TextStyle(
                     fontSize: 16,
                     color: hasValue
@@ -1090,8 +1185,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   ),
                 ),
               ),
-              const Text(
-                "Tất cả",
+              Text(
+                "Tất cả".xtr(context),
                 style: TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 13,
@@ -1140,8 +1235,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      "Hạng mục thường dùng",
+                    Text(
+                      "Hạng mục thường dùng".xtr(context),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1198,7 +1293,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                           _renderSmartIcon(cat, 18),
                           const SizedBox(width: 8),
                           Text(
-                            cat.name,
+                            _displayCategoryName(cat.name),
                             style: TextStyle(
                               fontSize: 13,
                               color: isCatSelected
@@ -1376,9 +1471,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       child: TextField(
         controller: _noteInput,
         onTap: () => setState(() => _isNumpadVisible = false),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           icon: Icon(Icons.notes_rounded, color: Color(0xFF94A3B8), size: 24),
-          hintText: "Ghi chú thêm...",
+          hintText: "Ghi chú thêm...".xtr(context),
           hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
           border: InputBorder.none,
         ),
@@ -1429,8 +1524,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               borderRadius: BorderRadius.circular(16),
             ),
           ),
-          child: const Text(
-            "LƯU GIAO DỊCH",
+          child: Text(
+            "LƯU GIAO DỊCH".xtr(context),
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -1470,8 +1565,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text(
-                  "XÓA",
+                child: Text(
+                  "XÓA".xtr(context),
                   style: TextStyle(
                     color: Color(0xFFEF4444),
                     fontSize: 15,
@@ -1509,8 +1604,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text(
-                  "LƯU LẠI",
+                child: Text(
+                  "LƯU LẠI".xtr(context),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 15,

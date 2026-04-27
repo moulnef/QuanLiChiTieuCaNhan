@@ -17,7 +17,7 @@ class TransactionRepository {
   static const String _demoUserId = 'user_001';
 
   TransactionRepository([FinanceRepository? repository])
-      : _repository = repository ?? FinanceRepository();
+    : _repository = repository ?? FinanceRepository();
 
   final FinanceRepository _repository;
 
@@ -53,12 +53,12 @@ class FinanceRepository {
   static const String demoUserId = 'user_001';
 
   FinanceRepository({DatabaseHelper? databaseHelper})
-      : _databaseHelper = databaseHelper ?? DatabaseHelper.instance;
+    : _databaseHelper = databaseHelper ?? DatabaseHelper.instance;
 
   final DatabaseHelper _databaseHelper;
   final Map<String, Set<String>> _tableColumnsCache = {};
   static final StreamController<String> _transactionChangeController =
-  StreamController<String>.broadcast();
+      StreamController<String>.broadcast();
 
   Stream<void> watchTransactions(String userId) {
     return _transactionChangeController.stream
@@ -73,14 +73,16 @@ class FinanceRepository {
   }
 
   Future<List<TransactionModel>> getAllTransactionsByUserId(
-      String userId,
-      ) async {
+    String userId,
+  ) async {
     final db = await _databaseHelper.database;
-    final rows = await db.query(
-      'transactions',
-      where: 'userId = ?',
-      whereArgs: [userId],
-      orderBy: 'datetime(transactionDate) DESC, datetime(updatedAt) DESC',
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
+    final updatedColumn = await _transactionUpdatedColumn(db);
+    final rows = await db.rawQuery(
+      'SELECT * FROM transactions WHERE $userColumn = ? '
+      'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC',
+      [userId],
     );
 
     return rows.map(_transactionFromRow).toList();
@@ -88,9 +90,10 @@ class FinanceRepository {
 
   Future<TransactionModel?> getTransactionById(String userId, String id) async {
     final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
     final rows = await db.query(
       'transactions',
-      where: 'id = ? AND userId = ?',
+      where: 'id = ? AND $userColumn = ?',
       whereArgs: [id, userId],
       limit: 1,
     );
@@ -132,10 +135,11 @@ class FinanceRepository {
 
   Future<void> deleteTransaction(String userId, String id) async {
     final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
     final oldTransaction = await getTransactionById(userId, id);
     await db.delete(
       'transactions',
-      where: 'id = ? AND userId = ?',
+      where: 'id = ? AND $userColumn = ?',
       whereArgs: [id, userId],
     );
 
@@ -190,10 +194,10 @@ class FinanceRepository {
   }
 
   Future<void> refreshBudgetSpentForPeriod(
-      String userId,
-      int month,
-      int year,
-      ) async {
+    String userId,
+    int month,
+    int year,
+  ) async {
     final db = await _databaseHelper.database;
     final rows = await db.query(
       'budgets',
@@ -223,19 +227,22 @@ class FinanceRepository {
   }
 
   Future<double> getSumExpenseByCategory(
-      String userId,
-      String catId,
-      int month,
-      int year,
-      ) async {
+    String userId,
+    String catId,
+    int month,
+    int year,
+  ) async {
     final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final categoryColumn = await _transactionCategoryColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
 
     final result = await db.rawQuery(
       '''
       SELECT SUM(amount) as total FROM transactions
-      WHERE userId = ? AND categoryId = ? AND type = 'expense'
-      AND strftime('%m', transactionDate) = ?
-      AND strftime('%Y', transactionDate) = ?
+      WHERE $userColumn = ? AND $categoryColumn = ? AND type = 'expense'
+      AND strftime('%m', $dateColumn) = ?
+      AND strftime('%Y', $dateColumn) = ?
       ''',
       [userId, catId, month.toString().padLeft(2, '0'), year.toString()],
     );
@@ -244,8 +251,8 @@ class FinanceRepository {
   }
 
   Future<void> _syncBudgetSpentForTransaction(
-      TransactionModel transaction,
-      ) async {
+    TransactionModel transaction,
+  ) async {
     if (transaction.type != 'expense' || transaction.categoryId.isEmpty) {
       return;
     }
@@ -328,17 +335,17 @@ class FinanceRepository {
     return rows
         .map(
           (row) => FinanceSavingItem(
-        id: _asInt(row['id']) ?? 0,
-        icon: row['icon']?.toString() ?? '🎯',
-        title: row['title']?.toString() ?? 'Mục tiêu',
-        currentAmount:
-        _asInt(row['currentAmount'] ?? row['current_amount']) ?? 0,
-        targetAmount:
-        _asInt(row['targetAmount'] ?? row['target_amount']) ?? 0,
-        deadline: _parseDate(row['deadline']),
-        color: _parseColor(row['colorValue'] ?? row['color_value']),
-      ),
-    )
+            id: _asInt(row['id']) ?? 0,
+            icon: row['icon']?.toString() ?? '🎯',
+            title: row['title']?.toString() ?? 'Mục tiêu',
+            currentAmount:
+                _asInt(row['currentAmount'] ?? row['current_amount']) ?? 0,
+            targetAmount:
+                _asInt(row['targetAmount'] ?? row['target_amount']) ?? 0,
+            deadline: _parseDate(row['deadline']),
+            color: _parseColor(row['colorValue'] ?? row['color_value']),
+          ),
+        )
         .toList();
   }
 
@@ -377,8 +384,8 @@ class FinanceRepository {
   }
 
   Future<List<FinanceInstallmentItem>> getInstallmentsByUserId(
-      String userId,
-      ) async {
+    String userId,
+  ) async {
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM installments WHERE COALESCE(userId, user_id) = ? ORDER BY id ASC',
@@ -388,19 +395,19 @@ class FinanceRepository {
     return rows
         .map(
           (row) => FinanceInstallmentItem(
-        id: _asInt(row['id']) ?? 0,
-        icon: row['icon']?.toString() ?? '🧾',
-        title: row['title']?.toString() ?? 'Kế hoạch',
-        totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
-        paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
-        currentPeriod:
-        _asInt(row['currentPeriod'] ?? row['current_period']) ?? 0,
-        totalPeriods:
-        _asInt(row['totalPeriods'] ?? row['total_periods']) ?? 0,
-        nextDueDate: _parseDate(row['nextDueDate']),
-        color: _parseColor(row['colorValue'] ?? row['color_value']),
-      ),
-    )
+            id: _asInt(row['id']) ?? 0,
+            icon: row['icon']?.toString() ?? '🧾',
+            title: row['title']?.toString() ?? 'Kế hoạch',
+            totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
+            paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
+            currentPeriod:
+                _asInt(row['currentPeriod'] ?? row['current_period']) ?? 0,
+            totalPeriods:
+                _asInt(row['totalPeriods'] ?? row['total_periods']) ?? 0,
+            nextDueDate: _parseDate(row['nextDueDate']),
+            color: _parseColor(row['colorValue'] ?? row['color_value']),
+          ),
+        )
         .toList();
   }
 
@@ -462,18 +469,19 @@ class FinanceRepository {
     return rows
         .map(
           (row) => FinanceDebtItem(
-        id: _asInt(row['id']) ?? 0,
-        icon: row['icon']?.toString() ?? '💰',
-        title: row['title']?.toString() ?? 'Khoản vay',
-        lender: row['lender']?.toString() ?? 'Không rõ',
-        totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
-        paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
-        monthlyPayment: _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
-        dueDate: _parseDate(row['dueDate']),
-        interestText: row['interestText']?.toString() ?? 'Chưa cập nhật',
-        color: _parseColor(row['colorValue'] ?? row['color_value']),
-      ),
-    )
+            id: _asInt(row['id']) ?? 0,
+            icon: row['icon']?.toString() ?? '💰',
+            title: row['title']?.toString() ?? 'Khoản vay',
+            lender: row['lender']?.toString() ?? 'Không rõ',
+            totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
+            paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
+            monthlyPayment:
+                _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
+            dueDate: _parseDate(row['dueDate']),
+            interestText: row['interestText']?.toString() ?? 'Chưa cập nhật',
+            color: _parseColor(row['colorValue'] ?? row['color_value']),
+          ),
+        )
         .toList();
   }
 
@@ -531,6 +539,8 @@ class FinanceRepository {
   Future<Map<String, dynamic>> getHomeOverview(String userId) async {
     final now = DateTime.now();
     final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
 
     // Get income and expense for current month
     final result = await db.rawQuery(
@@ -539,9 +549,9 @@ class FinanceRepository {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
       FROM transactions
-      WHERE userId = ? 
-      AND strftime('%m', transactionDate) = ?
-      AND strftime('%Y', transactionDate) = ?
+      WHERE $userColumn = ? 
+      AND strftime('%m', $dateColumn) = ?
+      AND strftime('%Y', $dateColumn) = ?
       ''',
       [userId, now.month.toString().padLeft(2, '0'), now.year.toString()],
     );
@@ -564,16 +574,18 @@ class FinanceRepository {
 
   /// Get the N most recent transactions for a user
   Future<List<TransactionModel>> getRecentTransactions(
-      String userId, {
-        int limit = 5,
-      }) async {
+    String userId, {
+    int limit = 5,
+  }) async {
     final db = await _databaseHelper.database;
-    final rows = await db.query(
-      'transactions',
-      where: 'userId = ?',
-      whereArgs: [userId],
-      orderBy: 'datetime(transactionDate) DESC, datetime(updatedAt) DESC',
-      limit: limit,
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
+    final updatedColumn = await _transactionUpdatedColumn(db);
+    final rows = await db.rawQuery(
+      'SELECT * FROM transactions WHERE $userColumn = ? '
+      'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC '
+      'LIMIT ?',
+      [userId, limit],
     );
 
     return rows.map(_transactionFromRow).toList();
@@ -733,9 +745,9 @@ class FinanceRepository {
 
   /// Get a specific installment plan
   Future<InstallmentPlan?> getInstallmentPlanById(
-      String userId,
-      String planId,
-      ) async {
+    String userId,
+    String planId,
+  ) async {
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM installments WHERE id = ? AND COALESCE(userId, user_id) = ? LIMIT 1',
@@ -859,10 +871,10 @@ class FinanceRepository {
 
   /// Get budget status for all categories
   Future<Map<String, dynamic>> getBudgetStatus(
-      String userId,
-      int month,
-      int year,
-      ) async {
+    String userId,
+    int month,
+    int year,
+  ) async {
     final budgets = await getBudgets(userId, month, year);
     double totalLimit = 0;
     double totalSpent = 0;
@@ -894,13 +906,13 @@ class FinanceRepository {
       currentAmount: _asInt(row['currentAmount'] ?? row['current_amount']) ?? 0,
       targetAmount: _asInt(row['targetAmount'] ?? row['target_amount']) ?? 0,
       targetDate:
-      _asInt(row['targetDate'] ?? row['target_date']) ??
+          _asInt(row['targetDate'] ?? row['target_date']) ??
           DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch,
       createdAt:
-      _asInt(row['createdAt'] ?? row['created_at']) ??
+          _asInt(row['createdAt'] ?? row['created_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       updatedAt:
-      _asInt(row['updatedAt'] ?? row['updated_at']) ??
+          _asInt(row['updatedAt'] ?? row['updated_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       status: row['status']?.toString() ?? 'active',
     );
@@ -912,36 +924,36 @@ class FinanceRepository {
       userId: userId,
       title: row['title']?.toString() ?? 'Khoản vay',
       lenderName:
-      row['lender']?.toString() ??
+          row['lender']?.toString() ??
           row['lenderName']?.toString() ??
           row['lender_name']?.toString() ??
           'Không rõ',
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
       monthlyPayment:
-      _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
+          _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
       interestRate:
-      (row['interestRate'] as num?)?.toDouble() ??
+          (row['interestRate'] as num?)?.toDouble() ??
           (row['interest_rate'] as num?)?.toDouble() ??
           0.0,
       nextDueDate:
-      _asInt(row['nextDueDate'] ?? row['next_due_date']) ??
+          _asInt(row['nextDueDate'] ?? row['next_due_date']) ??
           _asInt(row['dueDate'] ?? row['due_date']) ??
           DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch,
       createdAt:
-      _asInt(row['createdAt'] ?? row['created_at']) ??
+          _asInt(row['createdAt'] ?? row['created_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       updatedAt:
-      _asInt(row['updatedAt'] ?? row['updated_at']) ??
+          _asInt(row['updatedAt'] ?? row['updated_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       status: row['status']?.toString() ?? 'active',
     );
   }
 
   InstallmentPlan _installmentPlanFromRow(
-      Map<String, Object?> row,
-      String userId,
-      ) {
+    Map<String, Object?> row,
+    String userId,
+  ) {
     return InstallmentPlan(
       id: row['id']?.toString() ?? '',
       userId: userId,
@@ -950,25 +962,25 @@ class FinanceRepository {
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
       monthlyPayment:
-      _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
+          _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
       paidPeriods:
-      _asInt(
-        row['currentPeriod'] ??
-            row['current_period'] ??
-            row['paidPeriods'] ??
-            row['paid_periods'],
-      ) ??
+          _asInt(
+            row['currentPeriod'] ??
+                row['current_period'] ??
+                row['paidPeriods'] ??
+                row['paid_periods'],
+          ) ??
           0,
       totalPeriods: _asInt(row['totalPeriods'] ?? row['total_periods']) ?? 0,
       nextDueDate:
-      _asInt(row['nextDueDateEpoch'] ?? row['next_due_date_epoch']) ??
+          _asInt(row['nextDueDateEpoch'] ?? row['next_due_date_epoch']) ??
           _asInt(row['nextDueDate'] ?? row['next_due_date']) ??
           DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch,
       createdAt:
-      _asInt(row['createdAt'] ?? row['created_at']) ??
+          _asInt(row['createdAt'] ?? row['created_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       updatedAt:
-      _asInt(row['updatedAt'] ?? row['updated_at']) ??
+          _asInt(row['updatedAt'] ?? row['updated_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       status: row['status']?.toString() ?? 'active',
     );
@@ -1021,8 +1033,9 @@ class FinanceRepository {
 
   Future<int> getTransactionCountByUserId(String userId) async {
     final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
     final rows = await db.rawQuery(
-      'SELECT COUNT(*) AS total FROM transactions WHERE userId = ?',
+      'SELECT COUNT(*) AS total FROM transactions WHERE $userColumn = ?',
       [userId],
     );
     return (rows.first['total'] as num?)?.toInt() ?? 0;
@@ -1041,7 +1054,7 @@ class FinanceRepository {
             [userId],
           ),
         ) ??
-            0;
+        0;
 
     // If user has no wallets, create default ones
     if (walletCount == 0) {
@@ -1114,11 +1127,11 @@ class FinanceRepository {
       id: row['id']?.toString() ?? '',
       userId: row['userId']?.toString() ?? row['user_id']?.toString() ?? '',
       walletId:
-      row['walletId']?.toString() ?? row['wallet_id']?.toString() ?? '',
+          row['walletId']?.toString() ?? row['wallet_id']?.toString() ?? '',
       categoryId:
-      row['categoryId']?.toString() ?? row['category_id']?.toString() ?? '',
+          row['categoryId']?.toString() ?? row['category_id']?.toString() ?? '',
       categoryName:
-      row['categoryName']?.toString() ??
+          row['categoryName']?.toString() ??
           row['category_name']?.toString() ??
           _resolveCategoryName(row['categoryId'] ?? row['category_id']),
       type: row['type']?.toString() ?? 'expense',
@@ -1150,7 +1163,7 @@ class FinanceRepository {
     final category = _findCategory(categoryId);
     final createdAt =
         _asInt(row['createdAt'] ?? row['created_at']) ??
-            DateTime.now().millisecondsSinceEpoch;
+        DateTime.now().millisecondsSinceEpoch;
     final updatedAt =
         _asInt(row['updatedAt'] ?? row['updated_at']) ?? createdAt;
     final spentAmount = _asInt(row['spentAmount'] ?? row['spent_amount']) ?? 0;
@@ -1159,19 +1172,19 @@ class FinanceRepository {
     return Budget(
       id: row['id']?.toString() ?? '',
       userId:
-      (row['userId']?.toString() ?? row['user_id']?.toString() ?? '')
-          .isNotEmpty
+          (row['userId']?.toString() ?? row['user_id']?.toString() ?? '')
+              .isNotEmpty
           ? (row['userId']?.toString() ?? row['user_id']?.toString() ?? '')
           : fallbackUserId,
       categoryId: categoryId,
       categoryName:
-      (row['categoryName']?.toString() ??
-          row['category_name']?.toString() ??
-          '')
-          .isNotEmpty
+          (row['categoryName']?.toString() ??
+                  row['category_name']?.toString() ??
+                  '')
+              .isNotEmpty
           ? (row['categoryName']?.toString() ??
-          row['category_name']?.toString() ??
-          '')
+                row['category_name']?.toString() ??
+                '')
           : category?.name ?? 'Không rõ',
       icon: row['icon']?.toString().isNotEmpty == true
           ? row['icon'].toString()
@@ -1243,11 +1256,11 @@ class FinanceRepository {
   }
 
   Future<void> _insertWithCompatibleColumns(
-      Database db,
-      String table,
-      Map<String, Object?> payload, {
-        required ConflictAlgorithm conflictAlgorithm,
-      }) async {
+    Database db,
+    String table,
+    Map<String, Object?> payload, {
+    required ConflictAlgorithm conflictAlgorithm,
+  }) async {
     final supportedColumns = await _getTableColumns(db, table);
     final compatiblePayload = <String, Object?>{};
     for (final entry in payload.entries) {
@@ -1261,6 +1274,35 @@ class FinanceRepository {
       compatiblePayload,
       conflictAlgorithm: conflictAlgorithm,
     );
+  }
+
+  Future<String> _transactionUserColumn(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    if (columns.contains('userId')) return 'userId';
+    if (columns.contains('user_id')) return 'user_id';
+    return 'userId';
+  }
+
+  Future<String> _transactionCategoryColumn(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    if (columns.contains('categoryId')) return 'categoryId';
+    if (columns.contains('category_id')) return 'category_id';
+    return 'categoryId';
+  }
+
+  Future<String> _transactionDateColumn(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    if (columns.contains('transactionDate')) return 'transactionDate';
+    if (columns.contains('transaction_date')) return 'transaction_date';
+    if (columns.contains('date')) return 'date';
+    return 'transactionDate';
+  }
+
+  Future<String> _transactionUpdatedColumn(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    if (columns.contains('updatedAt')) return 'updatedAt';
+    if (columns.contains('updated_at')) return 'updated_at';
+    return await _transactionDateColumn(db);
   }
 
   Future<Set<String>> _getTableColumns(Database db, String table) async {

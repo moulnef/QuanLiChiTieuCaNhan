@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
   AuthService._();
@@ -9,6 +12,12 @@ class AuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint('--- [AUTH DEBUG] $message');
+    }
+  }
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
@@ -35,18 +44,18 @@ class AuthService {
 
   Future<String?> login(String email, String password) async {
     try {
+      _log('1. Bắt đầu signInWithEmailAndPassword: ${DateTime.now()}');
       final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
-      );
+      ).timeout(const Duration(seconds: 15));
+      _log('2. Firebase Auth phản hồi: ${DateTime.now()}');
 
-      final user = credential.user;
-      if (user == null) {
-        return 'Không thể xác thực người dùng.';
-      }
-
-      return getUserRole(user.uid);
+      return credential.user == null ? 'Không thể xác thực người dùng.' : null;
     } on FirebaseAuthException catch (e) {
+      _log(
+        'Lỗi Firebase Auth: ${e.code} - ${e.message ?? 'no-message'} vào lúc ${DateTime.now()}',
+      );
       if (e.code == 'user-not-found') {
         return 'Không tìm thấy tài khoản này.';
       }
@@ -54,53 +63,55 @@ class AuthService {
         return 'Mật khẩu không chính xác.';
       }
       return e.message ?? 'Đã có lỗi xảy ra';
+    } on TimeoutException {
+      _log('Timeout đăng nhập Firebase Auth tại ${DateTime.now()}');
+      return 'Đăng nhập quá thời gian chờ. Vui lòng kiểm tra mạng và thử lại.';
     } catch (e) {
       return e.toString();
     }
   }
 
   Future<String> getUserRole(String uid) async {
-    await _seedSampleAdminIfNeeded();
+    try {
+      _log('3. Bắt đầu lấy role từ Firestore: ${DateTime.now()}');
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(uid)
+          .get()
+          .timeout(const Duration(seconds: 8));
+      _log('4. Firestore trả về role snapshot: ${DateTime.now()}');
 
-    final snapshot = await _firestore.collection('users').doc(uid).get();
+      if (!snapshot.exists) {
+        return _auth.currentUser?.email?.toLowerCase() == _sampleAdminEmail
+            ? 'admin'
+            : 'user';
+      }
 
-    if (!snapshot.exists) {
+      final data = snapshot.data();
+      final role = data?['role'];
+
+      if (role is String && role.trim().isNotEmpty) {
+        _log(
+          '5. Role hợp lệ = ${role.trim().toLowerCase()} tại ${DateTime.now()}',
+        );
+        return role.trim().toLowerCase();
+      }
+
+      _log(
+        '5. Role rỗng hoặc không hợp lệ, fallback user tại ${DateTime.now()}',
+      );
+      return 'user';
+    } catch (_) {
+      _log(
+        'Lỗi/timeout khi lấy role, fallback theo email tại ${DateTime.now()}',
+      );
       return _auth.currentUser?.email?.toLowerCase() == _sampleAdminEmail
           ? 'admin'
           : 'user';
     }
-
-    final data = snapshot.data();
-    final role = data?['role'];
-
-    if (role is String && role.trim().isNotEmpty) {
-      return role.trim().toLowerCase();
-    }
-
-    return 'user';
   }
 
   Future<bool> isAdmin(String uid) async {
     return (await getUserRole(uid)) == 'admin';
-  }
-
-  Future<void> _seedSampleAdminIfNeeded() async {
-    final user = _auth.currentUser;
-    final email = user?.email?.trim().toLowerCase();
-
-    if (user == null || email != _sampleAdminEmail) {
-      return;
-    }
-
-    await _firestore.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'displayName': user.email?.split('@').first ?? 'admin',
-      'photoURL': user.photoURL ?? '',
-      'emailVerified': user.emailVerified,
-      'createdAt': FieldValue.serverTimestamp(),
-      'uid': user.uid,
-      'role': 'admin',
-      'seededAsAdmin': true,
-    }, SetOptions(merge: true));
   }
 }

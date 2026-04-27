@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
+import 'package:flutter/foundation.dart';
 
 class BudgetProvider extends ChangeNotifier {
-  static const String _demoUserId = 'user_001';
-
   BudgetProvider([FinanceRepository? repository])
-      : _repository = repository ?? FinanceRepository();
+    : _repository = repository ?? FinanceRepository();
 
   final FinanceRepository _repository;
 
@@ -23,7 +22,16 @@ class BudgetProvider extends ChangeNotifier {
   int get selectedMonth => _selectedMonth;
   int get selectedYear => _selectedYear;
 
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint('--- [BUDGET PROVIDER] $message');
+    }
+  }
+
   Future<void> loadMonthlyBudgets(String userId, int month, int year) async {
+    _log(
+      'loadMonthlyBudgets start userId=$userId month=$month year=$year at ${DateTime.now()}',
+    );
     _isLoading = true;
     _errorMessage = null;
     _selectedMonth = month;
@@ -31,50 +39,45 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var effectiveUserId = userId;
-      await _repository.refreshBudgetSpentForPeriod(
-        effectiveUserId,
-        month,
-        year,
+      _log('refreshBudgetSpentForPeriod start at ${DateTime.now()}');
+      await _repository.refreshBudgetSpentForPeriod(userId, month, year);
+      _log('refreshBudgetSpentForPeriod done at ${DateTime.now()}');
+      _log('getBudgets primary start at ${DateTime.now()}');
+      var baseBudgets = await _repository.getBudgets(userId, month, year);
+      _log(
+        'getBudgets primary done count=${baseBudgets.length} at ${DateTime.now()}',
       );
-      var baseBudgets = await _repository.getBudgets(
-        effectiveUserId,
-        month,
-        year,
-      );
-
-      if (baseBudgets.isEmpty && userId != _demoUserId) {
-        effectiveUserId = _demoUserId;
-        baseBudgets = await _repository.getBudgets(
-          effectiveUserId,
-          month,
-          year,
-        );
-      }
 
       if (baseBudgets.isEmpty) {
-        final fallbackPeriod = await _repository.getLatestBudgetPeriod(
-          effectiveUserId,
+        _log(
+          'no budgets found, checking latest budget period at ${DateTime.now()}',
         );
+        final fallbackPeriod = await _repository.getLatestBudgetPeriod(userId);
         if (fallbackPeriod != null) {
           _selectedMonth = fallbackPeriod.month;
           _selectedYear = fallbackPeriod.year;
           baseBudgets = await _repository.getBudgets(
-            effectiveUserId,
+            userId,
             _selectedMonth,
             _selectedYear,
+          );
+          _log(
+            'fallback period budgets count=${baseBudgets.length} at ${DateTime.now()}',
           );
         }
       }
 
       _budgets = baseBudgets;
+      _log('loadMonthlyBudgets finished at ${DateTime.now()}');
     } catch (e) {
       _errorMessage = 'Không tải được ngân sách: $e';
       _budgets = [];
       debugPrint('Lỗi khi tải ngân sách: $e');
+      _log('loadMonthlyBudgets error=$e at ${DateTime.now()}');
     } finally {
       _isLoading = false;
       notifyListeners();
+      _log('loadMonthlyBudgets loading=false at ${DateTime.now()}');
     }
   }
 

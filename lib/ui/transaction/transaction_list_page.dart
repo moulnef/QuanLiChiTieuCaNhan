@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +9,8 @@ import '../transaction/create_transaction_page.dart';
 import '../../data/local/category_data.dart';
 import '../../domain/model/transaction_model.dart';
 import '../../domain/model/category_model.dart';
+import '../../services/translation_service.dart';
+import '../../utils/app_localizer.dart';
 
 class TransactionListPage extends ConsumerStatefulWidget {
   final bool forceShowBackButton;
@@ -20,10 +24,91 @@ class TransactionListPage extends ConsumerStatefulWidget {
 
 class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   bool _isSearchMode = false;
+  final Map<String, String> _dynamicCategoryTranslations = {};
+  final Set<String> _pendingCategoryTranslations = {};
+
+  String _displayCategory(String raw) {
+    final mapped = raw.xtrCategory(context);
+    if (mapped != raw) {
+      return mapped;
+    }
+    return _dynamicCategoryTranslations[raw] ?? raw;
+  }
+
+  void _queueCategoryTranslations(TransactionListState state) {
+    final lang = Localizations.localeOf(context).languageCode.toLowerCase();
+    if (lang != 'en') {
+      if (_dynamicCategoryTranslations.isNotEmpty ||
+          _pendingCategoryTranslations.isNotEmpty) {
+        _dynamicCategoryTranslations.clear();
+        _pendingCategoryTranslations.clear();
+      }
+      return;
+    }
+
+    final candidates = <String>{};
+    for (final tx in state.filteredList) {
+      final categoryId = tx.categoryId.trim();
+      final categoryName = tx.categoryName.trim();
+      if (categoryId.isNotEmpty) {
+        candidates.add(categoryId);
+      }
+      if (categoryName.isNotEmpty) {
+        candidates.add(categoryName);
+      }
+    }
+
+    final unresolved = candidates
+        .where((name) {
+          final mapped = name.xtrCategory(context);
+          return mapped == name &&
+              !_dynamicCategoryTranslations.containsKey(name) &&
+              !_pendingCategoryTranslations.contains(name);
+        })
+        .toList(growable: false);
+
+    if (unresolved.isEmpty) {
+      return;
+    }
+
+    _pendingCategoryTranslations.addAll(unresolved);
+
+    Future<void>(() async {
+      try {
+        final translated = await TranslationService.instance.translateMany(
+          sourceTexts: unresolved,
+          targetLanguageCode: 'en',
+        );
+
+        if (!mounted) {
+          return;
+        }
+        if (Localizations.localeOf(context).languageCode.toLowerCase() !=
+            'en') {
+          _pendingCategoryTranslations.removeAll(unresolved);
+          return;
+        }
+
+        setState(() {
+          for (var i = 0; i < unresolved.length; i++) {
+            final source = unresolved[i];
+            final target = translated[i].trim();
+            if (target.isNotEmpty && target != source) {
+              _dynamicCategoryTranslations[source] = target;
+            }
+          }
+          _pendingCategoryTranslations.removeAll(unresolved);
+        });
+      } catch (_) {
+        _pendingCategoryTranslations.removeAll(unresolved);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(transactionListControllerProvider);
+    _queueCategoryTranslations(state);
     final controller = ref.read(transactionListControllerProvider.notifier);
     double totalBalance = state.totalIncome - state.totalExpense;
     final bool canGoBack =
@@ -83,7 +168,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             onChanged: (value) =>
                                 controller.updateSearch(value),
                             decoration: InputDecoration(
-                              hintText: "Tìm kiếm...",
+                              hintText: "Tìm kiếm...".xtr(context),
                               hintStyle: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.7),
                                 fontSize: 15,
@@ -120,9 +205,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             ),
                             const SizedBox(width: 4),
                           ],
-                          const Text(
-                            "Giao dịch",
-                            style: TextStyle(
+                          Text(
+                            "Giao dịch".xtr(context),
+                            style: const TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -195,7 +280,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               children: [
                 Expanded(
                   child: _buildStatBox(
-                    "Thu nhập",
+                    "Thu nhập".xtr(context),
                     "+${_formatMoney(state.totalIncome)} đ",
                     const Color(0xFF10B981),
                   ),
@@ -203,7 +288,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _buildStatBox(
-                    "Chi tiêu",
+                    "Chi tiêu".xtr(context),
                     "-${_formatMoney(state.totalExpense)} đ",
                     const Color(0xFFEF4444),
                   ),
@@ -211,7 +296,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _buildStatBox(
-                    "Tổng",
+                    "Tổng".xtr(context),
                     "${totalBalance < 0 ? '-' : ''}${_formatMoney(totalBalance.abs())} đ",
                     const Color(0xFF1D4ED8),
                   ),
@@ -226,15 +311,19 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               loading: () => const Center(
                 child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
               ),
-              error: (err, stack) => Center(child: Text('Lỗi: $err')),
+              error: (err, stack) =>
+                  Center(child: Text('Lỗi: $err'.xtr(context))),
               data: (_) {
                 if (state.filteredList.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(40),
+                      padding: const EdgeInsets.all(40),
                       child: Text(
-                        "Không có giao dịch nào.",
-                        style: TextStyle(color: Colors.grey, fontSize: 15),
+                        "Không có giao dịch nào.".xtr(context),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   );
@@ -357,7 +446,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                             Text(
                                               tx.note.isNotEmpty
                                                   ? tx.note
-                                                  : tx.categoryId,
+                                                  : _displayCategory(
+                                                      tx.categoryId,
+                                                    ),
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 15,
@@ -368,7 +459,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              tx.categoryId,
+                                              _displayCategory(tx.categoryId),
                                               style: const TextStyle(
                                                 color: Color(0xFF94A3B8),
                                                 fontSize: 13,
@@ -428,6 +519,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   }
 
   Widget _buildTabBar(TransactionListState state, dynamic controller) {
+    const tabs = ['Tất cả', 'Thu nhập', 'Chi tiêu'];
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       padding: const EdgeInsets.all(4),
@@ -443,7 +535,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
         ],
       ),
       child: Row(
-        children: ['Tất cả', 'Thu nhập', 'Chi tiêu'].map((tab) {
+        children: tabs.map((tab) {
           final isSelected = state.currentTab == tab;
           return Expanded(
             child: GestureDetector(
@@ -459,7 +551,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
-                  tab,
+                  tab.xtr(context),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: isSelected ? Colors.white : const Color(0xFF64748B),
@@ -536,7 +628,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 children: [
                   if (hasCategory)
                     _buildActiveChip(
-                      label: state.selectedCategoryGroup!,
+                      label: _displayCategory(state.selectedCategoryGroup!),
                       icon: Icons.category_rounded,
                       onRemove: () {
                         ref
@@ -556,7 +648,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     ),
                   if (hasSort)
                     _buildActiveChip(
-                      label: _getSortLabel(state.sortType),
+                      label: _getSortLabel(state.sortType).xtr(context),
                       icon: Icons.sort_rounded,
                       onRemove: () {
                         ref
@@ -578,7 +670,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               notifier.updateDateRange(null);
               notifier.updateSortType('date_desc');
             },
-            child: const Text('Đặt lại'),
+            child: Text('Đặt lại'.xtr(context)),
           ),
         ],
       ),
@@ -680,7 +772,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             });
                           },
                           icon: const Icon(Icons.refresh_rounded, size: 16),
-                          label: const Text('Đặt lại'),
+                          label: Text('Đặt lại'.xtr(context)),
                         ),
                       ],
                     ),
@@ -690,26 +782,26 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                       children: [
                         _panelCard(
-                          title: 'Sắp xếp',
+                          title: 'Sắp xếp'.xtr(context),
                           child: Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
                               _buildChoicePill(
-                                label: 'Mới nhất',
+                                label: 'Mới nhất'.xtr(context),
                                 selected: tempSort == 'date_desc',
                                 onTap: () =>
                                     setSheetState(() => tempSort = 'date_desc'),
                               ),
                               _buildChoicePill(
-                                label: 'Số tiền giảm dần',
+                                label: 'Số tiền giảm dần'.xtr(context),
                                 selected: tempSort == 'amount_desc',
                                 onTap: () => setSheetState(
                                   () => tempSort = 'amount_desc',
                                 ),
                               ),
                               _buildChoicePill(
-                                label: 'Số tiền tăng dần',
+                                label: 'Số tiền tăng dần'.xtr(context),
                                 selected: tempSort == 'amount_asc',
                                 onTap: () => setSheetState(
                                   () => tempSort = 'amount_asc',
@@ -720,21 +812,23 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                         const SizedBox(height: 12),
                         _panelCard(
-                          title: 'Danh mục',
-                          subtitle: 'Theo nhóm danh mục của tab hiện tại',
+                          title: 'Danh mục'.xtr(context),
+                          subtitle: 'Theo nhóm danh mục của tab hiện tại'.xtr(
+                            context,
+                          ),
                           child: Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
                               _buildChoicePill(
-                                label: 'Tất cả',
+                                label: 'Tất cả'.xtr(context),
                                 selected: tempCategory == null,
                                 onTap: () =>
                                     setSheetState(() => tempCategory = null),
                               ),
                               ...groups.map(
                                 (group) => _buildChoicePill(
-                                  label: group,
+                                  label: _displayCategory(group),
                                   selected: tempCategory == group,
                                   onTap: () =>
                                       setSheetState(() => tempCategory = group),
@@ -745,7 +839,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                         const SizedBox(height: 12),
                         _panelCard(
-                          title: 'Thời gian',
+                          title: 'Thời gian'.xtr(context),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -754,7 +848,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 runSpacing: 8,
                                 children: [
                                   _buildChoicePill(
-                                    label: 'Hôm nay',
+                                    label: 'Hôm nay'.xtr(context),
                                     selected: _isSameRange(
                                       tempDateRange,
                                       _todayRange(),
@@ -764,7 +858,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     ),
                                   ),
                                   _buildChoicePill(
-                                    label: 'Tuần này',
+                                    label: 'Tuần này'.xtr(context),
                                     selected: _isSameRange(
                                       tempDateRange,
                                       _thisWeekRange(),
@@ -774,7 +868,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     ),
                                   ),
                                   _buildChoicePill(
-                                    label: 'Tháng này',
+                                    label: 'Tháng này'.xtr(context),
                                     selected: _isSameRange(
                                       tempDateRange,
                                       _thisMonthRange(),
@@ -784,7 +878,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     ),
                                   ),
                                   _buildChoicePill(
-                                    label: 'Năm này',
+                                    label: 'Năm này'.xtr(context),
                                     selected: _isSameRange(
                                       tempDateRange,
                                       _thisYearRange(),
@@ -803,7 +897,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     firstDate: DateTime(2020),
                                     lastDate: DateTime.now(),
                                     initialDateRange: tempDateRange,
-                                    helpText: 'Chọn khoảng thời gian',
+                                    helpText: 'Chọn khoảng thời gian'.xtr(
+                                      context,
+                                    ),
                                   );
                                   if (picked == null) return;
                                   setSheetState(() => tempDateRange = picked);
@@ -811,7 +907,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 icon: const Icon(Icons.date_range_rounded),
                                 label: Text(
                                   tempDateRange == null
-                                      ? 'Chọn khoảng tùy chỉnh'
+                                      ? 'Chọn khoảng tùy chỉnh'.xtr(context)
                                       : _formatDateRange(tempDateRange),
                                 ),
                               ),
@@ -819,7 +915,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 TextButton(
                                   onPressed: () =>
                                       setSheetState(() => tempDateRange = null),
-                                  child: const Text('Xóa lọc thời gian'),
+                                  child: Text('Xóa lọc thời gian'.xtr(context)),
                                 ),
                             ],
                           ),
@@ -836,7 +932,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Hủy'),
+                              child: Text('Hủy'.xtr(context)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -850,7 +946,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 Navigator.pop(context);
                               },
                               icon: const Icon(Icons.check_rounded),
-                              label: const Text('Áp dụng'),
+                              label: Text('Áp dụng'.xtr(context)),
                             ),
                           ),
                         ],
@@ -957,7 +1053,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   }
 
   String _formatDateRange(DateTimeRange? range) {
-    if (range == null) return 'Tất cả thời gian';
+    if (range == null) return 'Tất cả thời gian'.xtr(context);
     return '${DateFormat('dd/MM').format(range.start)} - ${DateFormat('dd/MM').format(range.end)}';
   }
 
@@ -1043,7 +1139,11 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 "Danh mục",
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(state.selectedCategoryGroup ?? "Tất cả"),
+              subtitle: Text(
+                state.selectedCategoryGroup == null
+                    ? "Tất cả".xtr(context)
+                    : _displayCategory(state.selectedCategoryGroup!),
+              ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
                 Navigator.pop(context);
@@ -1091,7 +1191,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               subtitle: Text(
                 state.filterDateRange != null
                     ? "${DateFormat('dd/MM').format(state.filterDateRange!.start)} - ${DateFormat('dd/MM').format(state.filterDateRange!.end)}"
-                    : "Tất cả",
+                    : "Tất cả".xtr(context),
               ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
@@ -1106,16 +1206,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   }
 
   String _getFormattedDate(DateTime date) {
-    List<String> weekdays = [
-      'Chủ Nhật',
-      'Thứ 2',
-      'Thứ 3',
-      'Thứ 4',
-      'Thứ 5',
-      'Thứ 6',
-      'Thứ 7',
-    ];
-    return "${weekdays[date.weekday == 7 ? 0 : date.weekday]}, ${DateFormat('dd/MM/yyyy').format(date)}";
+    return "${AppLocalizer.weekdayLabel(context, date)}, ${DateFormat('dd/MM/yyyy').format(date)}";
   }
 
   // --- CẬP NHẬT: Giao diện lọc y chang CategoryListScreen, lấy data theo Tab hiện tại ---
@@ -1176,9 +1267,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    "Lọc theo hạng mục",
-                    style: TextStyle(
+                  Text(
+                    "Lọc theo hạng mục".xtr(context),
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1E293B),
@@ -1232,7 +1323,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              "Tất cả hạng mục",
+                              "Tất cả hạng mục".xtr(context),
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -1278,8 +1369,10 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                           color: Color(0xFF1E293B),
                           fontWeight: FontWeight.w500,
                         ),
-                        decoration: const InputDecoration(
-                          hintText: "Tìm kiếm theo tên hạng mục...",
+                        decoration: InputDecoration(
+                          hintText: "Tìm kiếm theo tên hạng mục...".xtr(
+                            context,
+                          ),
                           hintStyle: TextStyle(
                             color: Color(0xFF94A3B8),
                             fontSize: 15,
@@ -1373,7 +1466,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               ),
               const SizedBox(width: 10),
               Text(
-                name,
+                _displayCategory(name),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -1455,7 +1548,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: Text(
-                    cat.name,
+                    _displayCategory(cat.name),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected
@@ -1505,7 +1598,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               ),
             ),
             _buildSheetOption(
-              label: "Ngày gần nhất",
+              label: "Ngày gần nhất".xtr(context),
               icon: Icons.access_time_filled_rounded,
               isSelected: state.sortType == 'date_desc',
               onTap: () {
@@ -1516,7 +1609,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               },
             ),
             _buildSheetOption(
-              label: "Tiền nhiều nhất",
+              label: "Tiền nhiều nhất".xtr(context),
               icon: Icons.arrow_upward_rounded,
               isSelected: state.sortType == 'amount_desc',
               onTap: () {
@@ -1527,7 +1620,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               },
             ),
             _buildSheetOption(
-              label: "Tiền ít nhất",
+              label: "Tiền ít nhất".xtr(context),
               icon: Icons.arrow_downward_rounded,
               isSelected: state.sortType == 'amount_asc',
               onTap: () {

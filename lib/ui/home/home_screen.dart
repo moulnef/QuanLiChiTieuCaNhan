@@ -28,35 +28,58 @@ class HomePageState extends State<HomePage> {
   StreamSubscription<void>? _transactionChangedSubscription;
   final ScrollController _scrollController = ScrollController();
   bool _isBalanceVisible = true;
+  bool _isReloadingHomeData = false;
 
   static void scrollToTopActive() {
     _activeInstance?.scrollToTop();
   }
 
   Future<void> _reloadHomeData() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+    if (_isReloadingHomeData) return;
+    _isReloadingHomeData = true;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _isReloadingHomeData = false;
+      return;
+    }
+    final userId = user.uid;
     final currentDate = DateTime.now();
 
-    await context.read<FinanceProvider>().refreshFinancialSummary(userId);
-    await context.read<BudgetProvider>().loadMonthlyBudgets(
-      userId,
-      currentDate.month,
-      currentDate.year,
-    );
+    try {
+      await Future.wait([
+        context.read<FinanceProvider>().refreshFinancialSummary(userId),
+        context.read<BudgetProvider>().loadMonthlyBudgets(
+          userId,
+          currentDate.month,
+          currentDate.year,
+        ),
+      ]);
+    } finally {
+      _isReloadingHomeData = false;
+    }
   }
 
   @override
   void initState() {
     super.initState();
     _activeInstance = this;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _reloadHomeData();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _reloadHomeData();
 
-      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+      if (!mounted) {
+        return;
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        return;
+      }
+      final userId = user.uid;
       _transactionChangedSubscription = _financeRepository
           .watchTransactions(userId)
           .listen((_) {
-            if (mounted) {
+            if (mounted && !_isReloadingHomeData) {
               _reloadHomeData();
             }
           });
@@ -139,12 +162,7 @@ class HomePageState extends State<HomePage> {
                         const SizedBox(height: 12),
                         _buildAiPreview(context),
                         const SizedBox(height: 12),
-                        _buildBudgetCard(
-                          context,
-                          budgets,
-                          budgetProvider.isLoading,
-                          currency,
-                        ),
+                        _buildBudgetCard(context, budgets, currency),
                         const SizedBox(height: 12),
                         _buildRecentTransactions(
                           context,
@@ -639,7 +657,6 @@ class HomePageState extends State<HomePage> {
   Widget _buildBudgetCard(
     BuildContext context,
     List<dynamic> budgets,
-    bool isLoading,
     NumberFormat currency,
   ) {
     return _surfaceCard(
@@ -672,12 +689,7 @@ class HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 8),
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (budgets.isEmpty)
+          if (budgets.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(

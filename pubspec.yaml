@@ -43,6 +43,7 @@ dependencies:
 
   # --- TIỆN ÍCH & GIAO DIỆN (UTILS & UI) ---
   intl: ^0.20.1
+  translator: ^1.0.4
   http: ^1.6.0
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2

@@ -26,7 +26,16 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   bool get isAdmin => _role == 'admin';
 
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint('--- [AUTH PROVIDER] $message');
+    }
+  }
+
   Future<void> _handleAuthStateChanged(User? user) async {
+    _log(
+      'authStateChanges callback: ${DateTime.now()} user=${user?.uid ?? 'null'}',
+    );
     _currentUser = user;
 
     if (user == null) {
@@ -36,33 +45,28 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
-    _isLoading = true;
+    _isLoading = false;
     notifyListeners();
 
+    _log('Bắt đầu gọi getUserRole: ${DateTime.now()}');
     _role = await _authService.getUserRole(user.uid);
-    _isLoading = false;
+    _log('getUserRole xong, role=$_role tại ${DateTime.now()}');
     notifyListeners();
   }
 
   Future<String?> login(String email, String password) async {
+    _log('login() được gọi: ${DateTime.now()}');
     _isLoading = true;
     notifyListeners();
 
     final result = await _authService.login(email, password);
+    _log('login() trả về: ${result ?? 'success'} tại ${DateTime.now()}');
 
     if (result == null) {
       _isLoading = false;
       notifyListeners();
       return null;
     }
-
-    if (result != 'admin' && result != 'user') {
-      _isLoading = false;
-      notifyListeners();
-      return result;
-    }
-
-    _role = result;
     _isLoading = false;
     notifyListeners();
     return result;

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
@@ -9,7 +10,7 @@ class FinanceProvider extends ChangeNotifier {
   static const String _demoUserId = 'user_001';
 
   FinanceProvider([FinanceRepository? repository])
-      : _repository = repository ?? FinanceRepository();
+    : _repository = repository ?? FinanceRepository();
 
   final FinanceRepository _repository;
 
@@ -50,29 +51,36 @@ class FinanceProvider extends ChangeNotifier {
   int get totalDebtRemaining =>
       _debts.fold(0, (sum, item) => sum + item.remainingAmount);
 
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint('--- [FINANCE PROVIDER] $message');
+    }
+  }
+
   Future<void> refreshFinancialSummary(String userId) async {
+    _log('refreshFinancialSummary start userId=$userId at ${DateTime.now()}');
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      var transactions = await _repository.getAllTransactionsByUserId(userId);
-
-      // Local seeded SQLite data uses demo userId by default.
-      if (transactions.isEmpty && userId != _demoUserId) {
-        transactions = await _repository.getAllTransactionsByUserId(
-          _demoUserId,
-        );
-      }
+      _log('Loading transactions from database at ${DateTime.now()}');
+      final transactions = await _repository.getAllTransactionsByUserId(userId);
+      _log(
+        'Primary transactions loaded count=${transactions.length} at ${DateTime.now()}',
+      );
 
       _applyFinancialSummary(transactions);
       _updateFinancialBalance();
+      _log('refreshFinancialSummary finished at ${DateTime.now()}');
     } catch (e) {
       _errorMessage = 'Không tải được dữ liệu tài chính: $e';
       debugPrint('Lỗi khi tải dữ liệu thực tế: $e');
+      _log('refreshFinancialSummary error=$e at ${DateTime.now()}');
     } finally {
       _isLoading = false;
       notifyListeners();
+      _log('refreshFinancialSummary loading=false at ${DateTime.now()}');
     }
   }
 
@@ -114,15 +122,6 @@ class FinanceProvider extends ChangeNotifier {
         effectiveUserId,
       );
       var debts = await _repository.getDebtsByUserId(effectiveUserId);
-
-      if (savings.isEmpty &&
-          installments.isEmpty &&
-          debts.isEmpty &&
-          effectiveUserId != _demoUserId) {
-        savings = await _repository.getSavingsByUserId(_demoUserId);
-        installments = await _repository.getInstallmentsByUserId(_demoUserId);
-        debts = await _repository.getDebtsByUserId(_demoUserId);
-      }
 
       _savings
         ..clear()
@@ -223,7 +222,7 @@ class FinanceProvider extends ChangeNotifier {
         totalAmount: totalAmount,
         totalPeriods: totalPeriods,
         nextDueDate:
-        nextDueDate ?? DateTime.now().add(const Duration(days: 30)),
+            nextDueDate ?? DateTime.now().add(const Duration(days: 30)),
         icon: icon,
         color: color,
       );
@@ -234,7 +233,11 @@ class FinanceProvider extends ChangeNotifier {
     }
   }
 
-  double calculateMonthlyPayment(double principal, double annualRate, int months) {
+  double calculateMonthlyPayment(
+    double principal,
+    double annualRate,
+    int months,
+  ) {
     if (principal <= 0 || months <= 0) return 0;
 
     final monthlyRate = annualRate / 100 / 12;
@@ -260,7 +263,9 @@ class FinanceProvider extends ChangeNotifier {
     final totalAmount = amount > 0
         ? amount.round()
         : (normalizedMonthlyPayment * months).round();
-    final normalizedTitle = bankName.trim().isEmpty ? name : '$name - $bankName';
+    final normalizedTitle = bankName.trim().isEmpty
+        ? name
+        : '$name - $bankName';
 
     await addInstallmentPlan(
       title: normalizedTitle,
@@ -355,8 +360,8 @@ class FinanceProvider extends ChangeNotifier {
   void _updateFinancialBalance() {
     _totalBalance =
         totalSavingAmount.toDouble() -
-            totalInstallmentRemaining.toDouble() -
-            totalDebtRemaining.toDouble();
+        totalInstallmentRemaining.toDouble() -
+        totalDebtRemaining.toDouble();
   }
 }
 
