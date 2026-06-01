@@ -19,23 +19,23 @@ class FinanceCalculator {
     required int progressPercent,
   }) {
     if (progressPercent >= 100) return 'danger';
-    if (progressPercent >= 70) return 'warning';
+    if (progressPercent >= 90) return 'warning';
     return 'safe';
   }
 
   static String getBudgetStatusColor({
     required int progressPercent,
   }) {
-    if (progressPercent >= 100) return '#EF4444';
-    if (progressPercent >= 80) return '#EF97316';
-    return '#22C55E';
+    if (progressPercent >= 100) return '#EF4444'; // Red
+    if (progressPercent >= 90) return '#F59E0B';  // Yellow
+    return '#10B981'; // Green
   }
 
   static String? getBudgetAlertMessage({
     required int progressPercent,
   }) {
     if (progressPercent >= 100) return 'Đã vượt ngân sách!';
-    if (progressPercent >= 80) return 'Sắp vượt ngân sách!';
+    if (progressPercent >= 90) return 'Sắp vượt ngân sách!';
     return null;
   }
 }

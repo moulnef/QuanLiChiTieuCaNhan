@@ -4,8 +4,12 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 
 // Helper formatters
 String formatCurrency(num amount) =>
@@ -21,6 +25,7 @@ class InstallmentTabPage extends StatefulWidget {
 
 class _InstallmentTabPageState extends State<InstallmentTabPage> {
   final FirestoreService _firestoreService = FirestoreService();
+  final FinanceRepository _repository = FinanceRepository();
 
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
@@ -36,16 +41,96 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
     );
   }
 
+  Future<WalletModel?> _showPaymentWalletDialog(int amount) async {
+    final walletsData = await _repository.getWalletsByUserId(_currentUserId);
+    final wallets = walletsData.map((w) => WalletModel.fromMap(w)).toList();
+    if (wallets.isEmpty) return null;
+    
+    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
+
+    return showDialog<WalletModel>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Thanh toán trả góp kỳ này', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Số tiền cần trả: ${formatCurrency(amount)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<WalletModel>(
+                value: selectedWallet,
+                items: wallets.map((w) => DropdownMenuItem(
+                  value: w,
+                  child: Text('${w.name} (${formatCurrency(w.balance)})'),
+                )).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => selectedWallet = val);
+                },
+                decoration: InputDecoration(
+                  labelText: 'Ví thanh toán',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedWallet.balance < amount) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Không đủ số dư trong ví đã chọn!'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, selectedWallet);
+              },
+              child: const Text('Thanh toán'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleMarkPaid(InstallmentPlan item) async {
     if (item.paidPeriods >= item.totalPeriods || item.status == 'completed') {
       return;
     }
 
+    final amount = item.monthlyPayment;
+    final wallet = await _showPaymentWalletDialog(amount);
+    if (wallet == null || !mounted) return;
+
     try {
+      // 1. Trừ tiền ví nguồn
+      final newBalance = wallet.balance - amount;
+      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
+
+      // 2. Tạo giao dịch trả góp
+      final tx = TransactionModel(
+        id: 'tx_inst_pay_${DateTime.now().millisecondsSinceEpoch}',
+        userId: _currentUserId,
+        walletId: wallet.id,
+        categoryId: 'installment_pay',
+        categoryName: 'Trả góp',
+        type: 'expense',
+        amount: amount.toDouble(),
+        note: 'Thanh toán trả góp: ${item.title} (Kỳ ${item.paidPeriods + 1}/${item.totalPeriods})',
+        transactionDate: DateTime.now(),
+      );
+      await _repository.upsertTransaction(tx);
+
+      // 3. Cập nhật trả góp
       final newPeriods = item.paidPeriods + 1;
       final isCompleted = newPeriods >= item.totalPeriods;
-      final addedAmount = item.monthlyPayment;
-      final newPaidAmount = (item.paidAmount + addedAmount).clamp(0, item.totalAmount);
+      final newPaidAmount = (item.paidAmount + amount).clamp(0, item.totalAmount);
       
       final currentDueDate = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
       final newDueDate = currentDueDate.add(const Duration(days: 30));
@@ -59,13 +144,15 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
       );
 
       await context.read<FinanceProvider>().updateInstallmentPlan(updated);
+      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Đã ghi nhận thanh toán kỳ thứ $newPeriods cho "${item.title}" ${isCompleted ? '🎉 Đã hoàn thành trả góp!' : ''}',
+            'Thanh toán thành công! Đã trả kỳ $newPeriods/$item.totalPeriods. Còn lại ${item.totalPeriods - newPeriods} kỳ.',
           ),
+          backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
@@ -472,8 +559,18 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _totalController = TextEditingController();
-  final _monthsController = TextEditingController();
-  final _interestController = TextEditingController();
+
+  String _selectedBank = 'MB Bank';
+  final List<String> _banks = ['MB Bank', 'Vietcombank', 'Techcombank', 'BIDV', 'VietinBank'];
+
+  int _selectedPeriod = 12;
+  final List<int> _periods = [3, 6, 12, 24];
+  final Map<int, double> _interestRates = {
+    3: 6.0,
+    6: 7.2,
+    12: 8.2,
+    24: 9.0,
+  };
 
   DateTime _selectedDate = DateTime.now();
   String _selectedEmoji = '🧾';
@@ -485,24 +582,22 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   void initState() {
     super.initState();
     if (widget.installmentPlan != null) {
-      _titleController.text = widget.installmentPlan!.title;
-      _totalController.text = widget.installmentPlan!.totalAmount.toString();
-      _monthsController.text = widget.installmentPlan!.totalPeriods.toString();
+      final titleParts = widget.installmentPlan!.title.split(' - ');
+      if (titleParts.length > 1) {
+        _titleController.text = titleParts[0];
+        final bankCandidate = titleParts[1];
+        if (_banks.contains(bankCandidate)) {
+          _selectedBank = bankCandidate;
+        }
+      } else {
+        _titleController.text = widget.installmentPlan!.title;
+      }
+      _totalController.text = NumberFormat('#,###', 'vi_VN').format(widget.installmentPlan!.totalAmount);
       _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.installmentPlan!.nextDueDate);
       _selectedEmoji = widget.installmentPlan!.icon;
-
-      // Estimate annual interest rate based on: monthlyPayment = (totalAmount * (1 + rate)) / totalPeriods
-      final total = widget.installmentPlan!.totalAmount;
-      final monthly = widget.installmentPlan!.monthlyPayment;
-      final periods = widget.installmentPlan!.totalPeriods;
-      if (total > 0 && periods > 0) {
-        final rate = (monthly * periods / total) - 1;
-        _interestController.text = (rate * 100).toStringAsFixed(1);
-      } else {
-        _interestController.text = '0';
+      if (_periods.contains(widget.installmentPlan!.totalPeriods)) {
+        _selectedPeriod = widget.installmentPlan!.totalPeriods;
       }
-    } else {
-      _interestController.text = '0';
     }
     _recalculate();
   }
@@ -511,25 +606,20 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   void dispose() {
     _titleController.dispose();
     _totalController.dispose();
-    _monthsController.dispose();
-    _interestController.dispose();
     super.dispose();
   }
 
   void _recalculate() {
-    final amountText = _totalController.text.trim();
-    final monthsText = _monthsController.text.trim();
-    final interestText = _interestController.text.trim();
-
-    if (amountText.isNotEmpty && monthsText.isNotEmpty) {
+    final amountText = _totalController.text.replaceAll(RegExp(r'\D'), '');
+    if (amountText.isNotEmpty) {
       final totalAmount = double.tryParse(amountText) ?? 0.0;
-      final months = int.tryParse(monthsText) ?? 1;
-      final interest = double.tryParse(interestText) ?? 0.0;
+      final months = _selectedPeriod;
+      final interest = _interestRates[months] ?? 0.0;
 
       if (totalAmount > 0 && months > 0) {
-        final rate = interest / 100;
+        final monthlyRate = interest / 100 / 12;
         setState(() {
-          _calculatedMonthly = ((totalAmount * (1 + rate)) / months).round();
+          _calculatedMonthly = ((totalAmount / months) + (totalAmount * monthlyRate)).round();
         });
         return;
       }
@@ -591,8 +681,9 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               TextFormField(
                 controller: _totalController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsSeparatorInputFormatter()],
                 decoration: InputDecoration(
-                  labelText: 'Tổng số tiền',
+                  labelText: 'Tổng số tiền gốc',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
@@ -600,54 +691,51 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                 ),
                 onChanged: (_) => _recalculate(),
                 validator: (v) {
-                  final val = int.tryParse(v!.trim());
+                  final clean = v!.replaceAll(RegExp(r'\D'), '');
+                  final val = int.tryParse(clean);
                   if (val == null || val <= 0) return 'Số tiền không hợp lệ';
                   return null;
                 },
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _monthsController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Số tháng trả góp',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
-                      ),
-                      onChanged: (_) => _recalculate(),
-                      validator: (v) {
-                        final val = int.tryParse(v!.trim());
-                        if (val == null || val <= 0) return 'Không hợp lệ';
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _interestController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Lãi suất tổng (%)',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
-                        suffixText: '%',
-                      ),
-                      onChanged: (_) => _recalculate(),
-                      validator: (v) {
-                        if (v!.trim().isEmpty) return null;
-                        final val = double.tryParse(v.trim());
-                        if (val == null || val < 0) return 'Không hợp lệ';
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
+              DropdownButtonFormField<String>(
+                value: _selectedBank,
+                items: _banks.map((b) => DropdownMenuItem(
+                  value: b,
+                  child: Text(b),
+                )).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedBank = val);
+                    _recalculate();
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Ngân hàng/Đơn vị',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<int>(
+                value: _selectedPeriod,
+                items: _periods.map((p) => DropdownMenuItem(
+                  value: p,
+                  child: Text('$p tháng - Lãi ${_interestRates[p]}%/năm'),
+                )).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedPeriod = val);
+                    _recalculate();
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Kỳ hạn & Lãi suất',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -723,7 +811,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Số tiền mỗi kỳ (ước tính):',
+                        'Số tiền mỗi kỳ (gốc + lãi):',
                         style: TextStyle(color: Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
                       ),
                       Text(
@@ -751,13 +839,11 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                   onPressed: () async {
                     if (!_formKey.currentState!.validate()) return;
 
-                    final title = _titleController.text.trim();
-                    final totalAmt = int.parse(_totalController.text.trim());
-                    final periods = int.parse(_monthsController.text.trim());
-                    final interestRate = double.tryParse(_interestController.text.trim()) ?? 0.0;
+                    final title = '${_titleController.text.trim()} - $_selectedBank';
+                    final cleanAmt = _totalController.text.replaceAll(RegExp(r'\D'), '');
+                    final totalAmt = int.parse(cleanAmt);
+                    final periods = _selectedPeriod;
                     
-                    final monthlyVal = ((totalAmt * (1 + interestRate / 100)) / periods).round();
-
                     final plan = InstallmentPlan(
                       id: widget.installmentPlan?.id ?? 'installment_${DateTime.now().millisecondsSinceEpoch}',
                       userId: widget.userId,
@@ -765,7 +851,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                       icon: _selectedEmoji,
                       totalAmount: totalAmt,
                       paidAmount: widget.installmentPlan?.paidAmount ?? 0,
-                      monthlyPayment: monthlyVal,
+                      monthlyPayment: _calculatedMonthly,
                       paidPeriods: widget.installmentPlan?.paidPeriods ?? 0,
                       totalPeriods: periods,
                       nextDueDate: _selectedDate.millisecondsSinceEpoch,

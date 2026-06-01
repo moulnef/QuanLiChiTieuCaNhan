@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import '../../services/sync_service.dart';
+import '../../services/notification_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
@@ -143,6 +144,9 @@ class FinanceProvider extends ChangeNotifier {
 
       _updateFinancialBalance();
 
+      // Trigger notifications check
+      NotificationService.instance.checkAndTriggerNotifications(effectiveUserId);
+
       // Trigger background sync, and silently reload upon completion
       _repository.syncWithFirebase(effectiveUserId).then((_) {
         _log('Background sync completed. Reloading lists silently...');
@@ -174,6 +178,9 @@ class FinanceProvider extends ChangeNotifier {
 
       _updateFinancialBalance();
       notifyListeners();
+
+      // Trigger notifications check
+      NotificationService.instance.checkAndTriggerNotifications(userId);
     } catch (e) {
       _log('Silently reloading finance data failed: $e');
     }

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/category_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class AddBudgetFormSheet extends StatefulWidget {
@@ -26,6 +29,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _limitController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
+  final FinanceRepository _repository = FinanceRepository();
 
   String? _selectedCategoryId;
   String? _selectedCategoryName;
@@ -41,7 +45,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       _selectedCategoryId = widget.budget!.categoryId;
       _selectedCategoryName = widget.budget!.categoryName;
       _selectedIcon = widget.budget!.icon;
-      _limitController.text = widget.budget!.limitAmount.toInt().toString();
+      _limitController.text = NumberFormat('#,###', 'vi_VN').format(widget.budget!.limitAmount);
       _selectedMonth = widget.budget!.month;
       _selectedYear = widget.budget!.year;
     } else {
@@ -57,7 +61,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategoryId == null || _selectedCategoryName == null) {
@@ -67,7 +71,8 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       return;
     }
 
-    final limitAmount = double.tryParse(_limitController.text.trim()) ?? 0;
+    final clean = _limitController.text.replaceAll(RegExp(r'\D'), '');
+    final limitAmount = double.tryParse(clean) ?? 0;
     if (limitAmount <= 0) {
       ScaffoldMessenger.of(
         context,
@@ -75,27 +80,81 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       return;
     }
 
-    final now = DateTime.now();
+    try {
+      // Check for budget duplicates in the selected month/year
+      final existingBudgets = await _repository.getBudgets(
+        widget.userId,
+        _selectedMonth,
+        _selectedYear,
+      );
 
-    final newBudget = Budget(
-      id:
-          widget.budget?.id ??
-          'budget_${DateTime.now().millisecondsSinceEpoch}',
-      userId: widget.userId,
-      categoryId: _selectedCategoryId!,
-      categoryName: _selectedCategoryName!,
-      icon: _selectedIcon ?? '📁',
-      month: _selectedMonth,
-      year: _selectedYear,
-      limitAmount: limitAmount,
-      spentAmount: widget.budget?.spentAmount ?? 0,
-      createdAt: widget.budget?.createdAt ?? now,
-      updatedAt: now,
-      status: widget.budget?.status ?? 'safe',
-    );
+      final isDuplicate = existingBudgets.any((b) =>
+          b.categoryId == _selectedCategoryId &&
+          b.id != widget.budget?.id);
 
-    widget.onSubmit(newBudget);
-    Navigator.pop(context);
+      if (isDuplicate) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Text('Ngân sách đã tồn tại'.xtr(context), style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(
+              'Danh mục này đã có thiết lập ngân sách cho Tháng $_selectedMonth/$_selectedYear. Vui lòng chỉnh sửa ngân sách hiện tại thay vì tạo mới.'.xtr(context),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Đóng'.xtr(context)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // Query SQLite for previously spent amount of the category in that month/year
+      final spent = await _repository.getSumExpenseByCategory(
+        widget.userId,
+        _selectedCategoryId!,
+        _selectedMonth,
+        _selectedYear,
+      );
+
+      final now = DateTime.now();
+
+      // Determine color status based on spentAmount vs limitAmount (warning: >=90%, danger: >=100%)
+      final ratio = limitAmount > 0 ? spent / limitAmount : 0.0;
+      String status = 'safe';
+      if (ratio >= 1.0) {
+        status = 'danger';
+      } else if (ratio >= 0.9) {
+        status = 'warning';
+      }
+
+      final newBudget = Budget(
+        id: widget.budget?.id ?? 'budget_${DateTime.now().millisecondsSinceEpoch}',
+        userId: widget.userId,
+        categoryId: _selectedCategoryId!,
+        categoryName: _selectedCategoryName!,
+        icon: _selectedIcon ?? '📁',
+        month: _selectedMonth,
+        year: _selectedYear,
+        limitAmount: limitAmount,
+        spentAmount: spent,
+        createdAt: widget.budget?.createdAt ?? now,
+        updatedAt: now,
+        status: status,
+      );
+
+      widget.onSubmit(newBudget);
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi kiểm tra ngân sách: $e'.xtr(context)), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -244,8 +303,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
               TextFormField(
                 controller: _limitController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsSeparatorInputFormatter()],
                 decoration: InputDecoration(
-                  hintText: 'Ví dụ: 3000000'.xtr(context),
+                  hintText: 'Ví dụ: 3.000.000'.xtr(context),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   border: OutlineInputBorder(
@@ -261,7 +321,8 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Vui lòng nhập hạn mức'.xtr(context);
                   }
-                  final number = int.tryParse(value.trim());
+                  final clean = value.replaceAll(RegExp(r'\D'), '');
+                  final number = int.tryParse(clean);
                   if (number == null || number <= 0) {
                     return 'Hạn mức phải là số nguyên dương'.xtr(context);
                   }

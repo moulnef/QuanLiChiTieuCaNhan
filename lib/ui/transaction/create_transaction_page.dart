@@ -6,11 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'transaction_controller.dart';
 import '../../domain/model/transaction_model.dart';
 import '../../domain/model/category_model.dart';
+import '../../domain/model/budget.dart';
 import '../../data/local/category_data.dart';
+import '../../data/repository/finance_repository.dart';
 import '../../services/translation_service.dart';
 import '../../utils/app_localizer.dart';
 import 'category_list_screen.dart';
@@ -314,6 +317,59 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         _isSaving = false;
         _isSuccess = true;
       });
+
+      // Check if this transaction causes category budget warning or danger
+      if (_currentType == 'expense') {
+        try {
+          final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+          final repository = FinanceRepository();
+          final budgets = await repository.getBudgets(
+            userId,
+            _selectedDate.month,
+            _selectedDate.year,
+          );
+
+          final budget = budgets.firstWhere(
+            (b) => b.categoryId == _categoryId,
+            orElse: () => Budget(
+              id: '',
+              userId: '',
+              categoryId: '',
+              categoryName: '',
+              icon: '',
+              month: 1,
+              year: 2026,
+              limitAmount: 0,
+              spentAmount: 0,
+              status: 'safe',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+
+          if (budget.id.isNotEmpty && budget.limitAmount > 0) {
+            final ratio = budget.spentAmount / budget.limitAmount;
+            if (ratio >= 1.0) {
+              _showCompactNotification(
+                "Cảnh báo: Đã vượt quá hạn mức ngân sách!".xtr(context),
+                Colors.redAccent,
+                Icons.error_outline,
+              );
+              await Future.delayed(const Duration(milliseconds: 1500));
+            } else if (ratio >= 0.9) {
+              _showCompactNotification(
+                "Cảnh báo: Chi tiêu đạt ${(ratio * 100).toStringAsFixed(0)}% ngân sách!".xtr(context),
+                const Color(0xFFD97706),
+                Icons.warning_amber_rounded,
+              );
+              await Future.delayed(const Duration(milliseconds: 1500));
+            }
+          }
+        } catch (e) {
+          debugPrint("Lỗi kiểm tra cảnh báo ngân sách: $e");
+        }
+      }
+
       _showCompactNotification(
         widget.editData != null
             ? "Cập nhật thành công!".xtr(context)

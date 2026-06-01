@@ -91,7 +91,9 @@ class HomePageState extends State<HomePage> {
           .listen((_) {
             if (mounted && !_isReloadingHomeData) {
               _reloadHomeData();
-              context.read<NotificationProvider>().checkNewNotifications(userId);
+              context.read<NotificationProvider>().checkNewNotifications(
+                userId,
+              );
             }
           });
     });
@@ -280,7 +282,9 @@ class HomePageState extends State<HomePage> {
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.15)),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -319,7 +323,8 @@ class HomePageState extends State<HomePage> {
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (context) => const NotificationScreen(),
+                                        builder: (context) =>
+                                            const NotificationScreen(),
                                       ),
                                     );
                                   },
@@ -518,7 +523,10 @@ class HomePageState extends State<HomePage> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 11),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.72),
+                    fontSize: 11,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -720,7 +728,10 @@ class HomePageState extends State<HomePage> {
                   const SizedBox(height: 2),
                   Text(
                     'Gợi ý tối ưu chi tiêu của bạn hôm nay'.xtr(context),
-                    style: const TextStyle(color: Color(0xFFE9D5FF), fontSize: 12),
+                    style: const TextStyle(
+                      color: Color(0xFFE9D5FF),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -779,8 +790,8 @@ class HomePageState extends State<HomePage> {
             )
           else
             ...budgets.map((budget) {
-              final spent = (budget.spentAmount as int).toDouble();
-              final limit = (budget.limitAmount as int).toDouble();
+              final spent = budget.spentAmount;
+              final limit = budget.limitAmount;
               final ratio = limit <= 0 ? 0.0 : (spent / limit).clamp(0.0, 1.0);
               final progressColor = ratio >= 0.9
                   ? const Color(0xFFEF4444)
@@ -813,7 +824,9 @@ class HomePageState extends State<HomePage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              (budget.categoryName as String).xtrCategory(context),
+                              (budget.categoryName as String).xtrCategory(
+                                context,
+                              ),
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF374151),

@@ -4,8 +4,12 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 
 String formatCurrency(num amount) =>
     NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(amount);
@@ -21,69 +25,198 @@ class SavingTabPage extends StatefulWidget {
 
 class _SavingTabPageState extends State<SavingTabPage> {
   final FirestoreService _firestoreService = FirestoreService();
+  final FinanceRepository _repository = FinanceRepository();
 
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
-  Future<int?> _showAmountDialog({
-    required String title,
-    required String actionLabel,
-    int? maxAmount,
-  }) async {
+  Future<Map<String, dynamic>?> _showDepositDialog(SavingGoal item, List<WalletModel> wallets) async {
     final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
 
-    return showDialog<int>(
+    return showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: InputDecoration(
-              suffixText: '₫',
-              hintText: 'Nhập số tiền...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Nạp tiền tiết kiệm', style: TextStyle(fontWeight: FontWeight.w700)),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<WalletModel>(
+                  value: selectedWallet,
+                  items: wallets.map((w) => DropdownMenuItem(
+                    value: w,
+                    child: Text('${w.name} (${formatCurrency(w.balance)})'),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => selectedWallet = val);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Nguồn tiền',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [ThousandsSeparatorInputFormatter()],
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    suffixText: '₫',
+                    hintText: 'Nhập số tiền...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (value) {
+                    final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                    final val = int.tryParse(clean);
+                    if (val == null || val <= 0) return 'Số tiền không hợp lệ';
+                    if (val > selectedWallet.balance) return 'Không đủ số dư trong ví';
+                    return null;
+                  },
+                ),
+              ],
             ),
-            validator: (value) {
-              final val = int.tryParse(value ?? '');
-              if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-              if (maxAmount != null && val > maxAmount) return 'Không đủ số dư';
-              return null;
-            },
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final clean = controller.text.replaceAll(RegExp(r'\D'), '');
+                  Navigator.pop(dialogContext, {
+                    'amount': int.parse(clean),
+                    'wallet': selectedWallet,
+                  });
+                }
+              },
+              child: const Text('Nạp ngay'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Hủy'),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _showWithdrawDialog(SavingGoal item, List<WalletModel> wallets) async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Rút tiền tiết kiệm', style: TextStyle(fontWeight: FontWeight.w700)),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<WalletModel>(
+                  value: selectedWallet,
+                  items: wallets.map((w) => DropdownMenuItem(
+                    value: w,
+                    child: Text('${w.name} (${formatCurrency(w.balance)})'),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => selectedWallet = val);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Ví nhận tiền',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [ThousandsSeparatorInputFormatter()],
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    suffixText: '₫',
+                    hintText: 'Nhập số tiền...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (value) {
+                    final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                    final val = int.tryParse(clean);
+                    if (val == null || val <= 0) return 'Số tiền không hợp lệ';
+                    if (val > item.currentAmount) return 'Vượt quá số tiền tiết kiệm hiện có';
+                    return null;
+                  },
+                ),
+              ],
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(dialogContext, int.parse(controller.text));
-              }
-            },
-            child: Text(actionLabel),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final clean = controller.text.replaceAll(RegExp(r'\D'), '');
+                  Navigator.pop(dialogContext, {
+                    'amount': int.parse(clean),
+                    'wallet': selectedWallet,
+                  });
+                }
+              },
+              child: const Text('Rút tiền'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _handleDeposit(SavingGoal item) async {
-    final amount = await _showAmountDialog(
-      title: 'Nạp tiền tiết kiệm',
-      actionLabel: 'Nạp ngay',
-    );
-    if (!mounted || amount == null) return;
+    final walletsData = await _repository.getWalletsByUserId(_currentUserId);
+    final wallets = walletsData.map((w) => WalletModel.fromMap(w)).toList();
+
+    if (wallets.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng tạo ví trước khi nạp tiền')),
+      );
+      return;
+    }
+
+    final result = await _showDepositDialog(item, wallets);
+    if (result == null || !mounted) return;
+
+    final amount = result['amount'] as int;
+    final wallet = result['wallet'] as WalletModel;
 
     try {
+      // 1. Trừ tiền ví nguồn
+      final newBalance = wallet.balance - amount;
+      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
+
+      // 2. Tạo giao dịch chuyển tiền vào quỹ
+      final tx = TransactionModel(
+        id: 'tx_saving_dep_${DateTime.now().millisecondsSinceEpoch}',
+        userId: _currentUserId,
+        walletId: wallet.id,
+        categoryId: 'saving_dep',
+        categoryName: 'Gửi tiết kiệm',
+        type: 'expense',
+        amount: amount.toDouble(),
+        note: 'Nạp tiền tiết kiệm: ${item.title}',
+        transactionDate: DateTime.now(),
+      );
+      await _repository.upsertTransaction(tx);
+
+      // 3. Cộng tiền vào mục tiêu tiết kiệm
       final newCurrent = item.currentAmount + amount;
       final completed = newCurrent >= item.targetAmount;
       final updated = item.copyWith(
@@ -93,10 +226,13 @@ class _SavingTabPageState extends State<SavingTabPage> {
       );
 
       await context.read<FinanceProvider>().updateSavingGoal(updated);
+      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã nạp ${formatCurrency(amount)} vào "${item.title}" ${completed ? '🎉 Hoàn thành!' : ''}')),
+        SnackBar(
+          content: Text('Đã nạp ${formatCurrency(amount)} từ ví "${wallet.name}" vào "${item.title}" ${completed ? '🎉 Hoàn thành!' : ''}'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -105,27 +241,86 @@ class _SavingTabPageState extends State<SavingTabPage> {
   }
 
   Future<void> _handleWithdraw(SavingGoal item) async {
-    final amount = await _showAmountDialog(
-      title: 'Rút tiền tiết kiệm',
-      actionLabel: 'Rút tiền',
-      maxAmount: item.currentAmount,
-    );
-    if (!mounted || amount == null) return;
+    final walletsData = await _repository.getWalletsByUserId(_currentUserId);
+    final wallets = walletsData.map((w) => WalletModel.fromMap(w)).toList();
+
+    if (wallets.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng tạo ví trước khi rút tiền')),
+      );
+      return;
+    }
+
+    final result = await _showWithdrawDialog(item, wallets);
+    if (result == null || !mounted) return;
+
+    final amount = result['amount'] as int;
+    final wallet = result['wallet'] as WalletModel;
 
     try {
+      // 1. Cộng tiền vào ví chính được chọn
+      final newBalance = wallet.balance + amount;
+      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
+
+      // 2. Tạo giao dịch nhận tiền từ quỹ
+      final tx = TransactionModel(
+        id: 'tx_saving_wd_${DateTime.now().millisecondsSinceEpoch}',
+        userId: _currentUserId,
+        walletId: wallet.id,
+        categoryId: 'saving_wd',
+        categoryName: 'Rút tiết kiệm',
+        type: 'income',
+        amount: amount.toDouble(),
+        note: 'Rút tiền tiết kiệm: ${item.title}',
+        transactionDate: DateTime.now(),
+      );
+      await _repository.upsertTransaction(tx);
+
+      // 3. Trừ tiền khỏi mục tiêu tiết kiệm
       final newCurrent = item.currentAmount - amount;
-      final completed = newCurrent >= item.targetAmount;
       final updated = item.copyWith(
         currentAmount: newCurrent,
-        status: completed ? 'completed' : 'active',
+        status: 'active',
         updatedAt: DateTime.now().millisecondsSinceEpoch,
       );
 
       await context.read<FinanceProvider>().updateSavingGoal(updated);
+      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
 
       if (!mounted) return;
+
+      // 4. Nếu rút hết khi đạt 100%, hỏi xem có muốn đóng mục tiêu không
+      if (newCurrent == 0 && item.currentAmount >= item.targetAmount) {
+        final shouldClose = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Đóng mục tiêu?', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Text('Mục tiêu "${item.title}" đã rút hết tiền. Bạn có muốn đóng mục tiêu tiết kiệm này không?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Hủy'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Đồng ý', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldClose == true && mounted) {
+          await context.read<FinanceProvider>().deleteSavingGoal(item.id);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Đã đóng và xóa mục tiêu tiết kiệm "${item.title}"')),
+          );
+          return;
+        }
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã rút ${formatCurrency(amount)} từ "${item.title}"')),
+        SnackBar(content: Text('Đã rút ${formatCurrency(amount)} về ví "${wallet.name}"')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -537,12 +732,26 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
     AppColors.teal,
   ];
 
+  int get _calculatedMonthlySaving {
+    final amountText = _amountController.text.replaceAll(RegExp(r'\D'), '');
+    final target = int.tryParse(amountText) ?? 0;
+    final current = widget.savingGoal?.currentAmount ?? 0;
+    if (target <= current) return 0;
+
+    final now = DateTime.now();
+    int monthsRemaining = ((_selectedDate.year - now.year) * 12) + _selectedDate.month - now.month;
+    if (monthsRemaining <= 0) {
+      monthsRemaining = 1;
+    }
+    return ((target - current) / monthsRemaining).round();
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.savingGoal != null) {
       _titleController.text = widget.savingGoal!.title;
-      _amountController.text = widget.savingGoal!.targetAmount.toString();
+      _amountController.text = NumberFormat('#,###', 'vi_VN').format(widget.savingGoal!.targetAmount);
       _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.savingGoal!.targetDate);
       _selectedEmoji = widget.savingGoal!.icon;
       if (widget.savingGoal!.colorValue != null) {
@@ -615,6 +824,7 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
               TextFormField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsSeparatorInputFormatter()],
                 decoration: InputDecoration(
                   labelText: 'Số tiền cần tiết kiệm',
                   border: OutlineInputBorder(
@@ -623,8 +833,10 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                 ),
+                onChanged: (_) => setState(() {}),
                 validator: (value) {
-                  final amount = int.tryParse(value?.trim() ?? '');
+                  final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                  final amount = int.tryParse(clean);
                   if (amount == null || amount <= 0) {
                     return 'Số tiền không hợp lệ';
                   }
@@ -725,6 +937,35 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                   }
                 },
               ),
+              if (_calculatedMonthlySaving > 0) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _selectedColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _selectedColor.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Cần tiết kiệm mỗi tháng:',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                      ),
+                      Text(
+                        formatCurrency(_calculatedMonthlySaving),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _selectedColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -741,7 +982,8 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                     if (!_formKey.currentState!.validate()) return;
 
                     final title = _titleController.text.trim();
-                    final targetAmt = int.parse(_amountController.text.trim());
+                    final cleanAmt = _amountController.text.replaceAll(RegExp(r'\D'), '');
+                    final targetAmt = int.parse(cleanAmt);
                     final currentAmt = widget.savingGoal?.currentAmount ?? 0;
                     final isDone = currentAmt >= targetAmt;
 
@@ -802,6 +1044,16 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class AddSavingSheetPublic extends StatelessWidget {
+  const AddSavingSheetPublic({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return _AddSavingGoalSheet(
+      userId: FirebaseAuth.instance.currentUser?.uid ?? 'user_001',
     );
   }
 }

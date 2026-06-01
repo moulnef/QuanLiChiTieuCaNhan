@@ -2422,8 +2422,8 @@ class FinanceRepository {
     if (limitAmount <= 0) return 'safe';
 
     final ratio = spentAmount / limitAmount;
-    if (ratio >= 1) return 'danger';
-    if (ratio >= 0.8) return 'warning';
+    if (ratio >= 1.0) return 'danger';
+    if (ratio >= 0.9) return 'warning';
     return 'safe';
   }
 

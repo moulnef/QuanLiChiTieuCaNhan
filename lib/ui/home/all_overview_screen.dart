@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/add_budget_form_sheet.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/finance/saving_tab.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/finance/installment_tab.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/finance/debt_tab.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
@@ -517,7 +520,14 @@ class _SavingTabContent extends StatelessWidget {
           label: '+  Tạo mục tiêu mới'.xtr(context),
           borderColor: _C.green,
           textColor: _C.green,
-          onPressed: () => _openCreateSavingGoalSheet(context, provider),
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const AddSavingSheetPublic(),
+            );
+          },
         ),
       ],
     );
@@ -565,7 +575,14 @@ class _InstallmentTabContent extends StatelessWidget {
           label: '+  Thêm kế hoạch trả góp'.xtr(context),
           borderColor: _C.primary,
           textColor: _C.primary,
-          onPressed: () => _openCreateInstallmentPlanSheet(context, provider),
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const AddInstallmentSheetPublic(),
+            );
+          },
         ),
       ],
     );
@@ -611,7 +628,14 @@ class _DebtTabContent extends StatelessWidget {
           label: '+  Thêm khoản vay'.xtr(context),
           borderColor: _C.orange,
           textColor: _C.orange,
-          onPressed: () => _openCreateLoanSheet(context, provider),
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const AddLoanSheetPublic(),
+            );
+          },
         ),
       ],
     );

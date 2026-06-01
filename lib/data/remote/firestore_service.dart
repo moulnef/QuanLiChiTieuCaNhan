@@ -894,8 +894,19 @@ class FirestoreService {
           .get();
 
       for (final doc in budgetSnapshot.docs) {
+        final budgetData = doc.data() as Map<String, dynamic>;
+        final limitAmount = (budgetData['limitAmount'] ?? budgetData['limit_amount'] ?? 0).toDouble();
+        final ratio = limitAmount > 0 ? spent / limitAmount : 0.0;
+        String status = 'safe';
+        if (ratio >= 1.0) {
+          status = 'danger';
+        } else if (ratio >= 0.9) {
+          status = 'warning';
+        }
+
         await doc.reference.update({
           'spentAmount': spent,
+          'status': status,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
