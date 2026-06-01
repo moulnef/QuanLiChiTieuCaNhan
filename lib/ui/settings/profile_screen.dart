@@ -8,7 +8,14 @@ import 'package:provider/provider.dart';
 import 'user_info_screen.dart';
 import 'change_password_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:intl/intl.dart' show DateFormat;
 import '../../utils/app_localizer.dart';
+import '../providers/sync_provider.dart';
+import '../../services/sync_service.dart';
+import '../../services/notification_service.dart';
+import '../providers/notification_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../modules/admin/admin_dashboard.dart';
 import '../providers/auth_provider.dart';
@@ -55,6 +62,10 @@ class _ProfilePageState extends State<ProfilePage> {
         _currentUserId,
       );
 
+      final prefs = await SharedPreferences.getInstance();
+      final notifyEnabledPref = prefs.getBool('notification_enabled') ?? false;
+      final hasOSPermission = await NotificationService.instance.checkPermission();
+
       if (!mounted) return;
       setState(() {
         _displayName = session?['displayName']?.toString().isNotEmpty == true
@@ -65,12 +76,22 @@ class _ProfilePageState extends State<ProfilePage> {
             : (user?.email ?? 'Chưa cập nhật');
         _walletBalance = totalWallet;
         _transactionCount = transactionCount;
+        _isNotifyEnabled = notifyEnabledPref && hasOSPermission;
       });
     } catch (_) {
+      bool localNotify = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final notifyEnabledPref = prefs.getBool('notification_enabled') ?? false;
+        final hasOSPermission = await NotificationService.instance.checkPermission();
+        localNotify = notifyEnabledPref && hasOSPermission;
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _displayName = user?.displayName ?? 'Người dùng';
         _email = user?.email ?? 'Chưa cập nhật';
+        _isNotifyEnabled = localNotify;
       });
     }
   }
@@ -123,16 +144,16 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       _buildItem(
                         icon: Icons.person_outline_rounded,
-                        label: "Thông tin cá nhân",
-                        subtitle: "Họ tên, ngày sinh",
+                        label: "Thông tin cá nhân".xtr(context),
+                        subtitle: "Họ tên, ngày sinh".xtr(context),
                         color: const Color(0xFF1D4ED8),
                         onTap: _onUserInfoTap,
                       ),
                       _buildDivider(),
                       _buildItem(
                         icon: Icons.lock_outline_rounded,
-                        label: "Đổi mật khẩu",
-                        subtitle: "Cập nhật mật khẩu",
+                        label: "Đổi mật khẩu".xtr(context),
+                        subtitle: "Cập nhật mật khẩu".xtr(context),
                         color: const Color(0xFF6D28D9),
                         onTap: _onChangePasswordTap,
                       ),
@@ -147,12 +168,58 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       _buildToggleItem(
                         icon: Icons.notifications_outlined,
-                        label: "Nhắc nhở thanh toán",
-                        subtitle: "Thông báo trước 3 ngày",
+                        label: "Nhắc nhở thanh toán".xtr(context),
+                        subtitle: "Thông báo trước 3 ngày".xtr(context),
                         color: const Color(0xFFF59E0B),
                         value: _isNotifyEnabled,
-                        onChanged: (val) =>
-                            setState(() => _isNotifyEnabled = val),
+                        onChanged: (val) async {
+                          if (val) {
+                            final hasPermission = await NotificationService.instance.checkPermission();
+                            bool granted = hasPermission;
+                            if (!hasPermission) {
+                              granted = await NotificationService.instance.requestPermission();
+                            }
+                            if (granted) {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('notification_enabled', true);
+                              setState(() {
+                                _isNotifyEnabled = true;
+                              });
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Đã bật thông báo thành công!'.xtr(context)),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                context.read<NotificationProvider>().checkNewNotifications(_currentUserId);
+                              }
+                            } else {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Vui lòng bật quyền thông báo trong cài đặt thiết bị.'.xtr(context)),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          } else {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('notification_enabled', false);
+                            setState(() {
+                              _isNotifyEnabled = false;
+                            });
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Đã tắt thông báo.'.xtr(context)),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -161,20 +228,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 10),
                   _buildCard(
                     children: [
-                      _buildToggleItem(
-                        icon: Icons.cloud_outlined,
-                        label: "Đồng bộ đám mây",
-                        subtitle: "Lần cuối: vừa xong",
-                        color: const Color(0xFF06B6D4),
-                        value: _isSyncEnabled,
-                        onChanged: (val) =>
-                            setState(() => _isSyncEnabled = val),
-                      ),
-                      _buildDivider(),
+                      _buildSyncSection(),
                       _buildItem(
                         icon: Icons.backup_outlined,
-                        label: "Sao lưu dữ liệu",
-                        subtitle: "Sao lưu / Khôi phục",
+                        label: "Sao lưu dữ liệu".xtr(context),
+                        subtitle: "Sao lưu / Khôi phục".xtr(context),
                         color: const Color(0xFF6D28D9),
                         onTap: () {},
                       ),
@@ -333,27 +391,72 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                Consumer<SyncProvider>(
+                  builder: (context, syncProvider, _) {
+                    Color dotColor;
+                    switch (syncProvider.status) {
+                      case SyncStatus.syncing:
+                        dotColor = const Color(0xFFF59E0B); // Yellow
+                        break;
+                      case SyncStatus.success:
+                        dotColor = const Color(0xFF10B981); // Green
+                        break;
+                      case SyncStatus.error:
+                      case SyncStatus.offline:
+                        dotColor = const Color(0xFFEF4444); // Red
+                        break;
+                      case SyncStatus.idle:
+                      default:
+                        dotColor = syncProvider.pendingCount > 0
+                            ? const Color(0xFFF59E0B) // Yellow
+                            : const Color(0xFF10B981); // Green
+                        break;
+                    }
+
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 2,
+                          right: 2,
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: dotColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF1D4ED8), // matched gradient background
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -389,18 +492,18 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.white.withValues(alpha: 0.4),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.verified_rounded,
                               size: 13,
                               color: Colors.white,
                             ),
-                            SizedBox(width: 5),
+                            const SizedBox(width: 5),
                             Text(
-                              "Đã xác minh",
-                              style: TextStyle(
+                              "Đã xác minh".xtr(context),
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: Colors.white,
                                 fontWeight: FontWeight.w500,
@@ -442,15 +545,15 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     return Row(
       children: [
-        _statCard("$_transactionCount", "Giao dịch", Icons.swap_horiz_rounded),
+        _statCard("$_transactionCount", "Giao dịch".xtr(context), Icons.swap_horiz_rounded),
         const SizedBox(width: 12),
         _statCard(
           _formatMoney(_walletBalance),
-          "Tổng ví",
+          "Tổng ví".xtr(context),
           Icons.account_balance_wallet_outlined,
         ),
         const SizedBox(width: 12),
-        _statCard(joinedDate, "Tham gia", Icons.calendar_today_outlined),
+        _statCard(joinedDate, "Tham gia".xtr(context), Icons.calendar_today_outlined),
       ],
     );
   }
@@ -670,14 +773,14 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ],
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
-            SizedBox(width: 8),
+            const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
+            const SizedBox(width: 8),
             Text(
-              "Đăng xuất",
-              style: TextStyle(
+              "Đăng xuất".xtr(context),
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFFEF4444),
@@ -741,22 +844,22 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Bảng điều khiển quản trị',
-                      style: TextStyle(
+                      'Bảng điều khiển quản trị'.xtr(context),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'Mở trang dashboard dành cho admin',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      'Mở trang dashboard dành cho admin'.xtr(context),
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
@@ -770,6 +873,181 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSyncSection() {
+    if (kIsWeb) return const SizedBox.shrink();
+
+    return Consumer<SyncProvider>(
+      builder: (context, syncProvider, _) {
+        Color iconColor;
+        Widget trailingWidget;
+        String statusText;
+
+        switch (syncProvider.status) {
+          case SyncStatus.syncing:
+            iconColor = const Color(0xFFF59E0B); // Orange
+            trailingWidget = const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+              ),
+            );
+            statusText = "Đang đồng bộ...".xtr(context);
+            break;
+          case SyncStatus.success:
+            iconColor = const Color(0xFF10B981); // Green
+            trailingWidget = const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981), size: 20);
+            statusText = "Đã đồng bộ".xtr(context);
+            break;
+          case SyncStatus.error:
+            iconColor = const Color(0xFFEF4444); // Red
+            trailingWidget = const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 20);
+            statusText = syncProvider.errorMessage ?? "Lỗi đồng bộ".xtr(context);
+            break;
+          case SyncStatus.offline:
+            iconColor = const Color(0xFF94A3B8); // Grey
+            trailingWidget = const Icon(Icons.cloud_off_rounded, color: Color(0xFF94A3B8), size: 20);
+            statusText = "Không có kết nối mạng".xtr(context);
+            break;
+          case SyncStatus.idle:
+          default:
+            if (syncProvider.pendingCount > 0) {
+              iconColor = const Color(0xFFF59E0B); // Orange
+              trailingWidget = Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "${syncProvider.pendingCount}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFD97706),
+                  ),
+                ),
+              );
+              statusText = "${syncProvider.pendingCount} " + "bản ghi chờ đồng bộ".xtr(context);
+            } else {
+              iconColor = const Color(0xFF10B981); // Green
+              trailingWidget = const Icon(Icons.cloud_done_outlined, color: Color(0xFF10B981), size: 20);
+              statusText = "Đã đồng bộ".xtr(context);
+            }
+            break;
+        }
+
+        final lastSyncTimeStr = syncProvider.lastSyncTime != null
+            ? DateFormat('HH:mm dd/MM/yyyy').format(syncProvider.lastSyncTime!)
+            : "Chưa đồng bộ lần nào".xtr(context);
+        final subtitle = "Lần cuối: ".xtr(context) + lastSyncTimeStr + " • " + "Tự động đồng bộ khi có kết nối".xtr(context);
+
+        final showRetryButton = syncProvider.status == SyncStatus.error;
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.cloud_outlined, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "Đồng bộ đám mây".xtr(context),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            trailingWidget,
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          statusText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: iconColor,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (showRetryButton)
+                    ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          final result = await syncProvider.syncNow(_currentUserId);
+                          if (context.mounted && result != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Đã đồng bộ ".xtr(context) + "${result.successCount} " + "bản ghi thành công!".xtr(context)),
+                                backgroundColor: const Color(0xFF10B981),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Đồng bộ thất bại: ".xtr(context) + "$e"),
+                                backgroundColor: const Color(0xFFEF4444),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Text("Thử lại".xtr(context)),
+                    ),
+                ],
+              ),
+            ),
+            _buildDivider(),
+          ],
+        );
+      },
     );
   }
 }

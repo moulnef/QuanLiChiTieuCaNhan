@@ -10,6 +10,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
 
 // Common Widgets (Lùi 1 cấp ra widgets, sau đó vào common)
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/progress_status_bar.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class BudgetItemCard extends StatelessWidget {
   final Budget budget;
@@ -85,7 +86,7 @@ class BudgetItemCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      budget.categoryName,
+                      budget.categoryName.xtrCategory(context),
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -94,7 +95,7 @@ class BudgetItemCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${budget.progressPercent}% đã dùng',
+                      '${budget.progressPercent}% ' + 'đã dùng'.xtr(context),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
@@ -122,7 +123,7 @@ class BudgetItemCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Đã chi: ${MoneyFormatter.formatVnd(budget.spentAmount)}',
+                  'Đã chi: '.xtr(context) + MoneyFormatter.formatVnd(budget.spentAmount),
                   style: const TextStyle(
                     fontSize: 15,
                     color: AppColors.textSecondary,
@@ -130,7 +131,7 @@ class BudgetItemCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'Còn lại: ${MoneyFormatter.formatVnd(budget.remainingAmount)}',
+                'Còn lại: '.xtr(context) + MoneyFormatter.formatVnd(budget.remainingAmount),
                 style: const TextStyle(
                   fontSize: 15,
                   color: AppColors.safe,
@@ -149,7 +150,7 @@ class BudgetItemCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
-                alert,
+                alert.xtr(context),
                 style: TextStyle(
                   fontSize: 15,
                   color: statusColor,

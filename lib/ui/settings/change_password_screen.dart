@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -48,19 +49,19 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Đổi mật khẩu thành công!")),
+            SnackBar(content: Text("Đổi mật khẩu thành công!".xtr(context))),
           );
           Navigator.pop(context);
         }
       }
     } catch (e) {
       if (mounted) {
-        String errorMsg = "Lỗi: ${e.toString()}";
+        String errorMsg = "Lỗi: ".xtr(context) + e.toString();
         if (e is FirebaseAuthException) {
           if (e.code == 'wrong-password') {
-            errorMsg = "Mật khẩu hiện tại không chính xác.";
+            errorMsg = "Mật khẩu hiện tại không chính xác.".xtr(context);
           } else if (e.code == 'weak-password') {
-            errorMsg = "Mật khẩu mới quá yếu.";
+            errorMsg = "Mật khẩu mới quá yếu.".xtr(context);
           }
         }
         ScaffoldMessenger.of(
@@ -77,9 +78,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          "Đổi mật khẩu",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        title: Text(
+          "Đổi mật khẩu".xtr(context),
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -97,46 +98,49 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Mật khẩu mới của bạn phải khác với mật khẩu đã sử dụng trước đó.",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    Text(
+                      "Mật khẩu mới của bạn phải khác với mật khẩu đã sử dụng trước đó.".xtr(context),
+                      style: const TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                     const SizedBox(height: 32),
                     _buildPasswordField(
-                      label: "Mật khẩu hiện tại",
+                      label: "Mật khẩu hiện tại".xtr(context),
                       controller: _currentPasswordController,
                       obscureText: _obscureCurrent,
                       onToggle: () =>
                           setState(() => _obscureCurrent = !_obscureCurrent),
                       validator: (value) => (value == null || value.isEmpty)
-                          ? "Vui lòng nhập mật khẩu hiện tại"
+                          ? "Vui lòng nhập mật khẩu hiện tại".xtr(context)
                           : null,
                     ),
                     const SizedBox(height: 20),
                     _buildPasswordField(
-                      label: "Mật khẩu mới",
+                      label: "Mật khẩu mới".xtr(context),
                       controller: _newPasswordController,
                       obscureText: _obscureNew,
                       onToggle: () =>
                           setState(() => _obscureNew = !_obscureNew),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
-                          return "Vui lòng nhập mật khẩu mới";
-                        if (value.length < 6)
-                          return "Mật khẩu phải có ít nhất 6 ký tự";
+                        if (value == null || value.isEmpty) {
+                          return "Vui lòng nhập mật khẩu mới".xtr(context);
+                        }
+                        if (value.length < 6) {
+                          return "Mật khẩu phải có ít nhất 6 ký tự".xtr(context);
+                        }
                         return null;
                       },
                     ),
                     const SizedBox(height: 20),
                     _buildPasswordField(
-                      label: "Xác nhận mật khẩu",
+                      label: "Xác nhận mật khẩu".xtr(context),
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirm,
                       onToggle: () =>
                           setState(() => _obscureConfirm = !_obscureConfirm),
                       validator: (value) {
-                        if (value != _newPasswordController.text)
-                          return "Mật khẩu xác nhận không khớp";
+                        if (value != _newPasswordController.text) {
+                          return "Mật khẩu xác nhận không khớp".xtr(context);
+                        }
                         return null;
                       },
                     ),
@@ -154,9 +158,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          "Cập nhật mật khẩu",
-                          style: TextStyle(
+                        child: Text(
+                          "Cập nhật mật khẩu".xtr(context),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),

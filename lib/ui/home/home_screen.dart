@@ -13,6 +13,10 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/all_overview_screen.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/budget_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/transaction_list_page.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/notification_provider.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/notification/notification_screen.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/create_transaction_page.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -76,11 +80,18 @@ class HomePageState extends State<HomePage> {
         return;
       }
       final userId = user.uid;
+
+      // Trigger warnings check
+      if (mounted) {
+        context.read<NotificationProvider>().checkNewNotifications(userId);
+      }
+
       _transactionChangedSubscription = _financeRepository
           .watchTransactions(userId)
           .listen((_) {
             if (mounted && !_isReloadingHomeData) {
               _reloadHomeData();
+              context.read<NotificationProvider>().checkNewNotifications(userId);
             }
           });
     });
@@ -112,7 +123,7 @@ class HomePageState extends State<HomePage> {
     final String fullName =
         (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
         ? user.displayName!.trim()
-        : 'Bạn';
+        : 'Bạn'.xtr(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4FF),
@@ -191,37 +202,37 @@ class HomePageState extends State<HomePage> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+          colors: [Color(0xFF1D4ED8), Color(0xFF4F46E5), Color(0xFF6D28D9)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(34),
-          bottomRight: Radius.circular(34),
+          bottomLeft: Radius.circular(36),
+          bottomRight: Radius.circular(36),
         ),
       ),
       child: Stack(
         children: [
           Positioned(
-            top: -80,
-            right: -70,
+            top: -60,
+            right: -50,
             child: Container(
-              width: 220,
-              height: 220,
+              width: 180,
+              height: 180,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.11),
+                color: Colors.white.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
             ),
           ),
           Positioned(
-            bottom: -52,
-            left: 40,
+            bottom: -40,
+            left: 20,
             child: Container(
-              width: 130,
-              height: 130,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
+                color: Colors.white.withOpacity(0.07),
                 shape: BoxShape.circle,
               ),
             ),
@@ -229,7 +240,7 @@ class HomePageState extends State<HomePage> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 56),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 56),
               child: Column(
                 children: [
                   Row(
@@ -239,21 +250,23 @@ class HomePageState extends State<HomePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Xin chào,',
+                              'Xin chào,'.xtr(context),
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.8),
+                                color: Colors.white.withOpacity(0.72),
                                 fontSize: 13,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(
                               '$fullName 👋',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 21,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 23,
+                                letterSpacing: -0.3,
                               ),
                             ),
                           ],
@@ -261,136 +274,205 @@ class HomePageState extends State<HomePage> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
+                          horizontal: 12,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF22C55E).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(999),
+                          color: Colors.white.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.15)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(
-                              Icons.wifi_rounded,
-                              color: Color(0xFF86EFAC),
-                              size: 13,
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF4ADE80),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 6),
                             Text(
-                              'Online',
-                              style: TextStyle(
-                                color: Color(0xFF86EFAC),
+                              'Online'.xtr(context),
+                              style: const TextStyle(
+                                color: Colors.white,
                                 fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            onPressed: () {},
-                            icon: const Icon(
-                              Icons.notifications_none_rounded,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFEF4444),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
+                      const SizedBox(width: 8),
+                      Consumer<NotificationProvider>(
+                        builder: (context, provider, _) {
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => const NotificationScreen(),
+                                      ),
+                                    );
+                                  },
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
+                              if (provider.unreadCount > 0)
+                                Positioned(
+                                  top: -2,
+                                  right: -2,
+                                  child: Container(
+                                    width: 16,
+                                    height: 16,
+                                    alignment: Alignment.center,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFEF4444),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '${provider.unreadCount}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Số dư khả dụng',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 13,
+                  // Glassmorphism Balance Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.18),
+                          Colors.white.withOpacity(0.06),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.24),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6D28D9).withOpacity(0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Số dư khả dụng'.xtr(context).toUpperCase(),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                            Text(
+                              DateFormat('MM/yyyy').format(DateTime.now()),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                displayBalance,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => setState(
+                                  () => _isBalanceVisible = !_isBalanceVisible,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(
+                                    _isBalanceVisible
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: Colors.white.withOpacity(0.9),
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          displayBalance,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 31,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      InkWell(
-                        onTap: () => setState(
-                          () => _isBalanceVisible = !_isBalanceVisible,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            _isBalanceVisible
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            color: Colors.white.withValues(alpha: 0.88),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('MM/yyyy').format(DateTime.now()),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
                   Row(
                     children: [
                       Expanded(
                         child: _headerStatCard(
                           icon: Icons.trending_up_rounded,
-                          iconColor: const Color(0xFF86EFAC),
-                          label: 'Thu nhập',
+                          iconColor: const Color(0xFF4ADE80),
+                          label: 'Thu nhập'.xtr(context),
                           value: displayIncome,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: _headerStatCard(
                           icon: Icons.trending_down_rounded,
-                          iconColor: const Color(0xFFFCA5A5),
-                          label: 'Chi tiêu',
+                          iconColor: const Color(0xFFF87171),
+                          label: 'Chi tiêu'.xtr(context),
                           value: displayExpense,
                         ),
                       ),
@@ -412,41 +494,41 @@ class HomePageState extends State<HomePage> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
       ),
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.22),
+              color: iconColor.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 17, color: iconColor),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 11),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -464,19 +546,19 @@ class HomePageState extends State<HomePage> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Thu - Chi 6 tháng',
-                  style: TextStyle(
+                  'Thu - Chi 6 tháng'.xtr(context),
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
                   ),
                 ),
               ),
-              _legendDot(const Color(0xFF3B82F6), 'Thu'),
+              _legendDot(const Color(0xFF3B82F6), 'Thu'.xtr(context)),
               const SizedBox(width: 10),
-              _legendDot(const Color(0xFFF87171), 'Chi'),
+              _legendDot(const Color(0xFFF87171), 'Chi'.xtr(context)),
             ],
           ),
           const SizedBox(height: 12),
@@ -586,69 +668,65 @@ class HomePageState extends State<HomePage> {
   }
 
   Widget _buildAiPreview(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ChatbotScreen()),
-          );
-        },
-        child: Ink(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return _ScaleOnTap(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ChatbotScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF6D28D9), Color(0xFF8B5CF6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6D28D9).withOpacity(0.25),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withValues(alpha: 0.28),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.22),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: const Text('🤖', style: TextStyle(fontSize: 20)),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'AI Financial Assistant',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+              alignment: Alignment.center,
+              child: const Text('🤖', style: TextStyle(fontSize: 20)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'AI Financial Assistant',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Gợi ý tối ưu chi tiêu của bạn hôm nay',
-                      style: TextStyle(color: Color(0xFFE9D5FF), fontSize: 12),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Gợi ý tối ưu chi tiêu của bạn hôm nay'.xtr(context),
+                    style: const TextStyle(color: Color(0xFFE9D5FF), fontSize: 12),
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFFE9D5FF)),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFE9D5FF)),
+          ],
         ),
       ),
     );
@@ -665,10 +743,10 @@ class HomePageState extends State<HomePage> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Ngân sách tháng này',
-                  style: TextStyle(
+                  'Ngân sách tháng này'.xtr(context),
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
@@ -684,18 +762,18 @@ class HomePageState extends State<HomePage> {
                     ),
                   );
                 },
-                child: const Text('Xem tất cả'),
+                child: Text('Xem tất cả'.xtr(context)),
               ),
             ],
           ),
           const SizedBox(height: 8),
           if (budgets.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'Bạn chưa thiết lập ngân sách.',
-                  style: TextStyle(color: Color(0xFF6B7280)),
+                  'Bạn chưa thiết lập ngân sách.'.xtr(context),
+                  style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
               ),
             )
@@ -710,53 +788,63 @@ class HomePageState extends State<HomePage> {
                   ? const Color(0xFFF97316)
                   : const Color(0xFF22C55E);
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          (budget.icon as String).isEmpty
-                              ? '💰'
-                              : budget.icon as String,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            budget.categoryName as String,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF374151),
+              return _ScaleOnTap(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AllOverviewScreen(initialIndex: 2),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            (budget.icon as String).isEmpty
+                                ? '💰'
+                                : budget.icon as String,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              (budget.categoryName as String).xtrCategory(context),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF374151),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${currency.format(budget.spentAmount)} / ${currency.format(budget.limitAmount)} đ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: progressColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                        Text(
-                          '${currency.format(budget.spentAmount)} / ${currency.format(budget.limitAmount)} đ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: progressColor,
-                            fontWeight: FontWeight.w600,
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          minHeight: 8,
+                          value: ratio,
+                          backgroundColor: const Color(0xFFE5E7EB),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            progressColor,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 8,
-                        value: ratio,
-                        backgroundColor: const Color(0xFFE5E7EB),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          progressColor,
-                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }),
@@ -776,10 +864,10 @@ class HomePageState extends State<HomePage> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Giao dịch gần đây',
-                  style: TextStyle(
+                  'Giao dịch gần đây'.xtr(context),
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
@@ -796,85 +884,95 @@ class HomePageState extends State<HomePage> {
                     ),
                   );
                 },
-                child: const Text('Xem tất cả'),
+                child: Text('Xem tất cả'.xtr(context)),
               ),
             ],
           ),
           const SizedBox(height: 8),
           if (tx.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'Bạn chưa có giao dịch nào.',
-                  style: TextStyle(color: Color(0xFF6B7280)),
+                  'Bạn chưa có giao dịch nào.'.xtr(context),
+                  style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
               ),
             )
           else
             ...tx.map((item) {
               final isExpense = item.type == 'expense';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: isExpense
-                            ? const Color(0xFFFEE2E2)
-                            : const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        item.categoryName.isEmpty
-                            ? '💸'
-                            : item.categoryName.characters.first,
-                        style: const TextStyle(fontSize: 18),
-                      ),
+              return _ScaleOnTap(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateTransactionPage(editData: item),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.note.isNotEmpty
-                                ? item.note
-                                : item.categoryName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1F2937),
-                              fontWeight: FontWeight.w600,
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: isExpense
+                              ? const Color(0xFFFEE2E2)
+                              : const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          item.categoryName.isEmpty
+                              ? '💸'
+                              : item.categoryName.characters.first,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.note.isNotEmpty
+                                  ? item.note
+                                  : item.categoryName.xtrCategory(context),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF1F2937),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${item.categoryName} · ${DateFormat('dd/MM').format(item.transactionDate)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF9CA3AF),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${item.categoryName.xtrCategory(context)} · ${DateFormat('dd/MM').format(item.transactionDate)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF9CA3AF),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${isExpense ? '-' : '+'}${currency.format(item.amount)} đ',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isExpense
-                            ? const Color(0xFFEF4444)
-                            : const Color(0xFF22C55E),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${isExpense ? '-' : '+'}${currency.format(item.amount)} đ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isExpense
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF22C55E),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }),
@@ -955,4 +1053,33 @@ class _MonthlyCashflow {
   final String label;
   final double income;
   final double expense;
+}
+
+class _ScaleOnTap extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _ScaleOnTap({required this.child, this.onTap});
+
+  @override
+  State<_ScaleOnTap> createState() => _ScaleOnTapState();
+}
+
+class _ScaleOnTapState extends State<_ScaleOnTap> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.96),
+      onTapUp: (_) => setState(() => _scale = 1.0),
+      onTapCancel: () => setState(() => _scale = 1.0),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
+    );
+  }
 }

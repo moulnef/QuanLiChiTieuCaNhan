@@ -1,9 +1,12 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/config/firebase_options.dart';
 import 'data/repository/finance_repository.dart';
 import 'ui/auth/login_screen.dart';
@@ -11,10 +14,17 @@ import 'ui/home/main_screen.dart';
 import 'ui/providers/auth_provider.dart';
 import 'ui/providers/budget_provider.dart';
 import 'ui/providers/finance_provider.dart';
+import 'ui/providers/sync_provider.dart';
+import 'ui/providers/notification_provider.dart';
 
 void main() async {
   // 1. Khởi tạo binding cho Flutter
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
 
   // Giữ status bar + navigation bar hiển thị theo kiểu edge-to-edge,
   // tránh bị vùng đen ở đáy trên một số thiết bị Android.
@@ -55,6 +65,12 @@ void main() async {
           provider.ChangeNotifierProvider<BudgetProvider>(
             create: (context) =>
                 BudgetProvider(context.read<FinanceRepository>()),
+          ),
+          provider.ChangeNotifierProvider<SyncProvider>(
+            create: (_) => SyncProvider(),
+          ),
+          provider.ChangeNotifierProvider<NotificationProvider>(
+            create: (_) => NotificationProvider(),
           ),
         ],
         child: EasyLocalization(

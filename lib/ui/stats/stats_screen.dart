@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/transaction_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -176,44 +177,51 @@ class _StatsPageState extends State<StatsPage> {
         name.contains('cafe') ||
         name.contains('bữa') ||
         name.contains('chợ') ||
-        name.contains('siêu thị'))
+        name.contains('siêu thị')) {
       return 'Ăn uống';
+    }
     if (name.contains('xăng') ||
         name.contains('taxi') ||
         name.contains('xe') ||
         name.contains('gửi xe') ||
         name.contains('đi lại') ||
-        name.contains('di chuyển'))
+        name.contains('di chuyển')) {
       return 'Di chuyển';
+    }
     if (name.contains('quần') ||
         name.contains('áo') ||
         name.contains('giày') ||
         name.contains('mua sắm') ||
-        name.contains('trang phục'))
+        name.contains('trang phục')) {
       return 'Mua sắm';
+    }
     if (name.contains('giải trí') ||
         name.contains('vui chơi') ||
         name.contains('phim') ||
-        name.contains('game'))
+        name.contains('game')) {
       return 'Giải trí';
+    }
     if (name.contains('thuốc') ||
         name.contains('bệnh') ||
         name.contains('y tế') ||
         name.contains('sức khỏe') ||
-        name.contains('thể thao'))
+        name.contains('thể thao')) {
       return 'Sức khỏe';
+    }
     if (name.contains('học') ||
         name.contains('giáo dục') ||
         name.contains('sách') ||
-        name.contains('trường'))
+        name.contains('trường')) {
       return 'Giáo dục';
+    }
     if (name.contains('điện') ||
         name.contains('nước') ||
         name.contains('internet') ||
         name.contains('hóa đơn') ||
         name.contains('gas') ||
-        name.contains('dịch vụ'))
+        name.contains('dịch vụ')) {
       return 'Hóa đơn';
+    }
     if (name.contains('du lịch') || name.contains('travel')) return 'Du lịch';
     return categoryName.isEmpty ? 'Khác' : categoryName;
   }
@@ -227,10 +235,11 @@ class _StatsPageState extends State<StatsPage> {
       for (final t in _allTransactions) {
         if (t.transactionDate.year == month.year &&
             t.transactionDate.month == month.month) {
-          if (t.type == 'income')
+          if (t.type == 'income') {
             income += t.amount;
-          else
+          } else {
             expense += t.amount;
+          }
         }
       }
       result.add({'income': income, 'expense': expense});
@@ -276,7 +285,7 @@ class _StatsPageState extends State<StatsPage> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final monthLabel = 'Tháng ${now.month}/${now.year}';
+    final monthLabel = 'Tháng '.xtr(context) + '${now.month}/${now.year}';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF),
@@ -360,9 +369,9 @@ class _StatsPageState extends State<StatsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Thống Kê & Báo Cáo',
-                    style: TextStyle(
+                  Text(
+                    'Thống Kê & Báo Cáo'.xtr(context),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -380,15 +389,15 @@ class _StatsPageState extends State<StatsPage> {
                   const SizedBox(height: 24),
                   Row(
                     children: [
-                      _buildSummaryCard('Thu nhập', _formatMoney(_totalIncome)),
+                      _buildSummaryCard('Thu nhập'.xtr(context), _formatMoney(_totalIncome)),
                       const SizedBox(width: 10),
                       _buildSummaryCard(
-                        'Chi tiêu',
+                        'Chi tiêu'.xtr(context),
                         _formatMoney(_totalExpense),
                       ),
                       const SizedBox(width: 10),
                       _buildSummaryCard(
-                        'Tiết kiệm',
+                        'Tiết kiệm'.xtr(context),
                         '${_savingPercent.toStringAsFixed(0)}%',
                       ),
                     ],
@@ -475,7 +484,7 @@ class _StatsPageState extends State<StatsPage> {
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
-                  _tabs[i],
+                  _tabs[i].xtr(context),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: selected ? Colors.white : Colors.grey.shade600,
@@ -496,9 +505,9 @@ class _StatsPageState extends State<StatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Phân bố chi tiêu',
-            style: TextStyle(
+          Text(
+            'Phân bố chi tiêu'.xtr(context),
+            style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
@@ -506,17 +515,17 @@ class _StatsPageState extends State<StatsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tổng: ${_formatMoneyFull(_totalExpense)}',
+            'Tổng: '.xtr(context) + _formatMoneyFull(_totalExpense),
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 16),
           if (_topCategories.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Chưa có dữ liệu chi tiêu',
-                  style: TextStyle(color: Colors.grey),
+                  'Chưa có dữ liệu chi tiêu'.xtr(context),
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ),
             )
@@ -563,7 +572,7 @@ class _StatsPageState extends State<StatsPage> {
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                entry.key,
+                                entry.key.xtrCategory(context),
                                 style: const TextStyle(fontSize: 12),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -624,9 +633,9 @@ class _StatsPageState extends State<StatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Thu - Chi theo tháng',
-            style: TextStyle(
+          Text(
+            'Thu - Chi theo tháng'.xtr(context),
+            style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
@@ -635,19 +644,19 @@ class _StatsPageState extends State<StatsPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _legendDot(const Color(0xFF1D4ED8), 'Thu nhập'),
+              _legendDot(const Color(0xFF1D4ED8), 'Thu nhập'.xtr(context)),
               const SizedBox(width: 16),
-              _legendDot(const Color(0xFFFB7185), 'Chi tiêu'),
+              _legendDot(const Color(0xFFFB7185), 'Chi tiêu'.xtr(context)),
             ],
           ),
           const SizedBox(height: 16),
           SizedBox(
             height: 180,
             child: _monthlyData.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'Chưa có dữ liệu',
-                      style: TextStyle(color: Colors.grey),
+                      'Chưa có dữ liệu'.xtr(context),
+                      style: const TextStyle(color: Colors.grey),
                     ),
                   )
                 : BarChart(
@@ -682,8 +691,9 @@ class _StatsPageState extends State<StatsPage> {
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
                               final idx = value.toInt();
-                              if (idx < 0 || idx >= monthLabels.length)
+                              if (idx < 0 || idx >= monthLabels.length) {
                                 return const SizedBox.shrink();
+                              }
                               return Padding(
                                 padding: const EdgeInsets.only(top: 6),
                                 child: Text(
@@ -764,9 +774,9 @@ class _StatsPageState extends State<StatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Chi tiêu trong tuần',
-            style: TextStyle(
+          Text(
+            'Chi tiêu trong tuần'.xtr(context),
+            style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
@@ -817,8 +827,9 @@ class _StatsPageState extends State<StatsPage> {
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
                         final idx = value.toInt();
-                        if (idx < 0 || idx >= dayLabels.length)
+                        if (idx < 0 || idx >= dayLabels.length) {
                           return const SizedBox.shrink();
+                        }
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -881,9 +892,9 @@ class _StatsPageState extends State<StatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Top danh mục chi tiêu',
-            style: TextStyle(
+          Text(
+            'Top danh mục chi tiêu'.xtr(context),
+            style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
@@ -891,12 +902,12 @@ class _StatsPageState extends State<StatsPage> {
           ),
           const SizedBox(height: 16),
           if (topFive.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Chưa có dữ liệu',
-                  style: TextStyle(color: Colors.grey),
+                  'Chưa có dữ liệu'.xtr(context),
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ),
             )
@@ -933,7 +944,7 @@ class _StatsPageState extends State<StatsPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            entry.key,
+                            entry.key.xtrCategory(context),
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 // Dùng package path để không bao giờ bị sai cấp độ lùi
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/progress_status_bar.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 class BudgetSummaryCard extends StatelessWidget {
   final int totalSpent;
   final int totalLimit;
@@ -30,10 +29,10 @@ class BudgetSummaryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Tổng ngân sách tháng 3',
-                  style: TextStyle(
+                  'Tổng ngân sách tháng 3'.xtr(context),
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,
@@ -79,7 +78,7 @@ class BudgetSummaryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Đã dùng: ${MoneyFormatter.formatVnd(totalSpent)}',
+                  'Đã dùng: '.xtr(context) + MoneyFormatter.formatVnd(totalSpent),
                   style: const TextStyle(
                     fontSize: 15,
                     color: Colors.white,
@@ -87,7 +86,7 @@ class BudgetSummaryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'Giới hạn: ${MoneyFormatter.formatVnd(totalLimit)}',
+                'Giới hạn: '.xtr(context) + MoneyFormatter.formatVnd(totalLimit),
                 style: const TextStyle(
                   fontSize: 15,
                   color: Colors.white,

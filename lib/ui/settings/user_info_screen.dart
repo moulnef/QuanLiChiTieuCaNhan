@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/snackbar_utils.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class UserInfoPage extends StatefulWidget {
   const UserInfoPage({super.key});
@@ -130,12 +131,12 @@ class _UserInfoPageState extends State<UserInfoPage> {
       });
 
       if (mounted) {
-        SnackbarUtils.showSuccess(context, 'Cập nhật hồ sơ thành công');
+        SnackbarUtils.showSuccess(context, 'Cập nhật hồ sơ thành công'.xtr(context));
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        SnackbarUtils.showError(context, 'Lỗi cập nhật hồ sơ: ${e.toString()}');
+        SnackbarUtils.showError(context, 'Lỗi cập nhật hồ sơ: '.xtr(context) + e.toString());
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -168,9 +169,9 @@ class _UserInfoPageState extends State<UserInfoPage> {
             ),
           ),
         ),
-        title: const Text(
-          "Thông tin cá nhân",
-          style: TextStyle(
+        title: Text(
+          "Thông tin cá nhân".xtr(context),
+          style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -272,14 +273,14 @@ class _UserInfoPageState extends State<UserInfoPage> {
                       child: Column(
                         children: [
                           _buildField(
-                            label: "Họ và tên",
+                            label: "Họ và tên".xtr(context),
                             controller: _nameController,
                             icon: Icons.person_outline_rounded,
-                            hint: "Nhập họ và tên",
+                            hint: "Nhập họ và tên".xtr(context),
                           ),
                           const SizedBox(height: 16),
                           _buildField(
-                            label: "Email",
+                            label: "Email".xtr(context),
                             controller: _emailController,
                             icon: Icons.email_outlined,
                             hint: "example@gmail.com",
@@ -287,15 +288,15 @@ class _UserInfoPageState extends State<UserInfoPage> {
                           ),
                           const SizedBox(height: 16),
                           _buildField(
-                            label: "Số điện thoại",
+                            label: "Số điện thoại".xtr(context),
                             controller: _phoneController,
                             icon: Icons.phone_outlined,
-                            hint: "Chưa cập nhật",
+                            hint: "Chưa cập nhật".xtr(context),
                             keyboardType: TextInputType.phone,
                           ),
                           const SizedBox(height: 16),
                           _buildField(
-                            label: "Ngày sinh",
+                            label: "Ngày sinh".xtr(context),
                             controller: _dobController,
                             icon: Icons.calendar_today_outlined,
                             hint: "dd/MM/yyyy",
@@ -324,9 +325,9 @@ class _UserInfoPageState extends State<UserInfoPage> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text(
-                          "Lưu thay đổi",
-                          style: TextStyle(
+                        child: Text(
+                          "Lưu thay đổi".xtr(context),
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.3,

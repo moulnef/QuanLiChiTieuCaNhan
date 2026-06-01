@@ -56,8 +56,8 @@ class BudgetService {
       );
 
       return budget.copyWith(
-        spentAmount: spent,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
+        spentAmount: spent.toDouble(),
+        updatedAt: DateTime.now(),
         status: FinanceCalculator.getBudgetStatus(
           progressPercent: progress,
         ),
@@ -72,12 +72,12 @@ class BudgetService {
   static int getTotalSpent({
     required List<Budget> budgets,
   }) {
-    return budgets.fold(0, (sum, item) => sum + item.spentAmount);
+    return budgets.fold<double>(0.0, (sum, item) => sum + item.spentAmount).toInt();
   }
 
   static int getTotalLimit({
     required List<Budget> budgets,
   }) {
-    return budgets.fold(0, (sum, item) => sum + item.limitAmount);
+    return budgets.fold<double>(0.0, (sum, item) => sum + item.limitAmount).toInt();
   }
 }

@@ -1,14 +1,18 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 2;
+  static const int _databaseVersion = 5;
 
   DatabaseHelper._init();
 
   Future<Database> get database async {
+    if (kIsWeb) {
+      throw UnsupportedError('SQLite không hỗ trợ trên nền tảng Web.');
+    }
     if (_database != null) return _database!;
     _database = await _initDB('expense_manager.db');
     return _database!;
@@ -32,6 +36,7 @@ class DatabaseHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await _createAllTables(db);
     await _migrateTransactionsColumns(db);
+    await _migrateAllTablesForSync(db);
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -56,7 +61,12 @@ class DatabaseHelper {
         created_at TEXT,
         updatedAt TEXT,
         updated_at TEXT,
-        person TEXT
+        person TEXT,
+        isDeleted INTEGER,
+        receiptImageUrl TEXT,
+        tags TEXT,
+        recurringId TEXT,
+        isSynced INTEGER DEFAULT 0
       )
     ''');
 
@@ -80,7 +90,8 @@ class DatabaseHelper {
         createdAt INTEGER,
         created_at INTEGER,
         updatedAt INTEGER,
-        updated_at INTEGER
+        updated_at INTEGER,
+        isSynced INTEGER DEFAULT 0
       )
     ''');
 
@@ -104,7 +115,8 @@ class DatabaseHelper {
         created_at INTEGER,
         updatedAt INTEGER,
         updated_at INTEGER,
-        status TEXT
+        status TEXT,
+        isSynced INTEGER DEFAULT 0
       )
     ''');
 
@@ -137,7 +149,8 @@ class DatabaseHelper {
         created_at INTEGER,
         updatedAt INTEGER,
         updated_at INTEGER,
-        status TEXT
+        status TEXT,
+        isSynced INTEGER DEFAULT 0
       )
     ''');
 
@@ -171,7 +184,8 @@ class DatabaseHelper {
         created_at INTEGER,
         updatedAt INTEGER,
         updated_at INTEGER,
-        status TEXT
+        status TEXT,
+        isSynced INTEGER DEFAULT 0
       )
     ''');
 
@@ -206,7 +220,20 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        type TEXT,
+        title TEXT,
+        body TEXT,
+        createdAt TEXT,
+        isRead INTEGER,
+        relatedId TEXT
+      )
+    ''');
+
     await _migrateTransactionsColumns(db);
+    await _migrateAllTablesForSync(db);
   }
 
   Future<void> _migrateTransactionsColumns(Database db) async {
@@ -229,10 +256,21 @@ class DatabaseHelper {
       'amount REAL',
       'type TEXT',
       'date TEXT',
+      'isDeleted INTEGER',
+      'receiptImageUrl TEXT',
+      'tags TEXT',
+      'recurringId TEXT',
     ];
 
     for (final columnDef in requiredColumns) {
       await _addColumnIfMissing(db, 'transactions', columnDef);
+    }
+  }
+
+  Future<void> _migrateAllTablesForSync(Database db) async {
+    final tables = ['transactions', 'budgets', 'savings', 'installments', 'debts'];
+    for (final table in tables) {
+      await _addColumnIfMissing(db, table, 'isSynced INTEGER DEFAULT 0');
     }
   }
 

@@ -1,25 +1,25 @@
 class FinanceCalculator {
   static int calculateBudgetProgress({
-    required int spentAmount,
-    required int limitAmount,
+    required num spentAmount,
+    required num limitAmount,
   }) {
     if (limitAmount <= 0) return 0;
     return ((spentAmount * 100) / limitAmount).floor();
   }
 
-  static int calculateRemainingAmount({
-    required int totalAmount,
-    required int currentAmount,
+  static double calculateRemainingAmount({
+    required num totalAmount,
+    required num currentAmount,
   }) {
     final result = totalAmount - currentAmount;
-    return result < 0 ? 0 : result;
+    return result < 0 ? 0.0 : result.toDouble();
   }
 
   static String getBudgetStatus({
     required int progressPercent,
   }) {
     if (progressPercent >= 100) return 'danger';
-    if (progressPercent >= 80) return 'warning';
+    if (progressPercent >= 70) return 'warning';
     return 'safe';
   }
 

@@ -23,7 +23,7 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
   bool _isProcessing = false; // Trạng thái AI đang suy nghĩ, tránh đụng chạm
   String _text = "Bấm vào mic để nói...";
 
-  final String githubToken = 'ghp_' + '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
+  final String githubToken = 'ghp_' '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
 
   static final List<Map<String, dynamic>> _voiceHistory = [];
   static final FlutterTts _flutterTts = FlutterTts();

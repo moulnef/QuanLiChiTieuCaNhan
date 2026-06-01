@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 // Chú ý: model không có chữ 's'
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class BudgetVsActualChart extends StatelessWidget {
   final List<Budget> budgets;
@@ -36,9 +37,9 @@ class BudgetVsActualChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Ngân sách vs Thực tế',
-            style: TextStyle(
+          Text(
+            'Ngân sách vs Thực tế'.xtr(context),
+            style: const TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
@@ -89,7 +90,7 @@ class BudgetVsActualChart extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          '${budget.icon} ${budget.categoryName}',
+                          '${budget.icon} ${budget.categoryName.xtrCategory(context)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -106,24 +107,24 @@ class BudgetVsActualChart extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _LegendDot(color: Color(0xFFDCE9FF)),
-              SizedBox(width: 6),
+              const _LegendDot(color: Color(0xFFDCE9FF)),
+              const SizedBox(width: 6),
               Text(
-                'Ngân sách',
-                style: TextStyle(
+                'Ngân sách'.xtr(context),
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
               ),
-              SizedBox(width: 24),
-              _LegendDot(color: AppColors.blue),
-              SizedBox(width: 6),
+              const SizedBox(width: 24),
+              const _LegendDot(color: AppColors.blue),
+              const SizedBox(width: 6),
               Text(
-                'Thực tế',
-                style: TextStyle(
+                'Thực tế'.xtr(context),
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),

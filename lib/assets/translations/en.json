@@ -2,5 +2,12 @@
   "welcome_back": "Welcome back",
   "login": "Login",
   "email": "Email",
-  "password": "Password"
+  "password": "Password",
+  "notification_permission_title": "Enable notifications",
+  "notification_saving_low": "Saving goal '{name}' has only {percent}% left!",
+  "notification_budget_near": "Budget '{name}' used {percent}%",
+  "notification_budget_exceeded": "Budget '{name}' has exceeded limit!",
+  "notification_monthly_overspend": "This month's expenses exceeded income by {amount}",
+  "notification_debt_due": "Debt record '{name}' is due in {days} days",
+  "notification_installment_due": "Installment plan '{name}' payment is due"
 }

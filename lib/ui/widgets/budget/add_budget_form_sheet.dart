@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/database/mock/mock_categories.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/category_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class AddBudgetFormSheet extends StatefulWidget {
   final String userId;
+  final Budget? budget;
   final void Function(Budget newBudget) onSubmit;
 
   const AddBudgetFormSheet({
     super.key,
     required this.userId,
+    this.budget,
     required this.onSubmit,
   });
 
@@ -20,10 +25,11 @@ class AddBudgetFormSheet extends StatefulWidget {
 class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _limitController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
 
   String? _selectedCategoryId;
   String? _selectedCategoryName;
-  IconData? _selectedIcon; // ĐÃ SỬA TỪ String? THÀNH IconData?
+  String? _selectedIcon;
 
   late int _selectedMonth;
   late int _selectedYear;
@@ -31,9 +37,18 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _selectedMonth = now.month;
-    _selectedYear = now.year;
+    if (widget.budget != null) {
+      _selectedCategoryId = widget.budget!.categoryId;
+      _selectedCategoryName = widget.budget!.categoryName;
+      _selectedIcon = widget.budget!.icon;
+      _limitController.text = widget.budget!.limitAmount.toInt().toString();
+      _selectedMonth = widget.budget!.month;
+      _selectedYear = widget.budget!.year;
+    } else {
+      final now = DateTime.now();
+      _selectedMonth = now.month;
+      _selectedYear = now.year;
+    }
   }
 
   @override
@@ -45,40 +60,38 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedCategoryId == null ||
-        _selectedCategoryName == null ||
-        _selectedIcon == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn danh mục')),
-      );
+    if (_selectedCategoryId == null || _selectedCategoryName == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Vui lòng chọn danh mục'.xtr(context))));
       return;
     }
 
-    final limitAmount = int.tryParse(_limitController.text.trim()) ?? 0;
+    final limitAmount = double.tryParse(_limitController.text.trim()) ?? 0;
     if (limitAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hạn mức phải lớn hơn 0')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Hạn mức phải lớn hơn 0'.xtr(context))));
       return;
     }
 
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now();
 
     final newBudget = Budget(
-      id: 'budget_${DateTime.now().millisecondsSinceEpoch}',
+      id:
+          widget.budget?.id ??
+          'budget_${DateTime.now().millisecondsSinceEpoch}',
       userId: widget.userId,
       categoryId: _selectedCategoryId!,
       categoryName: _selectedCategoryName!,
-      // Chuyển IconData thành String codePoint để lưu vào Budget nếu Budget model vẫn nhận String
-      // Nếu Budget model đã sửa icon thành IconData hoặc lưu int, bạn cần đổi lại cho khớp nhé!
-      icon: _selectedIcon!.codePoint.toString(),
+      icon: _selectedIcon ?? '📁',
       month: _selectedMonth,
       year: _selectedYear,
       limitAmount: limitAmount,
-      spentAmount: 0,
-      createdAt: now,
+      spentAmount: widget.budget?.spentAmount ?? 0,
+      createdAt: widget.budget?.createdAt ?? now,
       updatedAt: now,
-      status: 'safe',
+      status: widget.budget?.status ?? 'safe',
     );
 
     widget.onSubmit(newBudget);
@@ -87,10 +100,6 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final expenseCategories = MockCategories.items
-        .where((item) => item.type == 'expense')
-        .toList();
-
     return Container(
       padding: EdgeInsets.only(
         left: 16,
@@ -119,9 +128,11 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              const Text(
-                'Thêm ngân sách mới',
-                style: TextStyle(
+              Text(
+                widget.budget != null
+                    ? 'Chỉnh sửa ngân sách'.xtr(context)
+                    : 'Thêm ngân sách mới'.xtr(context),
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
@@ -129,66 +140,101 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
               ),
               const SizedBox(height: 18),
 
-              const Text(
-                'Danh mục',
-                style: TextStyle(
+              Text(
+                'Danh mục'.xtr(context),
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedCategoryId,
-                items: expenseCategories.map((item) {
-                  return DropdownMenuItem<String>(
-                    value: item.id,
-                    // ĐÃ SỬA: Dùng Row để hiển thị IconData đàng hoàng thay vì nối chuỗi
-                    child: Row(
-                      children: [
-                        Icon(item.iconData, color: item.color, size: 20),
-                        const SizedBox(width: 8),
-                        Text(item.name),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  final selected = expenseCategories.firstWhere(
-                        (item) => item.id == value,
-                  );
-                  setState(() {
-                    _selectedCategoryId = selected.id;
-                    _selectedCategoryName = selected.name;
-                    _selectedIcon = selected.iconData; // Lúc này selected.icon là IconData
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: 'Chọn danh mục',
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Vui lòng chọn danh mục';
+              StreamBuilder<List<CategoryModel>>(
+                stream: _firestoreService.streamCategories(),
+                builder: (context, snapshot) {
+                  // Lấy dữ liệu từ Firestore, nếu lỗi hoặc trống thì dùng CategoryData cục bộ
+                  final remoteItems =
+                      snapshot.data
+                          ?.where((item) => item.type == 'expense')
+                          .toList() ??
+                      [];
+                  final expenseCategories = remoteItems.isNotEmpty
+                      ? remoteItems
+                      : CategoryData.getExpenseCategories();
+
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      remoteItems.isEmpty &&
+                      snapshot.error == null) {
+                    return const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
                   }
-                  return null;
+
+                  // Luôn hiển thị nếu có CategoryData làm dự phòng
+                  if (expenseCategories.isEmpty) {
+                    return Text(
+                      'Không tìm thấy danh mục chi tiêu nào trong tài khoản. Hãy tạo danh mục trước.'.xtr(context),
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    );
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    value: _selectedCategoryId,
+                    items: expenseCategories.map((item) {
+                      return DropdownMenuItem<String>(
+                        value: item.id,
+                        child: Row(
+                          children: [
+                            Text(
+                              (item.icon != null && item.icon!.isNotEmpty)
+                                  ? item.icon!
+                                  : '📁',
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(item.name.xtrCategory(context)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      final selected = expenseCategories.firstWhere(
+                        (item) => item.id == value,
+                      );
+                      setState(() {
+                        _selectedCategoryId = selected.id;
+                        _selectedCategoryName = selected.name;
+                        _selectedIcon = selected.icon;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Chọn danh mục'.xtr(context),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Vui lòng chọn danh mục'.xtr(context);
+                      }
+                      return null;
+                    },
+                  );
                 },
               ),
 
               const SizedBox(height: 16),
 
-              const Text(
-                'Hạn mức',
-                style: TextStyle(
+              Text(
+                'Hạn mức (VNĐ)'.xtr(context),
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
@@ -199,7 +245,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                 controller: _limitController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  hintText: 'Ví dụ: 3000000',
+                  hintText: 'Ví dụ: 3000000'.xtr(context),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   border: OutlineInputBorder(
@@ -213,11 +259,11 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập hạn mức';
+                    return 'Vui lòng nhập hạn mức'.xtr(context);
                   }
                   final number = int.tryParse(value.trim());
                   if (number == null || number <= 0) {
-                    return 'Hạn mức phải là số nguyên dương';
+                    return 'Hạn mức phải là số nguyên dương'.xtr(context);
                   }
                   return null;
                 },
@@ -231,9 +277,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Tháng',
-                          style: TextStyle(
+                        Text(
+                          'Tháng'.xtr(context),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
@@ -245,10 +291,10 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                           items: List.generate(12, (index) => index + 1)
                               .map(
                                 (month) => DropdownMenuItem(
-                              value: month,
-                              child: Text('Tháng $month'),
-                            ),
-                          )
+                                  value: month,
+                                  child: Text('Tháng '.xtr(context) + '$month'),
+                                ),
+                              )
                               .toList(),
                           onChanged: (value) {
                             setState(() {
@@ -260,11 +306,15 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                             fillColor: const Color(0xFFF8FAFC),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                             ),
                           ),
                         ),
@@ -276,9 +326,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Năm',
-                          style: TextStyle(
+                        Text(
+                          'Năm'.xtr(context),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
@@ -290,10 +340,10 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                           items: [2025, 2026, 2027, 2028]
                               .map(
                                 (year) => DropdownMenuItem(
-                              value: year,
-                              child: Text('$year'),
-                            ),
-                          )
+                                  value: year,
+                                  child: Text('$year'),
+                                ),
+                              )
                               .toList(),
                           onChanged: (value) {
                             setState(() {
@@ -305,11 +355,15 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                             fillColor: const Color(0xFFF8FAFC),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                             ),
                           ),
                         ),
@@ -334,12 +388,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text(
-                    'Lưu ngân sách',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Text(
+                    'Lưu ngân sách'.xtr(context),
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

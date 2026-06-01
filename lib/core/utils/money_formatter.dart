@@ -1,6 +1,6 @@
 class MoneyFormatter {
-  static String format(int amount) {
-    final text = amount.toString();
+  static String format(num amount) {
+    final text = amount.round().toString();
     final buffer = StringBuffer();
     int count = 0;
 
@@ -16,7 +16,7 @@ class MoneyFormatter {
     return buffer.toString().split('').reversed.join();
   }
 
-  static String formatVnd(int amount) {
+  static String formatVnd(num amount) {
     return '${format(amount)} đ';
   }
 }

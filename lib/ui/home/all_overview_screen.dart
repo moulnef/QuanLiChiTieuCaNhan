@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/add_budget_form_sheet.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/budget_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/finance_calculator.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_item_card.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_summary_card.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_vs_actual_chart.dart';
@@ -17,6 +18,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/progress_card.dart
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/budget_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/snackbar_utils.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 // ── Bảng màu chủ đạo: Trắng + Xanh nhạt ─────────────────
 class _C {
@@ -35,7 +37,8 @@ class _C {
 
 /// Màn hình tổng quan — kết hợp Home + Finance + Budget
 class AllOverviewScreen extends StatefulWidget {
-  const AllOverviewScreen({super.key});
+  final int initialIndex;
+  const AllOverviewScreen({super.key, this.initialIndex = 0});
 
   @override
   State<AllOverviewScreen> createState() => _AllOverviewScreenState();
@@ -49,7 +52,11 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialIndex,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
       final currentDate = DateTime.now();
@@ -185,9 +192,9 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
             mainAxisSize: MainAxisSize
                 .min, // QUAN TRỌNG: không dùng MainAxisAlignment.spaceBetween
             children: [
-              const Text(
-                'Tổng Quan Tài Chính',
-                style: TextStyle(
+              Text(
+                'Tổng Quan Tài Chính'.xtr(context),
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -196,7 +203,7 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
               ),
               const SizedBox(height: 2),
               Text(
-                'Tháng ${budgetProvider.selectedMonth}/${budgetProvider.selectedYear}',
+                'Tháng '.xtr(context) + '${budgetProvider.selectedMonth}/${budgetProvider.selectedYear}',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.white.withOpacity(0.72),
@@ -208,25 +215,25 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
                 child: Row(
                   children: [
                     _QuickStat(
-                      label: 'Tổng thu',
+                      label: 'Tổng thu'.xtr(context),
                       value:
-                          '${financeProvider.totalIncome.toStringAsFixed(0)}',
+                          financeProvider.totalIncome.toStringAsFixed(0),
                       icon: Icons.savings_outlined,
                       iconColor: const Color(0xFF4ADE80),
                     ),
                     const SizedBox(width: 8),
                     _QuickStat(
-                      label: 'Tổng chi',
+                      label: 'Tổng chi'.xtr(context),
                       value:
-                          '${financeProvider.totalExpense.toStringAsFixed(0)}',
+                          financeProvider.totalExpense.toStringAsFixed(0),
                       icon: Icons.credit_card_outlined,
                       iconColor: const Color(0xFF93C5FD),
                     ),
                     const SizedBox(width: 8),
                     _QuickStat(
-                      label: 'Số dư',
+                      label: 'Số dư'.xtr(context),
                       value:
-                          '${financeProvider.totalBalance.toStringAsFixed(0)}',
+                          financeProvider.totalBalance.toStringAsFixed(0),
                       icon: Icons.account_balance_outlined,
                       iconColor: const Color(0xFFFBBF24),
                     ),
@@ -257,10 +264,10 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
         indicatorSize: TabBarIndicatorSize.label,
         labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         unselectedLabelStyle: const TextStyle(fontSize: 14),
-        tabs: const [
-          Tab(text: 'Trang Chủ'),
-          Tab(text: 'Tài Chính'),
-          Tab(text: 'Ngân Sách'),
+        tabs: [
+          Tab(text: 'Trang Chủ'.xtr(context)),
+          Tab(text: 'Tài Chính'.xtr(context)),
+          Tab(text: 'Ngân Sách'.xtr(context)),
         ],
       ),
     );
@@ -278,10 +285,10 @@ class _HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: firestoreService.getTransactions(),
+    return StreamBuilder<List<TransactionModel>>(
+      stream: firestoreService.streamTransactions(),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
+        final transactions = snapshot.data ?? [];
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
@@ -289,7 +296,7 @@ class _HomeTab extends StatelessWidget {
             _AiAssistantBanner(),
             const SizedBox(height: 20),
 
-            _SectionHeader(title: 'Ngân sách tháng này'),
+            _SectionHeader(title: 'Ngân sách tháng này'.xtr(context)),
             const SizedBox(height: 10),
             ...budgets.take(3).map((b) => _BudgetMiniCard(budget: b)),
             if (budgets.length > 3)
@@ -297,13 +304,13 @@ class _HomeTab extends StatelessWidget {
                 onPressed: () {},
                 style: TextButton.styleFrom(foregroundColor: _C.primary),
                 child: Text(
-                  'Xem thêm ${budgets.length - 3} ngân sách...',
+                  'Xem thêm '.xtr(context) + '${budgets.length - 3}' + ' ngân sách...'.xtr(context),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             const SizedBox(height: 20),
 
-            _SectionHeader(title: 'Giao dịch gần đây'),
+            _SectionHeader(title: 'Giao dịch gần đây'.xtr(context)),
             const SizedBox(height: 10),
 
             if (snapshot.connectionState == ConnectionState.waiting)
@@ -314,18 +321,17 @@ class _HomeTab extends StatelessWidget {
                 ),
               )
             else if (snapshot.hasError)
-              _ErrorCard(message: 'Không thể tải giao dịch')
-            else if (docs.isEmpty)
+              _ErrorCard(message: 'Không thể tải giao dịch'.xtr(context))
+            else if (transactions.isEmpty)
               _EmptyStateCard(
                 icon: Icons.receipt_long_outlined,
-                message: 'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!',
+                message: 'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!'.xtr(context),
               )
             else
-              ...docs.take(5).map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
+              ...transactions.take(5).map((tx) {
                 return _TransactionCard(
-                  data: data,
-                  onDelete: () => firestoreService.deleteTransaction(doc.id),
+                  transaction: tx,
+                  onDelete: () => firestoreService.deleteTransaction(tx.id),
                 );
               }),
           ],
@@ -360,10 +366,10 @@ class _FinanceTab extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                   unselectedLabelStyle: const TextStyle(fontSize: 14),
-                  tabs: const [
-                    Tab(text: 'Tiết kiệm'),
-                    Tab(text: 'Trả góp'),
-                    Tab(text: 'Vay nợ'),
+                  tabs: [
+                    Tab(text: 'Tiết kiệm'.xtr(context)),
+                    Tab(text: 'Trả góp'.xtr(context)),
+                    Tab(text: 'Vay nợ'.xtr(context)),
                   ],
                 ),
               ),
@@ -376,7 +382,7 @@ class _FinanceTab extends StatelessWidget {
                 child: Row(
                   children: [
                     _FinanceChip(
-                      label: 'Đang tiết kiệm',
+                      label: 'Đang tiết kiệm'.xtr(context),
                       value: _formatCompactMoney(
                         financeProvider.totalSavingAmount.toDouble(),
                       ),
@@ -384,7 +390,7 @@ class _FinanceTab extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _FinanceChip(
-                      label: 'Còn trả góp',
+                      label: 'Còn trả góp'.xtr(context),
                       value: _formatCompactMoney(
                         financeProvider.totalInstallmentRemaining.toDouble(),
                       ),
@@ -392,7 +398,7 @@ class _FinanceTab extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _FinanceChip(
-                      label: 'Còn vay',
+                      label: 'Còn vay'.xtr(context),
                       value: _formatCompactMoney(
                         financeProvider.totalDebtRemaining.toDouble(),
                       ),
@@ -477,10 +483,10 @@ class _SavingTabContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       children: [
         if (provider.savings.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
             child: _InlineFinanceEmptyState(
-              message: 'Chưa có mục tiêu tiết kiệm',
+              message: 'Chưa có mục tiêu tiết kiệm'.xtr(context),
             ),
           ),
         ...provider.savings.map((item) {
@@ -492,23 +498,23 @@ class _SavingTabContent extends StatelessWidget {
             icon: item.icon,
             title: item.title,
             subtitle: daysLeft >= 0
-                ? 'Còn $daysLeft ngày'
-                : 'Đã quá hạn ${daysLeft.abs()} ngày',
-            leftLabel: 'Hiện tại',
+                ? 'Còn '.xtr(context) + '$daysLeft' + ' ngày'.xtr(context)
+                : 'Đã quá hạn '.xtr(context) + '${daysLeft.abs()}' + ' ngày'.xtr(context),
+            leftLabel: 'Hiện tại'.xtr(context),
             leftValue: _formatMoney(item.currentAmount.toDouble()),
-            rightLabel: 'Mục tiêu',
+            rightLabel: 'Mục tiêu'.xtr(context),
             rightValue: _formatMoney(item.targetAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
-            primaryButtonText: '+ Nạp tiền',
-            secondaryButtonText: 'Rút tiền',
+            primaryButtonText: '+ Nạp tiền'.xtr(context),
+            secondaryButtonText: 'Rút tiền'.xtr(context),
             onPrimaryPressed: () {},
             onSecondaryPressed: () {},
           );
         }),
         const SizedBox(height: 8),
         _AddButton(
-          label: '+  Tạo mục tiêu mới',
+          label: '+  Tạo mục tiêu mới'.xtr(context),
           borderColor: _C.green,
           textColor: _C.green,
           onPressed: () => _openCreateSavingGoalSheet(context, provider),
@@ -529,10 +535,10 @@ class _InstallmentTabContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       children: [
         if (provider.installments.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
             child: _InlineFinanceEmptyState(
-              message: 'Chưa có kế hoạch trả góp',
+              message: 'Chưa có kế hoạch trả góp'.xtr(context),
             ),
           ),
         ...provider.installments.map((item) {
@@ -542,21 +548,21 @@ class _InstallmentTabContent extends StatelessWidget {
           return ProgressCard(
             icon: item.icon,
             title: item.title,
-            subtitle: 'Đã trả ${item.currentPeriod}/${item.totalPeriods} kỳ',
-            leftLabel: 'Gốc + Lãi',
+            subtitle: 'Đã trả '.xtr(context) + '${item.currentPeriod}/${item.totalPeriods}' + ' kỳ'.xtr(context),
+            leftLabel: 'Gốc + Lãi'.xtr(context),
             leftValue: _formatMoney(item.totalAmount.toDouble()),
-            rightLabel: 'Còn nợ',
+            rightLabel: 'Còn nợ'.xtr(context),
             rightValue: _formatMoney(item.remainingAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
-                'Kỳ tiếp theo: ${DateFormat('yyyy-MM-dd').format(item.nextDueDate)}',
+                'Kỳ tiếp theo: '.xtr(context) + DateFormat('yyyy-MM-dd').format(item.nextDueDate),
             alertColor: AppColors.blue,
           );
         }),
         const SizedBox(height: 8),
         _AddButton(
-          label: '+  Thêm kế hoạch trả góp',
+          label: '+  Thêm kế hoạch trả góp'.xtr(context),
           borderColor: _C.primary,
           textColor: _C.primary,
           onPressed: () => _openCreateInstallmentPlanSheet(context, provider),
@@ -577,9 +583,9 @@ class _DebtTabContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       children: [
         if (provider.debts.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: _InlineFinanceEmptyState(message: 'Chưa có khoản vay nợ'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _InlineFinanceEmptyState(message: 'Chưa có khoản vay nợ'.xtr(context)),
           ),
         ...provider.debts.map((item) {
           final progress = item.totalAmount <= 0
@@ -589,20 +595,20 @@ class _DebtTabContent extends StatelessWidget {
             icon: item.icon,
             title: item.title,
             subtitle: item.lender,
-            leftLabel: 'Tổng vay',
+            leftLabel: 'Tổng vay'.xtr(context),
             leftValue: _formatMoney(item.totalAmount.toDouble()),
-            rightLabel: 'Còn lại',
+            rightLabel: 'Còn lại'.xtr(context),
             rightValue: _formatMoney(item.remainingAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
-                'Kỳ tiếp: ${DateFormat('yyyy-MM-dd').format(item.dueDate)} • ${item.interestText}',
+                'Kỳ tiếp: '.xtr(context) + DateFormat('yyyy-MM-dd').format(item.dueDate) + ' • ' + item.interestText.xtr(context),
             alertColor: AppColors.warning,
           );
         }),
         const SizedBox(height: 8),
         _AddButton(
-          label: '+  Thêm khoản vay',
+          label: '+  Thêm khoản vay'.xtr(context),
           borderColor: _C.orange,
           textColor: _C.orange,
           onPressed: () => _openCreateLoanSheet(context, provider),
@@ -699,9 +705,9 @@ Future<void> _openCreateSavingGoalSheet(
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Mục tiêu tiết kiệm mới',
-                    style: TextStyle(
+                  Text(
+                    'Mục tiêu tiết kiệm mới'.xtr(context),
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: _C.textDark,
@@ -712,7 +718,7 @@ Future<void> _openCreateSavingGoalSheet(
                     controller: titleController,
                     onChanged: (_) => setState(() {}),
                     decoration: _financeInputDecoration(
-                      hintText: 'Tên mục tiêu',
+                      hintText: 'Tên mục tiêu'.xtr(context),
                       borderRadius: 12,
                       borderColor: const Color(0xFFD1D5DB),
                       fillColor: const Color(0xFFF4F6FA),
@@ -725,7 +731,7 @@ Future<void> _openCreateSavingGoalSheet(
                     onChanged: (_) => setState(() {}),
                     keyboardType: TextInputType.number,
                     decoration: _financeInputDecoration(
-                      hintText: 'Số tiền cần tiết kiệm',
+                      hintText: 'Số tiền cần tiết kiệm'.xtr(context),
                       borderRadius: 12,
                       borderColor: const Color(0xFFD1D5DB),
                       fillColor: const Color(0xFFF4F6FA),
@@ -736,9 +742,9 @@ Future<void> _openCreateSavingGoalSheet(
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Ngày dự kiến hoàn thành',
-                        style: TextStyle(
+                      Text(
+                        'Ngày dự kiến hoàn thành'.xtr(context),
+                        style: const TextStyle(
                           fontSize: 14,
                           color: _C.textDark,
                           fontWeight: FontWeight.w500,
@@ -791,7 +797,7 @@ Future<void> _openCreateSavingGoalSheet(
                                 if (context.mounted) {
                                   SnackbarUtils.showError(
                                     context,
-                                    'Lưu mục tiêu tiết kiệm thất bại: $e',
+                                    'Lưu mục tiêu tiết kiệm thất bại: '.xtr(context) + '$e',
                                   );
                                 }
                               } finally {
@@ -822,9 +828,9 @@ Future<void> _openCreateSavingGoalSheet(
                                 ),
                               ),
                             )
-                          : const Text(
-                              'Tạo mục tiêu',
-                              style: TextStyle(
+                          : Text(
+                              'Tạo mục tiêu'.xtr(context),
+                              style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -882,9 +888,9 @@ Future<void> _openCreateInstallmentPlanSheet(
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Kế hoạch trả góp mới',
-                style: TextStyle(
+              Text(
+                'Kế hoạch trả góp mới'.xtr(context),
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: _C.textDark,
@@ -894,7 +900,7 @@ Future<void> _openCreateInstallmentPlanSheet(
               TextField(
                 controller: titleController,
                 decoration: _financeInputDecoration(
-                  hintText: 'Tên khoản trả góp',
+                  hintText: 'Tên khoản trả góp'.xtr(context),
                   borderRadius: 12,
                   borderColor: const Color(0xFFD1D5DB),
                   fillColor: Colors.white,
@@ -906,7 +912,7 @@ Future<void> _openCreateInstallmentPlanSheet(
                 controller: totalAmountController,
                 keyboardType: TextInputType.number,
                 decoration: _financeInputDecoration(
-                  hintText: 'Tổng số tiền',
+                  hintText: 'Tổng số tiền'.xtr(context),
                   borderRadius: 12,
                   borderColor: const Color(0xFFD1D5DB),
                   fillColor: Colors.white,
@@ -921,7 +927,7 @@ Future<void> _openCreateInstallmentPlanSheet(
                       controller: periodsController,
                       keyboardType: TextInputType.number,
                       decoration: _financeInputDecoration(
-                        hintText: 'Số kỳ',
+                        hintText: 'Số kỳ'.xtr(context),
                         borderRadius: 12,
                         borderColor: const Color(0xFFD1D5DB),
                         fillColor: Colors.white,
@@ -935,7 +941,7 @@ Future<void> _openCreateInstallmentPlanSheet(
                       controller: eachPeriodController,
                       keyboardType: TextInputType.number,
                       decoration: _financeInputDecoration(
-                        hintText: 'Mỗi kỳ',
+                        hintText: 'Mỗi kỳ'.xtr(context),
                         borderRadius: 12,
                         borderColor: const Color(0xFFD1D5DB),
                         fillColor: Colors.white,
@@ -987,9 +993,9 @@ Future<void> _openCreateInstallmentPlanSheet(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'Lưu kế hoạch',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  child: Text(
+                    'Lưu kế hoạch'.xtr(context),
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -1028,12 +1034,12 @@ Future<void> _openCreateLoanSheet(
                   MediaQuery.of(sheetContext).viewInsets.bottom +
                   _financeSheetBottomReserve,
             ),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(
+              borderRadius: BorderRadius.vertical(
                 top: Radius.circular(24),
               ),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
                   color: Color(0x14000000),
                   blurRadius: 24,
@@ -1055,9 +1061,9 @@ Future<void> _openCreateLoanSheet(
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Khoản vay mới',
-                    style: TextStyle(
+                  Text(
+                    'Khoản vay mới'.xtr(context),
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: _C.textDark,
@@ -1067,7 +1073,7 @@ Future<void> _openCreateLoanSheet(
                   TextField(
                     controller: titleController,
                     decoration: _financeInputDecoration(
-                      hintText: 'Tên khoản vay',
+                      hintText: 'Tên khoản vay'.xtr(context),
                       borderRadius: 12,
                       borderColor: const Color(0xFFD1D5DB),
                       fillColor: Colors.white,
@@ -1078,7 +1084,7 @@ Future<void> _openCreateLoanSheet(
                   TextField(
                     controller: lenderController,
                     decoration: _financeInputDecoration(
-                      hintText: 'Nguồn vay / Người cho vay',
+                      hintText: 'Nguồn vay / Người cho vay'.xtr(context),
                       borderRadius: 12,
                       borderColor: const Color(0xFFD1D5DB),
                       fillColor: Colors.white,
@@ -1090,7 +1096,7 @@ Future<void> _openCreateLoanSheet(
                     controller: totalAmountController,
                     keyboardType: TextInputType.number,
                     decoration: _financeInputDecoration(
-                      hintText: 'Tổng số tiền',
+                      hintText: 'Tổng số tiền'.xtr(context),
                       borderRadius: 12,
                       borderColor: const Color(0xFFD1D5DB),
                       fillColor: Colors.white,
@@ -1105,7 +1111,7 @@ Future<void> _openCreateLoanSheet(
                           controller: monthlyPaymentController,
                           keyboardType: TextInputType.number,
                           decoration: _financeInputDecoration(
-                            hintText: 'Trả mỗi tháng',
+                            hintText: 'Trả mỗi tháng'.xtr(context),
                             borderRadius: 12,
                             borderColor: const Color(0xFFD1D5DB),
                             fillColor: Colors.white,
@@ -1119,7 +1125,7 @@ Future<void> _openCreateLoanSheet(
                           controller: interestController,
                           keyboardType: TextInputType.number,
                           decoration: _financeInputDecoration(
-                            hintText: 'Lãi suất',
+                            hintText: 'Lãi suất'.xtr(context),
                             borderRadius: 12,
                             borderColor: const Color(0xFFD1D5DB),
                             fillColor: Colors.white,
@@ -1133,9 +1139,9 @@ Future<void> _openCreateLoanSheet(
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Ngày đến hạn tiếp theo',
-                        style: TextStyle(
+                      Text(
+                        'Ngày đến hạn tiếp theo'.xtr(context),
+                        style: const TextStyle(
                           fontSize: 14,
                           color: _C.textDark,
                           fontWeight: FontWeight.w500,
@@ -1155,9 +1161,9 @@ Future<void> _openCreateLoanSheet(
                             setState(() => selectedDueDate = picked);
                           }
                         },
-                        child: const Text(
-                          'Chọn ngày',
-                          style: TextStyle(
+                        child: Text(
+                          'Chọn ngày'.xtr(context),
+                          style: const TextStyle(
                             fontSize: 14,
                             color: Color(0xFF1E3A8A),
                             fontWeight: FontWeight.w700,
@@ -1192,9 +1198,9 @@ Future<void> _openCreateLoanSheet(
 
                         final interestText = interest.isEmpty
                             ? (monthlyPayment > 0
-                                  ? 'Trả mỗi tháng ${_formatMoney(monthlyPayment.toDouble())}'
-                                  : 'Chưa cập nhật lãi suất')
-                            : 'Lãi suất $interest%';
+                                  ? 'Trả mỗi tháng '.xtr(context) + _formatMoney(monthlyPayment.toDouble())
+                                  : 'Chưa cập nhật lãi suất'.xtr(context))
+                            : 'Lãi suất '.xtr(context) + '$interest%';
 
                         await provider.addDebtRecord(
                           title: title,
@@ -1215,9 +1221,9 @@ Future<void> _openCreateLoanSheet(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        'Lưu khoản vay',
-                        style: TextStyle(
+                      child: Text(
+                        'Lưu khoản vay'.xtr(context),
+                        style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1297,10 +1303,29 @@ class _BudgetTab extends StatelessWidget {
         ...budgets.map((b) => BudgetItemCard(budget: b)),
         const SizedBox(height: 8),
         _AddButton(
-          label: '+  Thêm ngân sách mới',
+          label: '+  Thêm ngân sách mới'.xtr(context),
           borderColor: _C.orange,
           textColor: _C.orange,
-          onPressed: () {},
+          onPressed: () {
+            final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => AddBudgetFormSheet(
+                userId: userId,
+                onSubmit: (newBudget) async {
+                  await context.read<BudgetProvider>().addBudget(newBudget);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(
+                        'Đã thêm ngân sách '.xtr(context) + newBudget.categoryName.xtrCategory(context))),
+                    );
+                  }
+                },
+              ),
+            );
+          },
         ),
       ],
     );
@@ -1397,11 +1422,11 @@ class _AiAssistantBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'AI Financial Assistant',
                   style: TextStyle(
                     fontSize: 13,
@@ -1409,10 +1434,10 @@ class _AiAssistantBanner extends StatelessWidget {
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'Bạn đã chi quá 71% ngân sách ăn uống',
-                  style: TextStyle(fontSize: 12, color: Colors.white),
+                  'Bạn đã chi quá '.xtr(context) + '71%' + ' ngân sách ăn uống'.xtr(context),
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
               ],
             ),
@@ -1482,7 +1507,7 @@ class _BudgetMiniCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                budget.categoryName,
+                budget.categoryName.xtrCategory(context),
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
@@ -1523,10 +1548,10 @@ class _BudgetMiniCard extends StatelessWidget {
 }
 
 class _TransactionCard extends StatelessWidget {
-  final Map<String, dynamic> data;
+  final TransactionModel transaction;
   final VoidCallback onDelete;
 
-  const _TransactionCard({required this.data, required this.onDelete});
+  const _TransactionCard({required this.transaction, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -1560,7 +1585,7 @@ class _TransactionCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          data['title'] ?? 'Không tên',
+          transaction.note.isNotEmpty ? transaction.note : (transaction.categoryName.isNotEmpty ? transaction.categoryName.xtrCategory(context) : 'Không tên'.xtr(context)),
           style: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 14,
@@ -1568,13 +1593,13 @@ class _TransactionCard extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${data['category'] ?? ''}${data['note'] != null ? " • ${data['note']}" : ""}',
+          '${transaction.categoryName.isNotEmpty ? transaction.categoryName.xtrCategory(context) : (transaction.type == 'income' ? 'Thu nhập'.xtr(context) : 'Chi tiêu'.xtr(context))} • ${DateFormat('dd/MM/yyyy').format(transaction.transactionDate)}',
           style: const TextStyle(fontSize: 12, color: _C.textLight),
         ),
         trailing: Text(
-          '-${data['amount']} VNĐ',
-          style: const TextStyle(
-            color: _C.red,
+          '${transaction.type == 'income' ? '+' : '-'}${transaction.amount.toStringAsFixed(0)} VNĐ',
+          style: TextStyle(
+            color: transaction.type == 'income' ? _C.green : _C.red,
             fontWeight: FontWeight.w800,
             fontSize: 13,
           ),

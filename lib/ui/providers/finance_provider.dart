@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
+import '../../services/sync_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 
 class FinanceProvider extends ChangeNotifier {
   static const String _demoUserId = 'user_001';
@@ -64,6 +68,10 @@ class FinanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Sync local/cloud database before loading summary
+      _log('Syncing databases with Firebase at ${DateTime.now()}');
+      await _repository.syncWithFirebase(userId);
+
       _log('Loading transactions from database at ${DateTime.now()}');
       final transactions = await _repository.getAllTransactionsByUserId(userId);
       _log(
@@ -134,11 +142,40 @@ class FinanceProvider extends ChangeNotifier {
         ..addAll(debts);
 
       _updateFinancialBalance();
+
+      // Trigger background sync, and silently reload upon completion
+      _repository.syncWithFirebase(effectiveUserId).then((_) {
+        _log('Background sync completed. Reloading lists silently...');
+        _loadFinanceDataSilently(effectiveUserId);
+      });
     } catch (e) {
       _errorMessage = 'Không tải được dữ liệu tài chính: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _loadFinanceDataSilently(String userId) async {
+    try {
+      var savings = await _repository.getSavingsByUserId(userId);
+      var installments = await _repository.getInstallmentsByUserId(userId);
+      var debts = await _repository.getDebtsByUserId(userId);
+
+      _savings
+        ..clear()
+        ..addAll(savings);
+      _installments
+        ..clear()
+        ..addAll(installments);
+      _debts
+        ..clear()
+        ..addAll(debts);
+
+      _updateFinancialBalance();
+      notifyListeners();
+    } catch (e) {
+      _log('Silently reloading finance data failed: $e');
     }
   }
 
@@ -159,6 +196,7 @@ class FinanceProvider extends ChangeNotifier {
         color: color,
       );
       await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
     } catch (e) {
       _errorMessage = 'Không thể lưu mục tiêu tiết kiệm: $e';
       rethrow;
@@ -176,12 +214,35 @@ class FinanceProvider extends ChangeNotifier {
     }
 
     final current = _savings[index];
-    _savings[index] = current.copyWith(
+    final updated = current.copyWith(
       currentAmount: current.currentAmount + amount,
     );
 
+    // Save locally
+    _savings[index] = updated;
     _updateFinancialBalance();
     notifyListeners();
+
+    // Push update to repository
+    try {
+      await _repository.updateSavingGoal(
+        SavingGoal(
+          id: updated.id.toString(),
+          userId: _activeUserId,
+          title: updated.title,
+          icon: updated.icon,
+          currentAmount: updated.currentAmount,
+          targetAmount: updated.targetAmount,
+          targetDate: updated.deadline.millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          status: 'active',
+        ),
+      );
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _log('Error saving deposit: $e');
+    }
   }
 
   Future<void> withdrawFromSavingGoal(int id, int amount) async {
@@ -199,12 +260,35 @@ class FinanceProvider extends ChangeNotifier {
       throw Exception('Không thể rút vượt số tiền hiện có.');
     }
 
-    _savings[index] = current.copyWith(
+    final updated = current.copyWith(
       currentAmount: current.currentAmount - amount,
     );
 
+    // Save locally
+    _savings[index] = updated;
     _updateFinancialBalance();
     notifyListeners();
+
+    // Push update to repository
+    try {
+      await _repository.updateSavingGoal(
+        SavingGoal(
+          id: updated.id.toString(),
+          userId: _activeUserId,
+          title: updated.title,
+          icon: updated.icon,
+          currentAmount: updated.currentAmount,
+          targetAmount: updated.targetAmount,
+          targetDate: updated.deadline.millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          status: 'active',
+        ),
+      );
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _log('Error saving withdrawal: $e');
+    }
   }
 
   Future<void> addInstallmentPlan({
@@ -227,6 +311,7 @@ class FinanceProvider extends ChangeNotifier {
         color: color,
       );
       await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
     } catch (e) {
       _errorMessage = 'Không thể lưu kế hoạch trả góp: $e';
       rethrow;
@@ -259,7 +344,9 @@ class FinanceProvider extends ChangeNotifier {
   }) async {
     final normalizedMonthlyPayment = monthlyPayment > 0
         ? monthlyPayment
-        : calculateMonthlyPayment(amount, interestRate, months);
+        : kIsWeb
+            ? amount / months
+            : calculateMonthlyPayment(amount, interestRate, months);
     final totalAmount = amount > 0
         ? amount.round()
         : (normalizedMonthlyPayment * months).round();
@@ -295,7 +382,7 @@ class FinanceProvider extends ChangeNotifier {
         ? current.currentPeriod + 1
         : current.currentPeriod;
 
-    _installments[index] = current.copyWith(
+    final updated = current.copyWith(
       paidAmount: newPaidAmount,
       currentPeriod: newCurrentPeriod,
       nextDueDate: current.remainingAmount - amount <= 0
@@ -303,8 +390,34 @@ class FinanceProvider extends ChangeNotifier {
           : current.nextDueDate.add(const Duration(days: 30)),
     );
 
+    // Save locally
+    _installments[index] = updated;
     _updateFinancialBalance();
     notifyListeners();
+
+    // Push update to repository
+    try {
+      await _repository.updateInstallmentPlan(
+        InstallmentPlan(
+          id: updated.id.toString(),
+          userId: _activeUserId,
+          title: updated.title,
+          icon: updated.icon,
+          totalAmount: updated.totalAmount,
+          paidAmount: updated.paidAmount,
+          monthlyPayment: (updated.totalAmount / updated.totalPeriods).round(),
+          paidPeriods: updated.currentPeriod,
+          totalPeriods: updated.totalPeriods,
+          nextDueDate: updated.nextDueDate.millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          status: updated.remainingAmount <= 0 ? 'completed' : 'active',
+        ),
+      );
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _log('Error saving paid installment: $e');
+    }
   }
 
   Future<void> addDebtRecord({
@@ -330,6 +443,7 @@ class FinanceProvider extends ChangeNotifier {
         color: color,
       );
       await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
     } catch (e) {
       _errorMessage = 'Không thể lưu khoản vay: $e';
       rethrow;
@@ -351,10 +465,123 @@ class FinanceProvider extends ChangeNotifier {
       throw Exception('Không thể thanh toán vượt số nợ còn lại.');
     }
 
-    _debts[index] = current.copyWith(paidAmount: current.paidAmount + amount);
+    final updated = current.copyWith(paidAmount: current.paidAmount + amount);
 
+    // Save locally
+    _debts[index] = updated;
     _updateFinancialBalance();
     notifyListeners();
+
+    // Push update to repository
+    try {
+      await _repository.updateDebtRecord(
+        DebtRecord(
+          id: updated.id.toString(),
+          userId: _activeUserId,
+          title: updated.title,
+          lenderName: updated.lender,
+          totalAmount: updated.totalAmount,
+          paidAmount: updated.paidAmount,
+          monthlyPayment: updated.monthlyPayment,
+          interestRate: 0.0,
+          nextDueDate: updated.dueDate.millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          status: updated.remainingAmount <= 0 ? 'settled' : 'active',
+        ),
+      );
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _log('Error saving paid debt: $e');
+    }
+  }
+
+  Future<void> deleteSavingGoal(String id) async {
+    try {
+      await _repository.deleteSavingGoal(_activeUserId, id);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể xóa mục tiêu tiết kiệm: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> updateSavingGoal(SavingGoal goal) async {
+    try {
+      await _repository.updateSavingGoal(goal);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể cập nhật mục tiêu tiết kiệm: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> addInstallmentPlanDirect(InstallmentPlan plan) async {
+    try {
+      await _repository.insertInstallmentPlan(plan);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể lưu kế hoạch trả góp: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> addDebtRecordDirect(DebtRecord debt) async {
+    try {
+      await _repository.insertDebtRecord(debt);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể lưu khoản vay: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> deleteInstallment(String id) async {
+    try {
+      await _repository.deleteInstallmentPlan(_activeUserId, id);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể xóa khoản trả góp: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> updateInstallmentPlan(InstallmentPlan plan) async {
+    try {
+      await _repository.updateInstallmentPlan(plan);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể cập nhật khoản trả góp: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> deleteDebt(String id) async {
+    try {
+      await _repository.deleteDebtRecord(_activeUserId, id);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể xóa khoản vay: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> updateDebtRecord(DebtRecord debt) async {
+    try {
+      await _repository.updateDebtRecord(debt);
+      await loadFinanceData(_activeUserId);
+      SyncService().triggerImmediateSync();
+    } catch (e) {
+      _errorMessage = 'Không thể cập nhật khoản vay: $e';
+      rethrow;
+    }
   }
 
   void _updateFinancialBalance() {

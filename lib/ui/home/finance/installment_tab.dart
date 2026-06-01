@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/bank_interest.dart';
 
 // Helper formatters
 String formatCurrency(num amount) =>
@@ -17,160 +20,186 @@ class InstallmentTabPage extends StatefulWidget {
 }
 
 class _InstallmentTabPageState extends State<InstallmentTabPage> {
-  Future<int?> _showAmountDialog({
-    required String title,
-    required String actionLabel,
-    int? maxAmount,
-  }) async {
-    final result = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        final formKey = GlobalKey<FormState>();
-        final controller = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
 
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Số tiền',
-                suffixText: '₫',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              validator: (value) {
-                final val = int.tryParse(value ?? '');
-                if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                if (maxAmount != null && val > maxAmount)
-                  return 'Vượt quá phần còn lại';
-                return null;
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(dialogContext, int.parse(controller.text));
-                }
-              },
-              child: Text(actionLabel),
-            ),
-          ],
-        );
-      },
+  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+
+  void _showAddInstallmentSheet([InstallmentPlan? plan]) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddInstallmentSheet(
+        userId: _currentUserId,
+        installmentPlan: plan,
+      ),
     );
-    return result;
   }
 
-  Future<void> _handlePay(FinanceInstallmentItem item) async {
-    final amount = await _showAmountDialog(
-      title: 'Thanh toán trả góp',
-      actionLabel: 'Thanh toán',
-      maxAmount: item.remainingAmount,
-    );
-
-    if (!mounted || amount == null) return;
+  Future<void> _handleMarkPaid(InstallmentPlan item) async {
+    if (item.paidPeriods >= item.totalPeriods || item.status == 'completed') {
+      return;
+    }
 
     try {
-      await context.read<FinanceProvider>().payInstallment(item.id, amount);
+      final newPeriods = item.paidPeriods + 1;
+      final isCompleted = newPeriods >= item.totalPeriods;
+      final addedAmount = item.monthlyPayment;
+      final newPaidAmount = (item.paidAmount + addedAmount).clamp(0, item.totalAmount);
+      
+      final currentDueDate = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
+      final newDueDate = currentDueDate.add(const Duration(days: 30));
+
+      final updated = item.copyWith(
+        paidPeriods: newPeriods,
+        paidAmount: newPaidAmount,
+        nextDueDate: newDueDate.millisecondsSinceEpoch,
+        status: isCompleted ? 'completed' : 'active',
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+
+      await context.read<FinanceProvider>().updateInstallmentPlan(updated);
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Đã thanh toán ${formatCurrency(amount)} cho "${item.title}"',
+            'Đã ghi nhận thanh toán kỳ thứ $newPeriods cho "${item.title}" ${isCompleted ? '🎉 Đã hoàn thành trả góp!' : ''}',
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-  Future<void> _openCreateSheet() async {
-    final created = await showModalBottomSheet<bool>(
+  Future<bool?> _confirmDelete(InstallmentPlan item) {
+    return showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _AddInstallmentSheet(),
-    );
-
-    if (!mounted) return;
-    if (created == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã tạo kế hoạch trả góp mới')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading && provider.installments.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final items = provider.installments;
-        if (items.isEmpty) return _buildEmptyState();
-
-        return ListView.builder(
-          padding: const EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 20,
-            bottom: 100,
-          ), // Tăng bottom padding
-          itemCount: items.length + 1,
-          itemBuilder: (context, index) {
-            if (index == items.length) return _buildAddButton();
-            final item = items[index];
-            return _InstallmentCard(item: item, onPay: () => _handlePay(item));
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.credit_card_rounded, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          const Text(
-            'Chưa có khoản trả góp',
-            style: TextStyle(color: Colors.grey),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Xác nhận xóa', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Bạn có chắc chắn muốn xóa kế hoạch trả góp "${item.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
           ),
-          const SizedBox(height: 20),
-          _buildAddButton(),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAddButton() {
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<InstallmentPlan>>(
+      stream: _firestoreService.streamInstallments(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final items = snapshot.data ?? [];
+        if (items.isEmpty) {
+          return _EmptyState(onCreate: () => _showAddInstallmentSheet());
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+          itemCount: items.length + 1,
+          itemBuilder: (context, index) {
+            if (index == items.length) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _AddButton(onPressed: () => _showAddInstallmentSheet()),
+              );
+            }
+
+            final item = items[index];
+            return Dismissible(
+              key: Key(item.id),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) => _confirmDelete(item),
+              onDismissed: (_) async {
+                try {
+                  await context.read<FinanceProvider>().deleteInstallment(item.id);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Đã xóa kế hoạch trả góp "${item.title}"')),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Không thể xóa: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 24),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+              ),
+              child: GestureDetector(
+                onTap: () => _showAddInstallmentSheet(item),
+                child: _InstallmentCard(
+                  item: item,
+                  onPay: () => _handleMarkPaid(item),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onCreate;
+  const _EmptyState({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.credit_card_rounded, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            const Text(
+              'Chưa có khoản trả góp',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            _AddButton(onPressed: onCreate),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _AddButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: _openCreateSheet,
+      onPressed: onPressed,
       icon: const Icon(Icons.add_rounded),
       label: const Text('Thêm kế hoạch trả góp'),
       style: OutlinedButton.styleFrom(
@@ -184,14 +213,17 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
 }
 
 class _InstallmentCard extends StatelessWidget {
-  const _InstallmentCard({required this.item, required this.onPay});
-  final FinanceInstallmentItem item;
+  final InstallmentPlan item;
   final VoidCallback onPay;
+
+  const _InstallmentCard({required this.item, required this.onPay});
 
   @override
   Widget build(BuildContext context) {
-    double progress = (item.paidAmount / item.totalAmount).clamp(0.0, 1.0);
+    double progress = item.totalPeriods > 0 ? (item.paidPeriods / item.totalPeriods).clamp(0.0, 1.0) : 0.0;
     int percent = (progress * 100).toInt();
+    final isCompleted = item.paidPeriods >= item.totalPeriods || item.status == 'completed';
+    final nextDueDateTime = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -225,17 +257,44 @@ class _InstallmentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: Color(0xFF1E293B),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              color: Color(0xFF1E293B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCompleted)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Đã hoàn tất 🎉',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Đã trả ${item.currentPeriod}/${item.totalPeriods} kỳ',
+                      isCompleted
+                          ? 'Đã trả hết tất cả các kỳ!'
+                          : 'Kỳ hạn tiếp theo: ${formatDate(nextDueDateTime)}',
                       style: const TextStyle(
                         color: Color(0xFF94A3B8),
                         fontSize: 13,
@@ -245,10 +304,11 @@ class _InstallmentCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '$percent%',
                 style: const TextStyle(
-                  color: Color(0xFF2563EB),
+                  color: Color(0xFF8B5CF6), // Tím cho trả góp
                   fontWeight: FontWeight.w800,
                   fontSize: 20,
                 ),
@@ -261,9 +321,7 @@ class _InstallmentCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation(
-                Color(0xFF8B5CF6),
-              ), // Tím cho trả góp
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
               minHeight: 10,
             ),
           ),
@@ -272,31 +330,47 @@ class _InstallmentCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _AmountColumn(
-                label: 'Đã thanh toán',
+                label: 'Đã trả (${item.paidPeriods}/${item.totalPeriods} tháng)',
                 amount: item.paidAmount,
                 color: const Color(0xFF8B5CF6),
               ),
               _AmountColumn(
-                label: 'Tổng nợ',
+                label: 'Tổng tiền trả góp',
                 amount: item.totalAmount,
                 color: const Color(0xFF1E293B),
                 isRight: true,
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _CardButton(
-                  text: 'Thanh toán kỳ này',
-                  onPressed: onPay,
-                  color: const Color(0xFF8B5CF6).withOpacity(0.08),
-                  textColor: const Color(0xFF7C3AED),
-                ),
+              Text(
+                'Số tiền mỗi tháng:',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              Text(
+                formatCurrency(item.monthlyPayment),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1E293B)),
               ),
             ],
           ),
+          if (!isCompleted) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _CardButton(
+                    text: 'Đánh dấu đã trả tháng này',
+                    onPressed: onPay,
+                    color: const Color(0xFF8B5CF6).withOpacity(0.08),
+                    textColor: const Color(0xFF7C3AED),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -319,9 +393,7 @@ class _AmountColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+      crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -384,7 +456,14 @@ class _CardButton extends StatelessWidget {
 }
 
 class _AddInstallmentSheet extends StatefulWidget {
-  const _AddInstallmentSheet();
+  final String userId;
+  final InstallmentPlan? installmentPlan;
+
+  const _AddInstallmentSheet({
+    required this.userId,
+    this.installmentPlan,
+  });
+
   @override
   State<_AddInstallmentSheet> createState() => _AddInstallmentSheetState();
 }
@@ -393,29 +472,77 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _totalController = TextEditingController();
+  final _monthsController = TextEditingController();
+  final _interestController = TextEditingController();
 
-  BankInterest? selectedBank;
-  int? selectedTerm;
-  double monthlyAmount = 0;
+  DateTime _selectedDate = DateTime.now();
+  String _selectedEmoji = '🧾';
+  int _calculatedMonthly = 0;
 
-  void _calculateMonthly() {
-    final amountText = _totalController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (selectedBank != null && selectedTerm != null && amountText.isNotEmpty) {
-      double principal = double.tryParse(amountText) ?? 0;
-      double rate = selectedBank!.rates[selectedTerm!]!;
+  final List<String> _emojiList = ['🧾', '📱', '💻', '🚗', '🏍️', '🏠', '🎁', '✈️', '🎓', '💍', '🛋️'];
 
-      setState(() {
-        monthlyAmount = context.read<FinanceProvider>().calculateMonthlyPayment(
-          principal,
-          rate,
-          selectedTerm!,
-        );
-      });
+  @override
+  void initState() {
+    super.initState();
+    if (widget.installmentPlan != null) {
+      _titleController.text = widget.installmentPlan!.title;
+      _totalController.text = widget.installmentPlan!.totalAmount.toString();
+      _monthsController.text = widget.installmentPlan!.totalPeriods.toString();
+      _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.installmentPlan!.nextDueDate);
+      _selectedEmoji = widget.installmentPlan!.icon;
+
+      // Estimate annual interest rate based on: monthlyPayment = (totalAmount * (1 + rate)) / totalPeriods
+      final total = widget.installmentPlan!.totalAmount;
+      final monthly = widget.installmentPlan!.monthlyPayment;
+      final periods = widget.installmentPlan!.totalPeriods;
+      if (total > 0 && periods > 0) {
+        final rate = (monthly * periods / total) - 1;
+        _interestController.text = (rate * 100).toStringAsFixed(1);
+      } else {
+        _interestController.text = '0';
+      }
+    } else {
+      _interestController.text = '0';
     }
+    _recalculate();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _totalController.dispose();
+    _monthsController.dispose();
+    _interestController.dispose();
+    super.dispose();
+  }
+
+  void _recalculate() {
+    final amountText = _totalController.text.trim();
+    final monthsText = _monthsController.text.trim();
+    final interestText = _interestController.text.trim();
+
+    if (amountText.isNotEmpty && monthsText.isNotEmpty) {
+      final totalAmount = double.tryParse(amountText) ?? 0.0;
+      final months = int.tryParse(monthsText) ?? 1;
+      final interest = double.tryParse(interestText) ?? 0.0;
+
+      if (totalAmount > 0 && months > 0) {
+        final rate = interest / 100;
+        setState(() {
+          _calculatedMonthly = ((totalAmount * (1 + rate)) / months).round();
+        });
+        return;
+      }
+    }
+    setState(() {
+      _calculatedMonthly = 0;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.installmentPlan != null;
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -432,82 +559,156 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Kế hoạch trả góp mới',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              Text(
+                isEdit ? 'Chỉnh sửa trả góp' : 'Kế hoạch trả góp mới',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 20),
-              _buildInput(
+              TextFormField(
                 controller: _titleController,
-                label: 'Tên vật phẩm/Khoản trả góp',
+                decoration: InputDecoration(
+                  labelText: 'Tên vật phẩm/Khoản trả góp',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+                validator: (v) => v!.trim().isEmpty ? 'Vui lòng nhập tên khoản trả góp' : null,
               ),
-              const SizedBox(height: 16),
-              _buildInput(
+              const SizedBox(height: 14),
+              TextFormField(
                 controller: _totalController,
-                label: 'Số tiền gốc',
-                isNumber: true,
-                onChanged: (_) => _calculateMonthly(),
-              ),
-              const SizedBox(height: 16),
-
-              // CHỌN NGÂN HÀNG
-              DropdownButtonFormField<BankInterest>(
-                decoration: _dropdownDecoration('Chọn ngân hàng'),
-                value: selectedBank,
-                items: bankData
-                    .map(
-                      (bank) => DropdownMenuItem(
-                    value: bank,
-                    child: Text(
-                      bank.name,
-                      style: const TextStyle(fontSize: 15),
-                    ),
-                  ),
-                )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedBank = value;
-                    selectedTerm = null; // Reset kỳ hạn khi đổi ngân hàng
-                    monthlyAmount = 0;
-                  });
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Tổng số tiền',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  suffixText: '₫',
+                ),
+                onChanged: (_) => _recalculate(),
+                validator: (v) {
+                  final val = int.tryParse(v!.trim());
+                  if (val == null || val <= 0) return 'Số tiền không hợp lệ';
+                  return null;
                 },
               ),
-              const SizedBox(height: 16),
-
-              // CHỌN KỲ HẠN
-              if (selectedBank != null)
-                DropdownButtonFormField<int>(
-                  decoration: _dropdownDecoration('Kỳ hạn trả góp'),
-                  value: selectedTerm,
-                  items: selectedBank!.rates.keys
-                      .map(
-                        (term) => DropdownMenuItem(
-                      value: term,
-                      child: Text(
-                        '$term tháng (Lãi ${selectedBank!.rates[term]}%/năm)',
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _monthsController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Số tháng trả góp',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
                       ),
+                      onChanged: (_) => _recalculate(),
+                      validator: (v) {
+                        final val = int.tryParse(v!.trim());
+                        if (val == null || val <= 0) return 'Không hợp lệ';
+                        return null;
+                      },
                     ),
-                  )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() => selectedTerm = value);
-                    _calculateMonthly();
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _interestController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Lãi suất tổng (%)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        suffixText: '%',
+                      ),
+                      onChanged: (_) => _recalculate(),
+                      validator: (v) {
+                        if (v!.trim().isEmpty) return null;
+                        final val = double.tryParse(v.trim());
+                        if (val == null || val < 0) return 'Không hợp lệ';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Chọn biểu tượng (Emoji)',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 52,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _emojiList.length,
+                  itemBuilder: (context, index) {
+                    final emoji = _emojiList[index];
+                    final isSelected = emoji == _selectedEmoji;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedEmoji = emoji),
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        margin: const EdgeInsets.only(right: 10),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF8B5CF6).withOpacity(0.15) : const Color(0xFFF1F5F9),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFF8B5CF6) : Colors.transparent,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                      ),
+                    );
                   },
                 ),
-
-              // HIỂN THỊ KẾT QUẢ TỰ ĐỘNG
-              if (monthlyAmount > 0) ...[
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                tileColor: const Color(0xFFF8FAFC),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                title: Text(
+                  isEdit ? 'Ngày thanh toán tiếp theo' : 'Ngày bắt đầu thanh toán',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                trailing: Text(
+                  formatDate(_selectedDate),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setState(() => _selectedDate = picked);
+                  }
+                },
+              ),
+              if (_calculatedMonthly > 0) ...[
                 const SizedBox(height: 20),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -515,64 +716,92 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: const Color(0xFF2563EB).withOpacity(0.2),
+                      color: const Color(0xFF8B5CF6).withOpacity(0.2),
                     ),
                   ),
-                  child: Column(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildResultRow(
-                        'Lãi suất áp dụng:',
-                        '${selectedBank!.rates[selectedTerm!]}%/năm',
-                      ),
-                      const Divider(height: 20),
-                      _buildResultRow(
+                      Text(
                         'Số tiền mỗi kỳ (ước tính):',
-                        formatCurrency(monthlyAmount),
-                        isBold: true,
-                        color: const Color(0xFF2563EB),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        formatCurrency(_calculatedMonthly),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: Color(0xFF8B5CF6),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
-
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
-                  onPressed: () {
-                    if (_formKey.currentState!.validate() &&
-                        selectedBank != null &&
-                        selectedTerm != null) {
-                      context.read<FinanceProvider>().addInstallment(
-                        name: _titleController.text,
-                        amount:
-                        double.tryParse(
-                          _totalController.text.replaceAll(
-                            RegExp(r'[^0-9]'),
-                            '',
+                  onPressed: () async {
+                    if (!_formKey.currentState!.validate()) return;
+
+                    final title = _titleController.text.trim();
+                    final totalAmt = int.parse(_totalController.text.trim());
+                    final periods = int.parse(_monthsController.text.trim());
+                    final interestRate = double.tryParse(_interestController.text.trim()) ?? 0.0;
+                    
+                    final monthlyVal = ((totalAmt * (1 + interestRate / 100)) / periods).round();
+
+                    final plan = InstallmentPlan(
+                      id: widget.installmentPlan?.id ?? 'installment_${DateTime.now().millisecondsSinceEpoch}',
+                      userId: widget.userId,
+                      title: title,
+                      icon: _selectedEmoji,
+                      totalAmount: totalAmt,
+                      paidAmount: widget.installmentPlan?.paidAmount ?? 0,
+                      monthlyPayment: monthlyVal,
+                      paidPeriods: widget.installmentPlan?.paidPeriods ?? 0,
+                      totalPeriods: periods,
+                      nextDueDate: _selectedDate.millisecondsSinceEpoch,
+                      createdAt: widget.installmentPlan?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
+                      updatedAt: DateTime.now().millisecondsSinceEpoch,
+                      status: (widget.installmentPlan?.paidPeriods ?? 0) >= periods ? 'completed' : 'active',
+                    );
+
+                    try {
+                      if (isEdit) {
+                        await context.read<FinanceProvider>().updateInstallmentPlan(plan);
+                      } else {
+                        await context.read<FinanceProvider>().addInstallmentPlanDirect(plan);
+                      }
+
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isEdit
+                                ? 'Đã cập nhật trả góp "$title"'
+                                : 'Đã thêm kế hoạch trả góp "$title"',
                           ),
-                        ) ??
-                            0,
-                        bankName: selectedBank!.name,
-                        interestRate: selectedBank!.rates[selectedTerm!]!,
-                        months: selectedTerm!,
-                        monthlyPayment: monthlyAmount,
+                        ),
                       );
-                      Navigator.pop(context, true);
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                      );
                     }
                   },
-                  child: const Text(
-                    'Lưu kế hoạch',
-                    style: TextStyle(
+                  child: Text(
+                    isEdit ? 'Cập nhật trả góp' : 'Lưu kế hoạch',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -586,65 +815,14 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
       ),
     );
   }
-
-  InputDecoration _dropdownDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    );
-  }
-
-  Widget _buildResultRow(
-      String label,
-      String value, {
-        bool isBold = false,
-        Color? color,
-      }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-            fontSize: isBold ? 16 : 14,
-            color: color ?? const Color(0xFF1E293B),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInput({
-    required TextEditingController controller,
-    required String label,
-    bool isNumber = false,
-    ValueChanged<String>? onChanged,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-      ),
-      onChanged: onChanged,
-      validator: (v) => v!.isEmpty ? 'Vui lòng nhập' : null,
-    );
-  }
 }
 
-/// Public alias để finance_screen có thể dùng trực tiếp
-class AddInstallmentSheetPublic extends _AddInstallmentSheet {
-  const AddInstallmentSheetPublic();
+class AddInstallmentSheetPublic extends StatelessWidget {
+  const AddInstallmentSheetPublic({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return _AddInstallmentSheet(
+      userId: FirebaseAuth.instance.currentUser?.uid ?? 'user_001',
+    );
+  }
 }

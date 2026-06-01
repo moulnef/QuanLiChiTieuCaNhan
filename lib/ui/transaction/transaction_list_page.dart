@@ -191,73 +191,78 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          if (canGoBack) ...[
-                            IconButton(
-                              onPressed: () => Navigator.of(context).maybePop(),
-                              icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                                color: Colors.white,
-                                size: 20,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (canGoBack) ...[
+                              IconButton(
+                                onPressed: () => Navigator.of(context).maybePop(),
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                splashRadius: 22,
                               ),
-                              splashRadius: 22,
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: Text(
+                                "Giao dịch".xtr(context),
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            const SizedBox(width: 4),
                           ],
-                          Text(
-                            "Giao dịch".xtr(context),
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: () =>
-                                setState(() => _isSearchMode = true),
-                            icon: const Icon(
-                              Icons.search_rounded,
-                              color: Colors.white,
-                            ),
-                            splashRadius: 24,
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                _showFilterSortPanel(context, state),
-                            icon: const Icon(
-                              Icons.tune_rounded,
-                              color: Colors.white,
-                            ),
-                            splashRadius: 24,
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CreateTransactionPage(),
-                                ),
+                          _ScaleOnTap(
+                            onTap: () => setState(() => _isSearchMode = true),
+                            child: const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Icon(
+                                Icons.search_rounded,
+                                color: Colors.white,
                               ),
-                              icon: const Icon(
+                            ),
+                          ),
+                          _ScaleOnTap(
+                            onTap: () => _showFilterSortPanel(context, state),
+                            child: const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Icon(
+                                Icons.tune_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _ScaleOnTap(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CreateTransactionPage(),
+                              ),
+                            ),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
                                 Icons.add_rounded,
                                 color: Colors.white,
                                 size: 24,
-                              ),
-                              splashRadius: 24,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 40,
-                                minHeight: 40,
                               ),
                             ),
                           ),
@@ -332,8 +337,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 Map<String, List<TransactionModel>> groupedData = {};
                 for (var tx in state.filteredList) {
                   String dateKey = DateFormat('yyyy-MM-dd').format(tx.date);
-                  if (!groupedData.containsKey(dateKey))
+                  if (!groupedData.containsKey(dateKey)) {
                     groupedData[dateKey] = [];
+                  }
                   groupedData[dateKey]!.add(tx);
                 }
 
@@ -382,118 +388,111 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                               .where((c) => c.name == tx.categoryId)
                               .firstOrNull;
 
-                          return Container(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.03),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Theme(
-                              data: Theme.of(context).copyWith(
-                                hoverColor: Colors.transparent,
-                                splashColor: Colors.transparent,
+                          return _ScaleOnTap(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    CreateTransactionPage(editData: tx),
                               ),
-                              child: InkWell(
+                            ),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        CreateTransactionPage(editData: tx),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 14,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 46,
-                                        height: 46,
-                                        decoration: BoxDecoration(
-                                          color:
-                                              (category?.color ?? Colors.grey)
-                                                  .withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          category?.iconData ??
-                                              Icons.receipt_long,
-                                          color: category?.color ?? Colors.grey,
-                                          size: 22,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (category?.color ?? Colors.grey)
+                                                .withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(
+                                          14,
                                         ),
                                       ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              tx.note.isNotEmpty
-                                                  ? tx.note
-                                                  : _displayCategory(
-                                                      tx.categoryId,
-                                                    ),
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                                color: Color(0xFF1E293B),
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _displayCategory(tx.categoryId),
-                                              style: const TextStyle(
-                                                color: Color(0xFF94A3B8),
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                      child: Icon(
+                                        category?.iconData ??
+                                            Icons.receipt_long,
+                                        color: category?.color ?? Colors.grey,
+                                        size: 22,
                                       ),
-                                      Column(
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.end,
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            "${isExpense ? '-' : '+'}${_formatMoney(tx.amount)} đ",
-                                            style: TextStyle(
-                                              color: isExpense
-                                                  ? const Color(0xFFEF4444)
-                                                  : const Color(0xFF10B981),
+                                            tx.note.isNotEmpty
+                                                ? tx.note
+                                                : _displayCategory(
+                                                    tx.categoryId,
+                                                  ),
+                                            style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
+                                              color: Color(0xFF1E293B),
                                             ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            DateFormat('HH:mm').format(tx.date),
+                                            _displayCategory(tx.categoryId),
                                             style: const TextStyle(
                                               color: Color(0xFF94A3B8),
-                                              fontSize: 12,
+                                              fontSize: 13,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          "${isExpense ? '-' : '+'}${_formatMoney(tx.amount)} đ",
+                                          style: TextStyle(
+                                            color: isExpense
+                                                ? const Color(0xFFEF4444)
+                                                : const Color(0xFF10B981),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          DateFormat('HH:mm').format(tx.date),
+                                          style: const TextStyle(
+                                            color: Color(0xFF94A3B8),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -528,7 +527,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -538,9 +537,8 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
         children: tabs.map((tab) {
           final isSelected = state.currentTab == tab;
           return Expanded(
-            child: GestureDetector(
+            child: _ScaleOnTap(
               onTap: () => controller.changeTab(tab),
-              behavior: HitTestBehavior.opaque,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -704,12 +702,15 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
             ),
           ),
           const SizedBox(width: 6),
-          GestureDetector(
+          _ScaleOnTap(
             onTap: onRemove,
-            child: const Icon(
-              Icons.close_rounded,
-              size: 16,
-              color: Color(0xFF6D28D9),
+            child: const Padding(
+              padding: EdgeInsets.all(2.0),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFF6D28D9),
+              ),
             ),
           ),
         ],
@@ -1012,17 +1013,17 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ScaleOnTap(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF6D28D9) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected ? const Color(0xFF6D28D9) : const Color(0xFFE2E8F0),
+            width: 1.2,
           ),
         ),
         child: Text(
@@ -1248,8 +1249,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
             Map<String, List<CategoryModel>> groupedCategories = {};
             for (var cat in filteredList) {
               String groupName = cat.group ?? "Khác";
-              if (!groupedCategories.containsKey(groupName))
+              if (!groupedCategories.containsKey(groupName)) {
                 groupedCategories[groupName] = [];
+              }
               groupedCategories[groupName]!.add(cat);
             }
 
@@ -1666,25 +1668,33 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   IconData _getGroupIcon(String groupName) {
     String lowerGroup = groupName.toLowerCase();
     if (lowerGroup.contains('ăn')) return Icons.restaurant_menu_rounded;
-    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt'))
+    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) {
       return Icons.electrical_services_rounded;
-    if (lowerGroup.contains('di chuyển') || lowerGroup.contains('đi lại'))
+    }
+    if (lowerGroup.contains('di chuyển') || lowerGroup.contains('đi lại')) {
       return Icons.directions_car_rounded;
-    if (lowerGroup.contains('trang phục') || lowerGroup.contains('mua sắm'))
+    }
+    if (lowerGroup.contains('trang phục') || lowerGroup.contains('mua sắm')) {
       return Icons.checkroom_rounded;
-    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('giải trí'))
+    }
+    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('giải trí')) {
       return Icons.celebration_rounded;
+    }
     if (lowerGroup.contains('con cái')) return Icons.child_care_rounded;
-    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('biếu tặng'))
+    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('biếu tặng')) {
       return Icons.card_giftcard_rounded;
+    }
     if (lowerGroup.contains('nhà cửa')) return Icons.home_rounded;
-    if (lowerGroup.contains('phát triển') || lowerGroup.contains('học'))
+    if (lowerGroup.contains('phát triển') || lowerGroup.contains('học')) {
       return Icons.psychology_rounded;
-    if (lowerGroup.contains('sức khỏe') || lowerGroup.contains('y tế'))
+    }
+    if (lowerGroup.contains('sức khỏe') || lowerGroup.contains('y tế')) {
       return Icons.medical_services_rounded;
+    }
     if (lowerGroup.contains('ngân hàng')) return Icons.account_balance_rounded;
-    if (lowerGroup.contains('vay') || lowerGroup.contains('nợ'))
+    if (lowerGroup.contains('vay') || lowerGroup.contains('nợ')) {
       return Icons.credit_score_rounded;
+    }
     if (lowerGroup.contains('thu nhập')) return Icons.monetization_on_rounded;
     if (lowerGroup.contains('đầu tư')) return Icons.trending_up_rounded;
     return Icons.folder_rounded;
@@ -1698,5 +1708,34 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
 
   String _formatMoney(double amount) {
     return NumberFormat('#,###', 'en_US').format(amount).replaceAll(',', '.');
+  }
+}
+
+class _ScaleOnTap extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _ScaleOnTap({required this.child, this.onTap});
+
+  @override
+  State<_ScaleOnTap> createState() => _ScaleOnTapState();
+}
+
+class _ScaleOnTapState extends State<_ScaleOnTap> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.95),
+      onTapUp: (_) => setState(() => _scale = 1.0),
+      onTapCancel: () => setState(() => _scale = 1.0),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
+    );
   }
 }

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/finance_calculator.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/database/mock/mock_budgets.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/database/mock/mock_transactions.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/budget_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_item_card.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_summary_card.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/budget_vs_actual_chart.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/add_budget_form_sheet.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/budget_provider.dart';
+
 class BudgetScreen extends StatefulWidget {
   const BudgetScreen({super.key});
 
@@ -17,18 +20,8 @@ class BudgetScreen extends StatefulWidget {
 }
 
 class _BudgetScreenState extends State<BudgetScreen> {
-  late List<Budget> _budgets;
-
-  @override
-  void initState() {
-    super.initState();
-    _budgets = BudgetService.getMonthlyBudgetStatus(
-      transactions: MockTransactions.items,
-      budgets: MockBudgets.items,
-      month: 3,
-      year: 2026,
-    );
-  }
+  String get _currentUserId =>
+      FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
   void _openAddBudgetForm() {
     showModalBottomSheet(
@@ -37,79 +30,206 @@ class _BudgetScreenState extends State<BudgetScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) {
         return AddBudgetFormSheet(
-          userId: 'user_001',
-          onSubmit: (newBudget) {
-            setState(() {
-              _budgets = [..._budgets, newBudget];
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Đã thêm ngân sách cho ${newBudget.categoryName}',
+          userId: _currentUserId,
+          onSubmit: (newBudget) async {
+            try {
+              await context.read<BudgetProvider>().addBudget(newBudget);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Đã thêm ngân sách cho ${newBudget.categoryName}',
+                  ),
                 ),
-              ),
-            );
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+              );
+            }
           },
         );
       },
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final totalSpent = BudgetService.getTotalSpent(budgets: _budgets);
-    final totalLimit = BudgetService.getTotalLimit(budgets: _budgets);
-    final totalProgress = FinanceCalculator.calculateBudgetProgress(
-      spentAmount: totalSpent,
-      limitAmount: totalLimit,
+  void _openEditBudgetForm(Budget budget) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return AddBudgetFormSheet(
+          userId: _currentUserId,
+          budget: budget,
+          onSubmit: (updatedBudget) async {
+            try {
+              await context.read<BudgetProvider>().updateBudget(updatedBudget);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Đã cập nhật ngân sách cho ${updatedBudget.categoryName}',
+                  ),
+                ),
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+              );
+            }
+          },
+        );
+      },
     );
+  }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          _BudgetHeader(
-            totalSpent: totalSpent,
-            totalLimit: totalLimit,
-            totalProgress: totalProgress,
+  Future<bool?> _confirmDelete(Budget budget) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Xác nhận xóa',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa ngân sách cho danh mục "${budget.categoryName}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-              children: [
-                BudgetVsActualChart(
-                  budgets: _budgets,
-                ),
-                const SizedBox(height: 18),
-                ..._budgets.map((budget) => BudgetItemCard(budget: budget)),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _openAddBudgetForm,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 58),
-                    side: const BorderSide(
-                      color: Color(0xFFF6B34F),
-                      width: 1.5,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    backgroundColor: Colors.transparent,
-                  ),
-                  child: const Text(
-                    '+  Thêm ngân sách mới',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFFF59E0B),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Xóa',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = context.read<FinanceRepository>();
+    final now = DateTime.now();
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: StreamBuilder<List<Budget>>(
+        stream: repository.streamBudgets(_currentUserId, now.month, now.year),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final budgets = snapshot.data ?? [];
+          final totalSpent = BudgetService.getTotalSpent(budgets: budgets);
+          final totalLimit = BudgetService.getTotalLimit(budgets: budgets);
+          final totalProgress = FinanceCalculator.calculateBudgetProgress(
+            spentAmount: totalSpent,
+            limitAmount: totalLimit,
+          );
+
+          return Column(
+            children: [
+              _BudgetHeader(
+                totalSpent: totalSpent,
+                totalLimit: totalLimit,
+                totalProgress: totalProgress,
+              ),
+              Expanded(
+                child: budgets.isEmpty
+                    ? _buildEmptyState()
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+                        children: [
+                          BudgetVsActualChart(budgets: budgets),
+                          const SizedBox(height: 18),
+                          ...budgets.map((budget) {
+                            return Dismissible(
+                              key: Key(budget.id),
+                              direction: DismissDirection.endToStart,
+                              confirmDismiss: (direction) =>
+                                  _confirmDelete(budget),
+                              onDismissed: (direction) async {
+                                try {
+                                  await context
+                                      .read<BudgetProvider>()
+                                      .deleteBudget(budget.id, _currentUserId);
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Đã xóa ngân sách của ${budget.categoryName}',
+                                      ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Không thể xóa: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _openEditBudgetForm(budget),
+                                child: BudgetItemCard(budget: budget),
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: _openAddBudgetForm,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 58),
+                              side: const BorderSide(
+                                color: Color(0xFFF6B34F),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              backgroundColor: Colors.transparent,
+                            ),
+                            child: const Text(
+                              '+  Thêm ngân sách mới',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Color(0xFFF59E0B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        },
       ),
       bottomNavigationBar: _FakeBottomNav(
         currentIndex: 3,
@@ -132,11 +252,51 @@ class _BudgetScreenState extends State<BudgetScreen> {
           ],
         ),
         child: IconButton(
-          onPressed: () {},
+          onPressed: _openAddBudgetForm,
           icon: const Icon(Icons.add, color: Colors.white, size: 34),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.pie_chart_outline_rounded,
+              size: 68,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Chưa có ngân sách nào cho tháng này.\nHãy thiết lập để kiểm soát chi tiêu tốt hơn!',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 15, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _openAddBudgetForm,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text('Thiết lập ngân sách ngay'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -157,9 +317,7 @@ class _BudgetHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 52, 16, 20),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFF8500),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFFF8500)),
       child: Column(
         children: [
           Row(
@@ -209,10 +367,7 @@ class _FakeBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  const _FakeBottomNav({
-    required this.currentIndex,
-    required this.onTap,
-  });
+  const _FakeBottomNav({required this.currentIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

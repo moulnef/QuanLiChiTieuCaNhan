@@ -9,6 +9,7 @@ class SavingGoal {
   final int createdAt;
   final int updatedAt;
   final String status;
+  final int? colorValue;
 
   const SavingGoal({
     required this.id,
@@ -21,6 +22,7 @@ class SavingGoal {
     required this.createdAt,
     required this.updatedAt,
     required this.status,
+    this.colorValue,
   });
 
   int get remainingAmount {
@@ -50,6 +52,7 @@ class SavingGoal {
     int? createdAt,
     int? updatedAt,
     String? status,
+    int? colorValue,
   }) {
     return SavingGoal(
       id: id ?? this.id,
@@ -62,6 +65,7 @@ class SavingGoal {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       status: status ?? this.status,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
 
@@ -77,21 +81,24 @@ class SavingGoal {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'status': status,
+      'colorValue': colorValue,
+      'color_value': colorValue,
     };
   }
 
   factory SavingGoal.fromMap(Map<String, dynamic> map) {
     return SavingGoal(
-      id: map['id'],
-      userId: map['userId'],
-      title: map['title'],
-      icon: map['icon'],
-      currentAmount: map['currentAmount'],
-      targetAmount: map['targetAmount'],
-      targetDate: map['targetDate'],
-      createdAt: map['createdAt'],
-      updatedAt: map['updatedAt'],
-      status: map['status'],
+      id: map['id'] ?? '',
+      userId: map['userId'] ?? map['user_id'] ?? '',
+      title: map['title'] ?? '',
+      icon: map['icon'] ?? '🎯',
+      currentAmount: map['currentAmount'] ?? map['current_amount'] ?? 0,
+      targetAmount: map['targetAmount'] ?? map['target_amount'] ?? 0,
+      targetDate: map['targetDate'] ?? map['target_date'] ?? 0,
+      createdAt: map['createdAt'] ?? map['created_at'] ?? 0,
+      updatedAt: map['updatedAt'] ?? map['updated_at'] ?? 0,
+      status: map['status'] ?? 'active',
+      colorValue: map['colorValue'] ?? map['color_value'],
     );
   }
 }

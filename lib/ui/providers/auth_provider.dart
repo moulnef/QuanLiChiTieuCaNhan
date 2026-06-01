@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/sync_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthService? authService})
@@ -41,12 +42,16 @@ class AuthProvider extends ChangeNotifier {
     if (user == null) {
       _role = 'guest';
       _isLoading = false;
+      SyncService().stopAutoSync();
       notifyListeners();
       return;
     }
 
     _isLoading = false;
     notifyListeners();
+
+    // Start auto sync on login
+    SyncService().startAutoSync(user.uid);
 
     _log('Bắt đầu gọi getUserRole: ${DateTime.now()}');
     _role = await _authService.getUserRole(user.uid);

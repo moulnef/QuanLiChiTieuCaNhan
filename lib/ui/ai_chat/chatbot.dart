@@ -23,7 +23,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   bool _isLoading = false;
 
   // ĐIỀN TOKEN MỚI VÀO ĐÂY VÀ GIỮ NGUYÊN CÁCH CỘNG CHUỖI NÀY
-  final String githubToken = 'ghp_' + '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
+  final String githubToken = 'ghp_' '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
   final formatCurrency = NumberFormat('#,###', 'vi_VN');
 
   @override

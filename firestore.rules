@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if the user is authenticated and owns the data
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rules for user profile and all their sub-collections
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // Validate sub-collections under users/{userId}
+      
+      match /profile/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /settings/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /wallets/{walletId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.name is string &&
+               request.resource.data.balance is number &&
+               request.resource.data.type in ['cash', 'bank', 'ewallet', 'credit']
+             ));
+      }
+
+      match /categories/{categoryId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.name is string &&
+               request.resource.data.type in ['income', 'expense']
+             ));
+      }
+
+      match /transactions/{transId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.amount is number &&
+               request.resource.data.amount > 0 &&
+               request.resource.data.type in ['income', 'expense', 'transfer'] &&
+               request.resource.data.categoryId is string &&
+               request.resource.data.walletId is string
+             ));
+      }
+
+      match /budgets/{budgetId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.limitAmount is number &&
+               request.resource.data.limitAmount > 0 &&
+               request.resource.data.month >= 1 &&
+               request.resource.data.month <= 12 &&
+               request.resource.data.year is int
+             ));
+      }
+
+      match /savings/{savingId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.targetAmount is number &&
+               request.resource.data.targetAmount > 0 &&
+               request.resource.data.currentAmount is number &&
+               request.resource.data.currentAmount >= 0
+             ));
+      }
+
+      match /debts/{debtId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.amount is number &&
+               request.resource.data.amount > 0 &&
+               request.resource.data.type in ['lend', 'borrow']
+             ));
+      }
+
+      match /installments/{planId} {
+        allow read, write: if isOwner(userId)
+          && (request.resource == null || (
+               request.resource.data.totalAmount is number &&
+               request.resource.data.totalAmount > 0
+             ));
+      }
+    }
+  }
+}

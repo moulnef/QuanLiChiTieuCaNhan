@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 import '../../domain/model/transaction_model.dart';
 import '../../domain/services/ocr_service.dart';
@@ -87,6 +87,7 @@ class _MainScreenState extends State<MainScreen>
   bool _isMenuOpen = false;
   bool _hideOverlaysForRoute = false;
   bool _isNestedRouteActive = false;
+  bool _isNavBarVisible = true;
   late AnimationController _animationController;
   late Animation<double> _rotationAnimation;
   Offset? _chatbotOffset;
@@ -145,11 +146,17 @@ class _MainScreenState extends State<MainScreen>
       if (index == 0) {
         HomePageState.scrollToTopActive();
       }
+      setState(() {
+        _isNavBarVisible = true;
+      });
       return;
     }
 
     if (_isMenuOpen) _toggleMenu();
-    setState(() => _selectedIndex = index);
+    setState(() {
+      _selectedIndex = index;
+      _isNavBarVisible = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateNestedRouteState();
     });
@@ -157,10 +164,13 @@ class _MainScreenState extends State<MainScreen>
 
   void _updateNestedRouteState() {
     if (!mounted) return;
-    final currentNav = _navigatorKeys[_selectedIndex].currentState;
-    final bool shouldHide = currentNav?.canPop() ?? false;
-    if (_isNestedRouteActive == shouldHide) return;
-    setState(() => _isNestedRouteActive = shouldHide);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final currentNav = _navigatorKeys[_selectedIndex].currentState;
+      final bool shouldHide = currentNav?.canPop() ?? false;
+      if (_isNestedRouteActive == shouldHide) return;
+      setState(() => _isNestedRouteActive = shouldHide);
+    });
   }
 
   Future<void> _pushInCurrentTab(
@@ -262,31 +272,54 @@ class _MainScreenState extends State<MainScreen>
 
           return Stack(
             children: [
-              IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  TabNavigator(
-                    navigatorKey: _navigatorKeys[0],
-                    rootPage: const HomePage(),
-                    navigatorObserver: _tabRouteObservers[0],
-                  ),
-                  TabNavigator(
-                    navigatorKey: _navigatorKeys[1],
-                    rootPage: const TransactionListPage(),
-                    navigatorObserver: _tabRouteObservers[1],
-                  ),
-                  const SizedBox.shrink(),
-                  TabNavigator(
-                    navigatorKey: _navigatorKeys[3],
-                    rootPage: const StatsPage(),
-                    navigatorObserver: _tabRouteObservers[3],
-                  ),
-                  TabNavigator(
-                    navigatorKey: _navigatorKeys[4],
-                    rootPage: const ProfilePage(),
-                    navigatorObserver: _tabRouteObservers[4],
-                  ),
-                ],
+              NotificationListener<UserScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.depth == 0) {
+                    if (notification.direction == ScrollDirection.reverse) {
+                      if (_isNavBarVisible) {
+                        setState(() {
+                          _isNavBarVisible = false;
+                          if (_isMenuOpen) {
+                            _toggleMenu();
+                          }
+                        });
+                      }
+                    } else if (notification.direction == ScrollDirection.forward) {
+                      if (!_isNavBarVisible) {
+                        setState(() {
+                          _isNavBarVisible = true;
+                        });
+                      }
+                    }
+                  }
+                  return false;
+                },
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: [
+                    TabNavigator(
+                      navigatorKey: _navigatorKeys[0],
+                      rootPage: const HomePage(),
+                      navigatorObserver: _tabRouteObservers[0],
+                    ),
+                    TabNavigator(
+                      navigatorKey: _navigatorKeys[1],
+                      rootPage: const TransactionListPage(),
+                      navigatorObserver: _tabRouteObservers[1],
+                    ),
+                    const SizedBox.shrink(),
+                    TabNavigator(
+                      navigatorKey: _navigatorKeys[3],
+                      rootPage: const StatsPage(),
+                      navigatorObserver: _tabRouteObservers[3],
+                    ),
+                    TabNavigator(
+                      navigatorKey: _navigatorKeys[4],
+                      rootPage: const ProfilePage(),
+                      navigatorObserver: _tabRouteObservers[4],
+                    ),
+                  ],
+                ),
               ),
               if (!hideAssistiveOverlays && _isMenuOpen)
                 GestureDetector(
@@ -297,14 +330,14 @@ class _MainScreenState extends State<MainScreen>
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutBack,
-                  bottom: _isMenuOpen ? 130 : 50,
+                  bottom: _isNavBarVisible ? (_isMenuOpen ? 130 : 50) : -100,
                   left: 0,
                   right: 0,
                   child: IgnorePointer(
                     ignoring: !_isMenuOpen,
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 200),
-                      opacity: _isMenuOpen ? 1.0 : 0.0,
+                      opacity: _isMenuOpen && _isNavBarVisible ? 1.0 : 0.0,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.max,
@@ -350,8 +383,10 @@ class _MainScreenState extends State<MainScreen>
                   ),
                 ),
               if (!hideAssistiveOverlays)
-                Positioned(
-                  bottom: 30,
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  bottom: _isNavBarVisible ? 30 : -100,
                   left: 20,
                   right: 20,
                   child: SafeArea(
@@ -436,8 +471,10 @@ class _MainScreenState extends State<MainScreen>
                   ),
                 ),
               if (!hideAssistiveOverlays)
-                Positioned(
-                  bottom: 50,
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  bottom: _isNavBarVisible ? 50 : -100,
                   left: 0,
                   right: 0,
                   child: Align(

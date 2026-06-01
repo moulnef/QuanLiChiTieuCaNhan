@@ -780,8 +780,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 showTitles: true,
                 getTitlesWidget: (value, _) {
                   final index = value.toInt();
-                  if (index < 0 || index >= monthly.length)
+                  if (index < 0 || index >= monthly.length) {
                     return const SizedBox.shrink();
+                  }
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
@@ -860,8 +861,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= monthly.length)
+                  if (index < 0 || index >= monthly.length) {
                     return const SizedBox.shrink();
+                  }
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(

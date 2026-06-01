@@ -2,5 +2,12 @@
   "welcome_back": "Chào mừng trở lại",
   "login": "Đăng nhập",
   "email": "Email",
-  "password": "Mật khẩu"
+  "password": "Mật khẩu",
+  "notification_permission_title": "Bật thông báo",
+  "notification_saving_low": "Tiết kiệm '{name}' còn {percent}% - sắp hết!",
+  "notification_budget_near": "Ngân sách '{name}' đã dùng {percent}%",
+  "notification_budget_exceeded": "Ngân sách '{name}' đã vượt mức!",
+  "notification_monthly_overspend": "Tháng này chi tiêu vượt thu nhập {amount}",
+  "notification_debt_due": "Khoản nợ '{name}' đến hạn sau {days} ngày",
+  "notification_installment_due": "Trả góp '{name}' đến kỳ thanh toán"
 }

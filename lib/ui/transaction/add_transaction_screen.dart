@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import '../../data/remote/firestore_service.dart';
+import '../../domain/model/transaction_model.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   const AddTransactionScreen({super.key});
@@ -79,13 +80,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _isSaving = true);
 
     try {
-      await _firestoreService.addTransaction(
-        title: title,
+      String categoryId = 'e46';
+      if (_selectedCategory == 'Ăn uống') {
+        categoryId = 'e2';
+      } else if (_selectedCategory == 'Di chuyển') categoryId = 'e14';
+      else if (_selectedCategory == 'Mua sắm') categoryId = 'e38';
+      else if (_selectedCategory == 'Giải trí') categoryId = 'e24';
+      else if (_selectedCategory == 'Hóa đơn') categoryId = 'e8';
+
+      final uId = _firestoreService.userId;
+
+      final tx = TransactionModel(
+        id: '',
+        userId: uId,
+        walletId: 'wallet_cash_$uId',
+        categoryId: categoryId,
+        categoryName: _selectedCategory,
+        type: 'expense',
         amount: amount,
-        category: _selectedCategory,
-        date: DateTime.now(),
         note: _noteController.text.trim(),
+        transactionDate: DateTime.now(),
       );
+
+      await _firestoreService.addTransaction(tx);
+
       if (mounted) {
         _showTopNotification("Đã lưu chi tiêu thành công!", const Color(0xFF10B981), Icons.check_circle_outline);
         Future.delayed(const Duration(milliseconds: 800), () {
@@ -155,7 +173,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               const SizedBox(height: 16),
               _buildInputBox(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  initialValue: _selectedCategory,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
                   items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontWeight: FontWeight.w500)))).toList(),
                   onChanged: (val) => setState(() => _selectedCategory = val!),

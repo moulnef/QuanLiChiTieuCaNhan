@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/database_helper.dart';
@@ -11,43 +16,9 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-
-class TransactionRepository {
-  static const String _demoUserId = 'user_001';
-
-  TransactionRepository([FinanceRepository? repository])
-    : _repository = repository ?? FinanceRepository();
-
-  final FinanceRepository _repository;
-
-  Stream<void> watchTransactions([String? userId]) {
-    return _repository.watchTransactions(userId ?? _demoUserId);
-  }
-
-  Future<List<TransactionModel>> getTransactions([String? userId]) async {
-    return _repository.getAllTransactionsByUserId(userId ?? _demoUserId);
-  }
-
-  Future<void> addTransaction(TransactionModel tx, [String? userId]) async {
-    final effectiveUserId = tx.userId.isNotEmpty
-        ? tx.userId
-        : (userId ?? _demoUserId);
-    final now = DateTime.now();
-    final normalized = tx.copyWith(
-      id: tx.id.isEmpty ? now.millisecondsSinceEpoch.toString() : tx.id,
-      userId: effectiveUserId,
-      createdAt: tx.createdAt,
-      updatedAt: now,
-    );
-    await _repository.upsertTransaction(normalized);
-  }
-
-  Future<void> deleteTransaction(String id, [String? userId]) async {
-    if (id.isEmpty) return;
-    await _repository.deleteTransaction(userId ?? _demoUserId, id);
-  }
-}
 
 class FinanceRepository {
   static const String demoUserId = 'user_001';
@@ -56,7 +27,9 @@ class FinanceRepository {
     : _databaseHelper = databaseHelper ?? DatabaseHelper.instance;
 
   final DatabaseHelper _databaseHelper;
+  final FirestoreService _firestoreService = FirestoreService();
   final Map<String, Set<String>> _tableColumnsCache = {};
+  
   static final StreamController<String> _transactionChangeController =
       StreamController<String>.broadcast();
 
@@ -72,15 +45,336 @@ class FinanceRepository {
     }
   }
 
+  // Cross-platform connectivity helper
+  Future<bool> _isOnline() async {
+    if (kIsWeb) return true;
+    try {
+      final result = await InternetAddress.lookup('example.com')
+          .timeout(const Duration(seconds: 2));
+      return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ==================== STREAM EXPOSURE FOR UI ====================
+
+  Stream<List<TransactionModel>> streamTransactions(String userId) {
+    if (kIsWeb) {
+      return _firestoreService.streamTransactions();
+    }
+    final controller = StreamController<List<TransactionModel>>.broadcast();
+
+    Future<void> load() async {
+      try {
+        final list = await getAllTransactionsByUserId(userId);
+        if (!controller.isClosed) {
+          controller.add(list);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    load();
+
+    final subscription = watchTransactions(userId).listen((_) => load());
+
+    controller.onCancel = () {
+      subscription.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<Budget>> streamBudgets(String userId, int month, int year) {
+    if (kIsWeb) {
+      return _firestoreService.streamBudgets().map((list) {
+        return list.where((b) => b.month == month && b.year == year).toList();
+      });
+    }
+    final controller = StreamController<List<Budget>>.broadcast();
+
+    Future<void> load() async {
+      try {
+        final list = await getBudgets(userId, month, year);
+        if (!controller.isClosed) {
+          controller.add(list);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    load();
+
+    final subscription = watchTransactions(userId).listen((_) => load());
+
+    controller.onCancel = () {
+      subscription.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<SavingGoal>> streamSavings(String userId) {
+    if (kIsWeb) {
+      return _firestoreService.streamSavings().map((list) {
+        return list.where((s) => s.userId == userId).toList();
+      });
+    }
+    final controller = StreamController<List<SavingGoal>>.broadcast();
+
+    Future<void> load() async {
+      try {
+        final list = await getAllSavingGoals(userId);
+        if (!controller.isClosed) {
+          controller.add(list);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    load();
+
+    final subscription = watchTransactions(userId).listen((_) => load());
+
+    controller.onCancel = () {
+      subscription.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<InstallmentPlan>> streamInstallments(String userId) {
+    if (kIsWeb) {
+      return _firestoreService.streamInstallments().map((list) {
+        return list.where((i) => i.userId == userId).toList();
+      });
+    }
+    final controller = StreamController<List<InstallmentPlan>>.broadcast();
+
+    Future<void> load() async {
+      try {
+        final list = await getAllInstallmentPlans(userId);
+        if (!controller.isClosed) {
+          controller.add(list);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    load();
+
+    final subscription = watchTransactions(userId).listen((_) => load());
+
+    controller.onCancel = () {
+      subscription.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<DebtRecord>> streamDebts(String userId) {
+    if (kIsWeb) {
+      return _firestoreService.streamDebts().map((list) {
+        return list.where((d) => d.userId == userId).toList();
+      });
+    }
+    final controller = StreamController<List<DebtRecord>>.broadcast();
+
+    Future<void> load() async {
+      try {
+        final list = await getAllDebtRecords(userId);
+        if (!controller.isClosed) {
+          controller.add(list);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    load();
+
+    final subscription = watchTransactions(userId).listen((_) => load());
+
+    controller.onCancel = () {
+      subscription.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  // ==================== STATISTICS & DATE QUERIES ====================
+
+  Future<List<TransactionModel>> getTransactionsByDateRange(
+    String userId,
+    DateTime start,
+    DateTime end,
+  ) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      return list.where((t) => t.transactionDate.isAfter(start.subtract(const Duration(seconds: 1))) && t.transactionDate.isBefore(end.add(const Duration(seconds: 1)))).toList();
+    }
+    final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
+    final rows = await db.rawQuery(
+      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
+      'AND datetime($dateColumn) >= datetime(?) AND datetime($dateColumn) <= datetime(?) '
+      'ORDER BY datetime($dateColumn) DESC',
+      [userId, start.toIso8601String(), end.toIso8601String()],
+    );
+    return rows.map(_transactionFromRow).toList();
+  }
+
+  Future<Map<String, double>> getMonthlyStats(
+    String userId,
+    int month,
+    int year,
+  ) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      final monthly = list.where((t) => t.transactionDate.month == month && t.transactionDate.year == year).toList();
+      double income = 0;
+      double expense = 0;
+      for (final t in monthly) {
+        if (t.type == 'income') {
+          income += t.amount;
+        } else {
+          expense += t.amount;
+        }
+      }
+      return {
+        'income': income,
+        'expense': expense,
+        'balance': income - expense,
+      };
+    }
+    final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
+    
+    final monthStr = month.toString().padLeft(2, '0');
+    final yearStr = year.toString();
+
+    final result = await db.rawQuery(
+      '''
+      SELECT 
+        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
+        SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
+      FROM transactions
+      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      AND strftime('%m', $dateColumn) = ?
+      AND strftime('%Y', $dateColumn) = ?
+      ''',
+      [userId, monthStr, yearStr],
+    );
+
+    final totalIncome = (result.first['totalIncome'] as num?)?.toDouble() ?? 0.0;
+    final totalExpense = (result.first['totalExpense'] as num?)?.toDouble() ?? 0.0;
+
+    return {
+      'income': totalIncome,
+      'expense': totalExpense,
+      'balance': totalIncome - totalExpense,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> getCategoryStats(
+    String userId,
+    int month,
+    int year,
+  ) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      final filtered = list.where((t) => 
+        !t.isDeleted && 
+        t.transactionDate.month == month && 
+        t.transactionDate.year == year
+      ).toList();
+
+      final groups = <String, Map<String, dynamic>>{};
+      for (final t in filtered) {
+        final key = '${t.categoryId}_${t.type}';
+        if (groups.containsKey(key)) {
+          groups[key]!['totalAmount'] = (groups[key]!['totalAmount'] as double) + t.amount;
+        } else {
+          groups[key] = {
+            'categoryId': t.categoryId,
+            'categoryName': t.categoryName,
+            'totalAmount': t.amount,
+            'type': t.type,
+          };
+        }
+      }
+      final resultList = groups.values.toList();
+      resultList.sort((a, b) => (b['totalAmount'] as double).compareTo(a['totalAmount'] as double));
+      return resultList;
+    }
+    final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final dateColumn = await _transactionDateColumn(db);
+    
+    final monthStr = month.toString().padLeft(2, '0');
+    final yearStr = year.toString();
+
+    final result = await db.rawQuery(
+      '''
+      SELECT 
+        categoryId,
+        categoryName,
+        SUM(amount) as totalAmount,
+        type
+      FROM transactions
+      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      AND strftime('%m', $dateColumn) = ?
+      AND strftime('%Y', $dateColumn) = ?
+      GROUP BY categoryId, categoryName, type
+      ORDER BY totalAmount DESC
+      ''',
+      [userId, monthStr, yearStr],
+    );
+
+    return result.map((row) => {
+      'categoryId': row['categoryId']?.toString() ?? '',
+      'categoryName': row['categoryName']?.toString() ?? '',
+      'totalAmount': (row['totalAmount'] as num?)?.toDouble() ?? 0.0,
+      'type': row['type']?.toString() ?? 'expense',
+    }).toList();
+  }
+
+  // ==================== BASIC CRUD MIRRORED ====================
+
   Future<List<TransactionModel>> getAllTransactionsByUserId(
     String userId,
   ) async {
+    if (kIsWeb) {
+      return _firestoreService.getTransactions();
+    }
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final dateColumn = await _transactionDateColumn(db);
     final updatedColumn = await _transactionUpdatedColumn(db);
     final rows = await db.rawQuery(
-      'SELECT * FROM transactions WHERE $userColumn = ? '
+      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
       'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC',
       [userId],
     );
@@ -89,6 +383,11 @@ class FinanceRepository {
   }
 
   Future<TransactionModel?> getTransactionById(String userId, String id) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      final matched = list.where((t) => t.id == id).toList();
+      return matched.isNotEmpty ? matched.first : null;
+    }
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final rows = await db.query(
@@ -104,6 +403,28 @@ class FinanceRepository {
 
   Future<void> upsertTransaction(TransactionModel transaction) async {
     if (transaction.userId.isEmpty) return;
+
+    if (kIsWeb) {
+      final now = DateTime.now();
+      final normalized = transaction.copyWith(
+        id: transaction.id.isEmpty
+            ? now.millisecondsSinceEpoch.toString()
+            : transaction.id,
+        updatedAt: now,
+        createdAt: transaction.createdAt.year < 2000 ? now : transaction.createdAt,
+      );
+      if (transaction.id.isEmpty) {
+        await _firestoreService.addTransaction(normalized);
+      } else {
+        try {
+          await _firestoreService.updateTransaction(normalized);
+        } catch (_) {
+          await _firestoreService.addTransaction(normalized);
+        }
+      }
+      _notifyTransactionChanged(transaction.userId);
+      return;
+    }
 
     final db = await _databaseHelper.database;
     final oldTransaction = await getTransactionById(
@@ -131,14 +452,32 @@ class FinanceRepository {
     }
 
     _notifyTransactionChanged(transaction.userId);
+
+    // Online write
+    try {
+      if (transaction.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.addTransaction(normalized);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ thêm giao dịch Firestore: $e");
+    }
   }
 
   Future<void> deleteTransaction(String userId, String id) async {
+    if (kIsWeb) {
+      await _firestoreService.deleteTransaction(id);
+      _notifyTransactionChanged(userId);
+      return;
+    }
+
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final oldTransaction = await getTransactionById(userId, id);
-    await db.delete(
+    
+    // Soft delete locally
+    await db.update(
       'transactions',
+      {'isDeleted': 1, 'updatedAt': DateTime.now().toIso8601String(), 'isSynced': 0},
       where: 'id = ? AND $userColumn = ?',
       whereArgs: [id, userId],
     );
@@ -147,9 +486,22 @@ class FinanceRepository {
       await _syncBudgetSpentForTransaction(oldTransaction);
     }
     _notifyTransactionChanged(userId);
+
+    // Online soft delete
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        await _firestoreService.deleteTransaction(id);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ xóa giao dịch Firestore: $e");
+    }
   }
 
   Future<List<Budget>> getBudgets(String userId, int month, int year) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getBudgets();
+      return list.where((b) => b.userId == userId && b.month == month && b.year == year).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.query(
       'budgets',
@@ -166,6 +518,33 @@ class FinanceRepository {
   }
 
   Future<void> createBudget(Budget budget) async {
+    if (kIsWeb) {
+      final spent = await getSumExpenseByCategory(
+        budget.userId,
+        budget.categoryId,
+        budget.month,
+        budget.year,
+      );
+      final now = DateTime.now();
+      final normalized = budget.copyWith(
+        spentAmount: spent,
+        updatedAt: now,
+        createdAt: budget.createdAt.year < 2000 ? now : budget.createdAt,
+        status: _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
+      );
+      if (budget.id.isEmpty) {
+        await _firestoreService.addBudget(normalized);
+      } else {
+        try {
+          await _firestoreService.updateBudget(normalized);
+        } catch (_) {
+          await _firestoreService.addBudget(normalized);
+        }
+      }
+      _notifyTransactionChanged(budget.userId);
+      return;
+    }
+
     final db = await _databaseHelper.database;
     final spent = await getSumExpenseByCategory(
       budget.userId,
@@ -173,24 +552,48 @@ class FinanceRepository {
       budget.month,
       budget.year,
     );
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now();
     final normalized = budget.copyWith(
-      spentAmount: spent.round(),
+      spentAmount: spent,
       updatedAt: now,
-      createdAt: budget.createdAt == 0 ? now : budget.createdAt,
-      status: _resolveBudgetStatus(spent.round(), budget.limitAmount),
+      createdAt: budget.createdAt.year < 2000 ? now : budget.createdAt,
+      status: _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
     );
 
     await db.insert(
       'budgets',
-      normalized.toMap(),
+      normalized.toSqliteMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    try {
+      if (budget.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.addBudget(normalized);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ thêm ngân sách Firestore: $e");
+    }
+    _notifyTransactionChanged(budget.userId);
   }
 
-  Future<void> deleteBudget(String budgetId) async {
+  Future<void> deleteBudget(String userId, String budgetId) async {
+    if (kIsWeb) {
+      await _firestoreService.deleteBudget(budgetId);
+      _notifyTransactionChanged(userId);
+      return;
+    }
+
     final db = await _databaseHelper.database;
     await db.delete('budgets', where: 'id = ?', whereArgs: [budgetId]);
+
+    try {
+      if (await _isOnline()) {
+        await _firestoreService.deleteBudget(budgetId);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ xóa ngân sách Firestore: $e");
+    }
+    _notifyTransactionChanged(userId);
   }
 
   Future<void> refreshBudgetSpentForPeriod(
@@ -198,6 +601,26 @@ class FinanceRepository {
     int month,
     int year,
   ) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getBudgets();
+      final filtered = list.where((b) => b.userId == userId && b.month == month && b.year == year).toList();
+      for (final budget in filtered) {
+        final spent = await getSumExpenseByCategory(
+          userId,
+          budget.categoryId,
+          month,
+          year,
+        );
+        final updated = budget.copyWith(
+          spentAmount: spent,
+          updatedAt: DateTime.now(),
+          status: _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
+        );
+        await _firestoreService.updateBudget(updated);
+      }
+      return;
+    }
+
     final db = await _databaseHelper.database;
     final rows = await db.query(
       'budgets',
@@ -218,7 +641,8 @@ class FinanceRepository {
         {
           'spentAmount': spent.round(),
           'updatedAt': DateTime.now().millisecondsSinceEpoch,
-          'status': _resolveBudgetStatus(spent.round(), budget.limitAmount),
+          'status': _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
+          'isSynced': 0,
         },
         where: 'id = ?',
         whereArgs: [budget.id],
@@ -232,6 +656,22 @@ class FinanceRepository {
     int month,
     int year,
   ) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      final filtered = list.where((t) => 
+        t.categoryId == catId && 
+        t.type == 'expense' && 
+        !t.isDeleted && 
+        t.transactionDate.month == month && 
+        t.transactionDate.year == year
+      );
+      double total = 0.0;
+      for (final t in filtered) {
+        total += t.amount;
+      }
+      return total;
+    }
+
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final categoryColumn = await _transactionCategoryColumn(db);
@@ -241,6 +681,7 @@ class FinanceRepository {
       '''
       SELECT SUM(amount) as total FROM transactions
       WHERE $userColumn = ? AND $categoryColumn = ? AND type = 'expense'
+      AND (isDeleted = 0 OR isDeleted IS NULL)
       AND strftime('%m', $dateColumn) = ?
       AND strftime('%Y', $dateColumn) = ?
       ''',
@@ -253,6 +694,7 @@ class FinanceRepository {
   Future<void> _syncBudgetSpentForTransaction(
     TransactionModel transaction,
   ) async {
+    if (kIsWeb) return;
     if (transaction.type != 'expense' || transaction.categoryId.isEmpty) {
       return;
     }
@@ -271,6 +713,7 @@ class FinanceRepository {
     required int month,
     required int year,
   }) async {
+    if (kIsWeb) return;
     final db = await _databaseHelper.database;
     final spent = await getSumExpenseByCategory(
       userId,
@@ -292,6 +735,7 @@ class FinanceRepository {
           'spentAmount': spent.round(),
           'updatedAt': DateTime.now().millisecondsSinceEpoch,
           'status': _resolveBudgetStatus(spent.round(), limitAmount),
+          'isSynced': 0,
         },
         where: 'id = ?',
         whereArgs: [row['id']],
@@ -300,6 +744,17 @@ class FinanceRepository {
   }
 
   Future<DateTime?> getLatestBudgetPeriod(String userId) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getBudgets();
+      final filtered = list.where((b) => b.userId == userId).toList();
+      if (filtered.isEmpty) return null;
+      filtered.sort((a, b) {
+        if (a.year != b.year) return b.year.compareTo(a.year);
+        return b.month.compareTo(a.month);
+      });
+      return DateTime(filtered.first.year, filtered.first.month);
+    }
+
     final db = await _databaseHelper.database;
     final result = await db.rawQuery(
       '''
@@ -326,6 +781,25 @@ class FinanceRepository {
   }
 
   Future<List<FinanceSavingItem>> getSavingsByUserId(String userId) async {
+    if (kIsWeb) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('savings')
+          .get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return FinanceSavingItem(
+          id: _asInt(data['id']) ?? 0,
+          icon: data['icon']?.toString() ?? '🎯',
+          title: data['title']?.toString() ?? 'Mục tiêu',
+          currentAmount: _asInt(data['currentAmount'] ?? data['current_amount']) ?? 0,
+          targetAmount: _asInt(data['targetAmount'] ?? data['target_amount']) ?? 0,
+          deadline: _parseDate(data['deadline'] ?? data['targetDate'] ?? data['target_date']),
+          color: _parseColor(data['colorValue'] ?? data['color_value']),
+        );
+      }).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM savings WHERE COALESCE(userId, user_id) = ? ORDER BY id ASC',
@@ -357,10 +831,29 @@ class FinanceRepository {
     required String icon,
     required Color color,
   }) async {
+    if (kIsWeb) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final targetEpoch = deadline.millisecondsSinceEpoch;
+      final goal = SavingGoal(
+        id: now.toString(),
+        userId: userId,
+        icon: icon,
+        title: title,
+        currentAmount: 0,
+        targetAmount: targetAmount,
+        targetDate: targetEpoch,
+        createdAt: now,
+        updatedAt: now,
+        status: 'active',
+        colorValue: color.value,
+      );
+      await _firestoreService.addSaving(goal);
+      return;
+    }
     final db = await _databaseHelper.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final targetEpoch = deadline.millisecondsSinceEpoch;
-    await _insertWithCompatibleColumns(db, 'savings', {
+    final payload = {
       'id': now,
       'userId': userId,
       'user_id': userId,
@@ -380,12 +873,45 @@ class FinanceRepository {
       'updatedAt': now,
       'updated_at': now,
       'status': 'active',
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    };
+    await _insertWithCompatibleColumns(db, 'savings', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        final goal = _savingGoalFromRow(payload, userId);
+        await _firestoreService.addSaving(goal);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ thêm tiết kiệm Firestore: $e");
+    }
   }
 
   Future<List<FinanceInstallmentItem>> getInstallmentsByUserId(
     String userId,
   ) async {
+    if (kIsWeb) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return FinanceInstallmentItem(
+          id: _asInt(data['id']) ?? 0,
+          icon: data['icon']?.toString() ?? '🧾',
+          title: data['title']?.toString() ?? 'Kế hoạch',
+          totalAmount: _asInt(data['totalAmount'] ?? data['total_amount']) ?? 0,
+          paidAmount: _asInt(data['paidAmount'] ?? data['paid_amount']) ?? 0,
+          currentPeriod:
+              _asInt(data['currentPeriod'] ?? data['current_period'] ?? data['paidPeriods'] ?? data['paid_periods']) ?? 0,
+          totalPeriods:
+              _asInt(data['totalPeriods'] ?? data['total_periods']) ?? 0,
+          nextDueDate: _parseDate(data['nextDueDate'] ?? data['nextDueDateEpoch'] ?? data['next_due_date_epoch']),
+          color: _parseColor(data['colorValue'] ?? data['color_value']),
+        );
+      }).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM installments WHERE COALESCE(userId, user_id) = ? ORDER BY id ASC',
@@ -420,6 +946,35 @@ class FinanceRepository {
     required String icon,
     required Color color,
   }) async {
+    if (kIsWeb) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final plan = InstallmentPlan(
+        id: now.toString(),
+        userId: userId,
+        icon: icon,
+        title: title,
+        totalAmount: totalAmount,
+        paidAmount: 0,
+        monthlyPayment: totalPeriods > 0 ? (totalAmount / totalPeriods).round() : 0,
+        paidPeriods: 0,
+        totalPeriods: totalPeriods,
+        nextDueDate: nextDueDate.millisecondsSinceEpoch,
+        createdAt: now,
+        updatedAt: now,
+        status: 'active',
+      );
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .doc(now.toString())
+          .set({
+            ...plan.toMap(),
+            'colorValue': color.value,
+            'color_value': color.value,
+          });
+      return;
+    }
     final db = await _databaseHelper.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final nextDueEpoch = nextDueDate.millisecondsSinceEpoch;
@@ -427,7 +982,7 @@ class FinanceRepository {
     final monthlyPayment = totalPeriods > 0
         ? (totalAmount / totalPeriods).round()
         : 0;
-    await _insertWithCompatibleColumns(db, 'installments', {
+    final payload = {
       'id': now,
       'userId': userId,
       'user_id': userId,
@@ -437,6 +992,8 @@ class FinanceRepository {
       'total_amount': totalAmount,
       'paidAmount': 0,
       'paid_amount': 0,
+      'monthlyPayment': monthlyPayment,
+      'monthly_payment': monthlyPayment,
       'currentPeriod': paidPeriods,
       'current_period': paidPeriods,
       'paidPeriods': paidPeriods,
@@ -447,8 +1004,6 @@ class FinanceRepository {
       'next_due_date': nextDueDate.toIso8601String(),
       'nextDueDateEpoch': nextDueEpoch,
       'next_due_date_epoch': nextDueEpoch,
-      'monthlyPayment': monthlyPayment,
-      'monthly_payment': monthlyPayment,
       'colorValue': color.value,
       'color_value': color.value,
       'createdAt': now,
@@ -456,10 +1011,42 @@ class FinanceRepository {
       'updatedAt': now,
       'updated_at': now,
       'status': 'active',
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    };
+    await _insertWithCompatibleColumns(db, 'installments', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        final plan = _installmentPlanFromRow(payload, userId);
+        await _firestoreService.addInstallment(plan);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ trả góp Firestore: $e");
+    }
   }
 
   Future<List<FinanceDebtItem>> getDebtsByUserId(String userId) async {
+    if (kIsWeb) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return FinanceDebtItem(
+          id: _asInt(data['id']) ?? 0,
+          icon: data['icon']?.toString() ?? '💰',
+          title: data['title']?.toString() ?? 'Khoản vay',
+          lender: data['lender']?.toString() ?? data['lenderName']?.toString() ?? data['lender_name']?.toString() ?? 'Không rõ',
+          totalAmount: _asInt(data['totalAmount'] ?? data['total_amount']) ?? 0,
+          paidAmount: _asInt(data['paidAmount'] ?? data['paid_amount']) ?? 0,
+          monthlyPayment: _asInt(data['monthlyPayment'] ?? data['monthly_payment']) ?? 0,
+          dueDate: _parseDate(data['dueDate'] ?? data['due_date'] ?? data['nextDueDate'] ?? data['next_due_date']),
+          interestText: data['interestText']?.toString() ?? 'Chưa cập nhật',
+          color: _parseColor(data['colorValue'] ?? data['color_value']),
+        );
+      }).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM debts WHERE COALESCE(userId, user_id) = ? ORDER BY id ASC',
@@ -496,10 +1083,38 @@ class FinanceRepository {
     required String icon,
     required Color color,
   }) async {
+    if (kIsWeb) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final payload = {
+        'id': now.toString(),
+        'userId': userId,
+        'icon': icon,
+        'title': title,
+        'lenderName': lender,
+        'totalAmount': totalAmount,
+        'paidAmount': 0,
+        'monthlyPayment': monthlyPayment,
+        'interestRate': 0.0,
+        'nextDueDate': dueDate.millisecondsSinceEpoch,
+        'createdAt': now,
+        'updatedAt': now,
+        'status': 'active',
+        'interestText': interestText,
+        'colorValue': color.value,
+        'color_value': color.value,
+      };
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .doc(now.toString())
+          .set(payload);
+      return;
+    }
     final db = await _databaseHelper.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final nextDueEpoch = dueDate.millisecondsSinceEpoch;
-    await _insertWithCompatibleColumns(db, 'debts', {
+    final payload = {
       'id': now,
       'userId': userId,
       'user_id': userId,
@@ -529,27 +1144,60 @@ class FinanceRepository {
       'updatedAt': now,
       'updated_at': now,
       'status': 'active',
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    };
+    await _insertWithCompatibleColumns(db, 'debts', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        final debt = _debtRecordFromRow(payload, userId);
+        await _firestoreService.addDebt(debt);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ vay nợ Firestore: $e");
+    }
   }
 
   // ========== HOME PAGE FUNCTIONS ==========
 
-  /// Get financial overview for home page
-  /// Returns: {income, expense, balance, recentTransactions}
   Future<Map<String, dynamic>> getHomeOverview(String userId) async {
+    if (kIsWeb) {
+      final now = DateTime.now();
+      final list = await _firestoreService.getTransactions();
+      final monthly = list.where((t) => 
+        !t.isDeleted && 
+        t.transactionDate.month == now.month && 
+        t.transactionDate.year == now.year
+      ).toList();
+
+      double totalIncome = 0;
+      double totalExpense = 0;
+      for (final t in monthly) {
+        if (t.type == 'income') {
+          totalIncome += t.amount;
+        } else {
+          totalExpense += t.amount;
+        }
+      }
+      final recentTransactions = await getRecentTransactions(userId, limit: 5);
+      return {
+        'income': totalIncome,
+        'expense': totalExpense,
+        'balance': totalIncome - totalExpense,
+        'recentTransactions': recentTransactions,
+      };
+    }
     final now = DateTime.now();
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final dateColumn = await _transactionDateColumn(db);
 
-    // Get income and expense for current month
     final result = await db.rawQuery(
       '''
       SELECT 
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
       FROM transactions
-      WHERE $userColumn = ? 
+      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
       AND strftime('%m', $dateColumn) = ?
       AND strftime('%Y', $dateColumn) = ?
       ''',
@@ -561,7 +1209,6 @@ class FinanceRepository {
         (result.first['totalExpense'] as num?)?.toDouble() ?? 0;
     final balance = totalIncome - totalExpense;
 
-    // Get 5 most recent transactions
     final recentTransactions = await getRecentTransactions(userId, limit: 5);
 
     return {
@@ -572,17 +1219,20 @@ class FinanceRepository {
     };
   }
 
-  /// Get the N most recent transactions for a user
   Future<List<TransactionModel>> getRecentTransactions(
     String userId, {
     int limit = 5,
   }) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      return list.take(limit).toList();
+    }
     final db = await _databaseHelper.database;
     final userColumn = await _transactionUserColumn(db);
     final dateColumn = await _transactionDateColumn(db);
     final updatedColumn = await _transactionUpdatedColumn(db);
     final rows = await db.rawQuery(
-      'SELECT * FROM transactions WHERE $userColumn = ? '
+      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
       'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC '
       'LIMIT ?',
       [userId, limit],
@@ -591,21 +1241,19 @@ class FinanceRepository {
     return rows.map(_transactionFromRow).toList();
   }
 
-  /// Insert a new transaction and update related budget
-  /// If transaction is an expense, update the corresponding budget's spentAmount
   Future<void> insertTransaction(TransactionModel transaction) async {
     if (transaction.userId.isEmpty) {
       return;
     }
-
-    // Use upsertTransaction which already handles budget sync
     await upsertTransaction(transaction);
   }
 
   // ========== SAVING GOAL FUNCTIONS ==========
 
-  /// Get all saving goals for a user
   Future<List<SavingGoal>> getAllSavingGoals(String userId) async {
+    if (kIsWeb) {
+      return await _firestoreService.getSavings();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM savings WHERE COALESCE(userId, user_id) = ? ORDER BY COALESCE(createdAt, created_at, id) DESC',
@@ -615,8 +1263,12 @@ class FinanceRepository {
     return rows.map((row) => _savingGoalFromRow(row, userId)).toList();
   }
 
-  /// Get a specific saving goal
   Future<SavingGoal?> getSavingGoalById(String userId, String goalId) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getSavings();
+      final matched = list.where((s) => s.id == goalId).toList();
+      return matched.isNotEmpty ? matched.first : null;
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM savings WHERE id = ? AND COALESCE(userId, user_id) = ? LIMIT 1',
@@ -627,8 +1279,11 @@ class FinanceRepository {
     return _savingGoalFromRow(rows.first, userId);
   }
 
-  /// Update an existing saving goal
   Future<void> updateSavingGoal(SavingGoal goal) async {
+    if (kIsWeb) {
+      await _firestoreService.updateSaving(goal);
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.update(
       'savings',
@@ -644,26 +1299,53 @@ class FinanceRepository {
         'updatedAt': goal.updatedAt,
         'updated_at': goal.updatedAt,
         'status': goal.status,
+        'isSynced': 0,
       },
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [goal.id, goal.userId],
     );
+
+    try {
+      if (goal.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.updateSaving(goal);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ cập nhật tiết kiệm Firestore: $e");
+    }
   }
 
-  /// Delete a saving goal
   Future<void> deleteSavingGoal(String userId, String goalId) async {
+    if (kIsWeb) {
+      await _firestoreService.deleteSaving(goalId);
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.delete(
       'savings',
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [goalId, userId],
     );
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        await _firestoreService.deleteSaving(goalId);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ xóa tiết kiệm Firestore: $e");
+    }
   }
 
   // ========== DEBT RECORD FUNCTIONS ==========
 
-  /// Get all debt records for a user
   Future<List<DebtRecord>> getAllDebtRecords(String userId) async {
+    if (kIsWeb) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .get();
+      return snapshot.docs.map((doc) => DebtRecord.fromMap(doc.data())).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM debts WHERE COALESCE(userId, user_id) = ? ORDER BY COALESCE(createdAt, created_at, id) DESC',
@@ -673,8 +1355,17 @@ class FinanceRepository {
     return rows.map((row) => _debtRecordFromRow(row, userId)).toList();
   }
 
-  /// Get a specific debt record
   Future<DebtRecord?> getDebtRecordById(String userId, String debtId) async {
+    if (kIsWeb) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .doc(debtId)
+          .get();
+      if (!doc.exists || doc.data() == null) return null;
+      return DebtRecord.fromMap(doc.data()!);
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM debts WHERE id = ? AND COALESCE(userId, user_id) = ? LIMIT 1',
@@ -685,8 +1376,75 @@ class FinanceRepository {
     return _debtRecordFromRow(rows.first, userId);
   }
 
-  /// Update an existing debt record
+  Future<void> insertDebtRecord(DebtRecord debt) async {
+    if (kIsWeb) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final docId = debt.id.isNotEmpty ? debt.id : now.toString();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(debt.userId)
+          .collection('debts')
+          .doc(docId)
+          .set({
+            ...debt.toMap(),
+            'id': docId,
+            'colorValue': Colors.blue.value,
+            'color_value': Colors.blue.value,
+          }, SetOptions(merge: true));
+      return;
+    }
+    final db = await _databaseHelper.database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final payload = {
+      'id': int.tryParse(debt.id) ?? now,
+      'userId': debt.userId,
+      'user_id': debt.userId,
+      'icon': '💰',
+      'title': debt.title,
+      'lender': debt.lenderName,
+      'lenderName': debt.lenderName,
+      'lender_name': debt.lenderName,
+      'totalAmount': debt.totalAmount,
+      'total_amount': debt.totalAmount,
+      'paidAmount': debt.paidAmount,
+      'paid_amount': debt.paidAmount,
+      'monthlyPayment': debt.monthlyPayment,
+      'monthly_payment': debt.monthlyPayment,
+      'interestRate': debt.interestRate,
+      'interest_rate': debt.interestRate,
+      'dueDate': DateTime.fromMillisecondsSinceEpoch(debt.nextDueDate).toIso8601String(),
+      'due_date': DateTime.fromMillisecondsSinceEpoch(debt.nextDueDate).toIso8601String(),
+      'nextDueDate': debt.nextDueDate,
+      'next_due_date': debt.nextDueDate,
+      'colorValue': Colors.blue.value,
+      'color_value': Colors.blue.value,
+      'createdAt': debt.createdAt == 0 ? now : debt.createdAt,
+      'created_at': debt.createdAt == 0 ? now : debt.createdAt,
+      'updatedAt': now,
+      'updated_at': now,
+      'status': debt.status,
+    };
+    await _insertWithCompatibleColumns(db, 'debts', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    try {
+      if (debt.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.addDebt(debt);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ thêm vay nợ Firestore: $e");
+    }
+  }
+
   Future<void> updateDebtRecord(DebtRecord debt) async {
+    if (kIsWeb) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(debt.userId)
+          .collection('debts')
+          .doc(debt.id)
+          .update(debt.toMap());
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.update(
       'debts',
@@ -714,26 +1472,58 @@ class FinanceRepository {
         'updatedAt': debt.updatedAt,
         'updated_at': debt.updatedAt,
         'status': debt.status,
+        'isSynced': 0,
       },
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [debt.id, debt.userId],
     );
+
+    try {
+      if (debt.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.updateDebt(debt);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ cập nhật vay nợ Firestore: $e");
+    }
   }
 
-  /// Delete a debt record
   Future<void> deleteDebtRecord(String userId, String debtId) async {
+    if (kIsWeb) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .doc(debtId)
+          .delete();
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.delete(
       'debts',
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [debtId, userId],
     );
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        await _firestoreService.deleteDebt(debtId);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ xóa vay nợ Firestore: $e");
+    }
   }
 
   // ========== INSTALLMENT PLAN FUNCTIONS ==========
 
-  /// Get all installment plans for a user
   Future<List<InstallmentPlan>> getAllInstallmentPlans(String userId) async {
+    if (kIsWeb) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .get();
+      return snapshot.docs.map((doc) => InstallmentPlan.fromMap(doc.data())).toList();
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM installments WHERE COALESCE(userId, user_id) = ? ORDER BY COALESCE(createdAt, created_at, id) DESC',
@@ -743,11 +1533,20 @@ class FinanceRepository {
     return rows.map((row) => _installmentPlanFromRow(row, userId)).toList();
   }
 
-  /// Get a specific installment plan
   Future<InstallmentPlan?> getInstallmentPlanById(
     String userId,
     String planId,
   ) async {
+    if (kIsWeb) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .doc(planId)
+          .get();
+      if (!doc.exists || doc.data() == null) return null;
+      return InstallmentPlan.fromMap(doc.data()!);
+    }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
       'SELECT * FROM installments WHERE id = ? AND COALESCE(userId, user_id) = ? LIMIT 1',
@@ -758,8 +1557,76 @@ class FinanceRepository {
     return _installmentPlanFromRow(rows.first, userId);
   }
 
-  /// Update an existing installment plan
+  Future<void> insertInstallmentPlan(InstallmentPlan plan) async {
+    if (kIsWeb) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final docId = plan.id.isNotEmpty ? plan.id : now.toString();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(plan.userId)
+          .collection('installments')
+          .doc(docId)
+          .set({
+            ...plan.toMap(),
+            'id': docId,
+            'colorValue': Colors.purple.value,
+            'color_value': Colors.purple.value,
+          }, SetOptions(merge: true));
+      return;
+    }
+    final db = await _databaseHelper.database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final payload = {
+      'id': int.tryParse(plan.id) ?? now,
+      'userId': plan.userId,
+      'user_id': plan.userId,
+      'icon': plan.icon,
+      'title': plan.title,
+      'totalAmount': plan.totalAmount,
+      'total_amount': plan.totalAmount,
+      'paidAmount': plan.paidAmount,
+      'paid_amount': plan.paidAmount,
+      'monthlyPayment': plan.monthlyPayment,
+      'monthly_payment': plan.monthlyPayment,
+      'currentPeriod': plan.paidPeriods,
+      'current_period': plan.paidPeriods,
+      'paidPeriods': plan.paidPeriods,
+      'paid_periods': plan.paidPeriods,
+      'totalPeriods': plan.totalPeriods,
+      'total_periods': plan.totalPeriods,
+      'nextDueDate': DateTime.fromMillisecondsSinceEpoch(plan.nextDueDate).toIso8601String(),
+      'next_due_date': DateTime.fromMillisecondsSinceEpoch(plan.nextDueDate).toIso8601String(),
+      'nextDueDateEpoch': plan.nextDueDate,
+      'next_due_date_epoch': plan.nextDueDate,
+      'colorValue': Colors.purple.value,
+      'color_value': Colors.purple.value,
+      'createdAt': plan.createdAt == 0 ? now : plan.createdAt,
+      'created_at': plan.createdAt == 0 ? now : plan.createdAt,
+      'updatedAt': now,
+      'updated_at': now,
+      'status': plan.status,
+    };
+    await _insertWithCompatibleColumns(db, 'installments', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    try {
+      if (plan.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.addInstallment(plan);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ thêm trả góp Firestore: $e");
+    }
+  }
+
   Future<void> updateInstallmentPlan(InstallmentPlan plan) async {
+    if (kIsWeb) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(plan.userId)
+          .collection('installments')
+          .doc(plan.id)
+          .update(plan.toMap());
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.update(
       'installments',
@@ -789,110 +1656,504 @@ class FinanceRepository {
         'updatedAt': plan.updatedAt,
         'updated_at': plan.updatedAt,
         'status': plan.status,
+        'isSynced': 0,
       },
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [plan.id, plan.userId],
     );
+
+    try {
+      if (plan.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.updateInstallment(plan);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ cập nhật trả góp Firestore: $e");
+    }
   }
 
-  /// Delete an installment plan
   Future<void> deleteInstallmentPlan(String userId, String planId) async {
+    if (kIsWeb) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .doc(planId)
+          .delete();
+      return;
+    }
     final db = await _databaseHelper.database;
     await db.delete(
       'installments',
       where: 'id = ? AND COALESCE(userId, user_id) = ?',
       whereArgs: [planId, userId],
     );
+
+    try {
+      if (userId != demoUserId && await _isOnline()) {
+        await _firestoreService.deleteInstallment(planId);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ xóa trả góp Firestore: $e");
+    }
   }
 
-  // ========== BUDGET FUNCTIONS ==========
+  // ========== WALLET FUNCTIONS ==========
 
-  /// Update or create a budget with validation
-  /// Checks if budget for this category exists in current month
-  /// Returns true if new budget was created, false if updated
-  Future<bool> upsertBudgetForCategory({
-    required String userId,
-    required String categoryId,
-    required int limitAmount,
-    required int month,
-    required int year,
-  }) async {
+  Future<List<Map<String, dynamic>>> getWalletsByUserId(String userId) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getWallets();
+      return list.map((w) => w.toMap()).toList();
+    }
     final db = await _databaseHelper.database;
-    final category = _findCategory(categoryId);
+    return await db.rawQuery(
+      'SELECT * FROM wallets WHERE COALESCE(userId, user_id) = ? ORDER BY name ASC',
+      [userId],
+    );
+  }
 
-    // Check if budget already exists
-    final existing = await db.query(
-      'budgets',
-      where: 'userId = ? AND categoryId = ? AND month = ? AND year = ?',
-      whereArgs: [userId, categoryId, month, year],
+  Future<double> getTotalWalletBalance(String userId) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getWallets();
+      return list.fold<double>(0.0, (sum, w) => sum + w.balance);
+    }
+    final db = await _databaseHelper.database;
+    final result = await db.rawQuery(
+      'SELECT SUM(balance) AS total FROM wallets WHERE COALESCE(userId, user_id) = ?',
+      [userId],
+    );
+    return (result.first['total'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  Future<int> getTransactionCountByUserId(String userId) async {
+    if (kIsWeb) {
+      final list = await _firestoreService.getTransactions();
+      return list.length;
+    }
+    final db = await _databaseHelper.database;
+    final userColumn = await _transactionUserColumn(db);
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)',
+      [userId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<void> upsertWallet(WalletModel wallet) async {
+    if (kIsWeb) {
+      try {
+        await _firestoreService.updateWallet(wallet);
+      } catch (_) {
+        await _firestoreService.addWallet(wallet);
+      }
+      return;
+    }
+    final db = await _databaseHelper.database;
+    await db.insert(
+      'wallets',
+      wallet.toSqliteMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    try {
+      if (wallet.userId != demoUserId && await _isOnline()) {
+        await _firestoreService.addWallet(wallet);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ ví lên Firestore: $e");
+    }
+  }
+
+  Future<void> ensureDefaultWalletsForUser(String userId) async {
+    if (kIsWeb) {
+      final wallets = await _firestoreService.getWallets();
+      if (wallets.isEmpty) {
+        final now = DateTime.now();
+        
+        final cashWallet = WalletModel(
+          id: 'wallet_cash_$userId',
+          userId: userId,
+          name: 'Tiền mặt',
+          balance: 0,
+          type: 'cash',
+          color: Colors.green.value,
+          icon: 'cash',
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        final bankWallet = WalletModel(
+          id: 'wallet_bank_$userId',
+          userId: userId,
+          name: 'Tài khoản ngân hàng',
+          balance: 0,
+          type: 'bank',
+          color: Colors.blue.value,
+          icon: 'bank',
+          isDefault: false,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await _firestoreService.addWallet(cashWallet);
+        await _firestoreService.addWallet(bankWallet);
+      }
+      return;
+    }
+    final db = await _databaseHelper.database;
+    final walletCount = Sqflite.firstIntValue(await db.rawQuery(
+      'SELECT COUNT(*) FROM wallets WHERE COALESCE(userId, user_id) = ?',
+      [userId],
+    )) ?? 0;
+
+    if (walletCount == 0) {
+      final now = DateTime.now();
+      
+      final cashWallet = WalletModel(
+        id: 'wallet_cash_$userId',
+        userId: userId,
+        name: 'Tiền mặt',
+        balance: 0,
+        type: 'cash',
+        color: Colors.green.value,
+        icon: 'cash',
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final bankWallet = WalletModel(
+        id: 'wallet_bank_$userId',
+        userId: userId,
+        name: 'Tài khoản ngân hàng',
+        balance: 0,
+        type: 'bank',
+        color: Colors.blue.value,
+        icon: 'bank',
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await db.transaction((txn) async {
+        await txn.insert('wallets', cashWallet.toSqliteMap());
+        await txn.insert('wallets', bankWallet.toSqliteMap());
+      });
+
+      try {
+        if (userId != demoUserId && await _isOnline()) {
+          await _firestoreService.addWallet(cashWallet);
+          await _firestoreService.addWallet(bankWallet);
+        }
+      } catch (e) {
+        print("Lỗi đồng bộ tạo ví mặc định Firestore: $e");
+      }
+    }
+  }
+
+  // ==================== COOPERATION ENGINE: SYNC ENGINE ====================
+
+  Future<void> syncWithFirebase(String userId) async {
+    if (kIsWeb) return;
+    if (userId.isEmpty || userId == demoUserId) return;
+    final online = await _isOnline();
+    if (!online) return;
+
+    try {
+      final db = await _databaseHelper.database;
+
+      // 1. SYNC WALLETS
+      final localWalletsRaw = await getWalletsByUserId(userId);
+      final localWallets = localWalletsRaw.map((row) => WalletModel.fromMap(row)).toList();
+      final remoteWallets = await _firestoreService.getWallets();
+
+      final walletsToPush = <WalletModel>[];
+      for (final local in localWallets) {
+        final remote = remoteWallets.firstWhere((w) => w.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt.isAfter(remote.updatedAt)) {
+          walletsToPush.add(local);
+        }
+      }
+      for (final remote in remoteWallets) {
+        final local = localWallets.firstWhere((w) => w.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt.isAfter(local.updatedAt)) {
+          await db.insert('wallets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // 2. SYNC TRANSACTIONS
+      final txSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('transactions')
+          .get();
+      final remoteTx = txSnapshot.docs
+          .map((doc) => TransactionModel.fromMap(doc.data(), doc.id))
+          .toList();
+
+      final localTxRaw = await db.query(
+        'transactions',
+        where: 'COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
+      );
+      final localTx = localTxRaw.map(_transactionFromRow).toList();
+
+      final txToPush = <TransactionModel>[];
+      for (final local in localTx) {
+        final remote = remoteTx.firstWhere((t) => t.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt.isAfter(remote.updatedAt)) {
+          txToPush.add(local);
+        }
+      }
+      for (final remote in remoteTx) {
+        final local = localTx.firstWhere((t) => t.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt.isAfter(local.updatedAt)) {
+          await db.insert('transactions', _transactionToRow(remote), conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // 3. SYNC BUDGETS
+      final budgetSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('budgets')
+          .get();
+      final remoteBudgets = budgetSnapshot.docs
+          .map((doc) => Budget.fromMap(doc.data(), doc.id))
+          .toList();
+
+      final localBudgetsRaw = await db.query(
+        'budgets',
+        where: 'COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
+      );
+      final localBudgets = localBudgetsRaw.map((row) => _budgetFromRow(row, userId)).toList();
+
+      final budgetsToPush = <Budget>[];
+      for (final local in localBudgets) {
+        final remote = remoteBudgets.firstWhere((b) => b.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt.isAfter(remote.updatedAt)) {
+          budgetsToPush.add(local);
+        }
+      }
+      for (final remote in remoteBudgets) {
+        final local = localBudgets.firstWhere((b) => b.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt.isAfter(local.updatedAt)) {
+          await db.insert('budgets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // 4. SYNC SAVINGS
+      final savingSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('savings')
+          .get();
+      final remoteSavings = savingSnapshot.docs
+          .map((doc) => SavingGoal.fromMap(doc.data()))
+          .toList();
+
+      final localSavings = await getAllSavingGoals(userId);
+
+      final savingsToPush = <SavingGoal>[];
+      for (final local in localSavings) {
+        final remote = remoteSavings.firstWhere((s) => s.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt > remote.updatedAt) {
+          savingsToPush.add(local);
+        }
+      }
+      for (final remote in remoteSavings) {
+        final local = localSavings.firstWhere((s) => s.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt > local.updatedAt) {
+          await _insertWithCompatibleColumns(db, 'savings', {
+            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'userId': userId,
+            'user_id': userId,
+            'icon': remote.icon,
+            'title': remote.title,
+            'currentAmount': remote.currentAmount,
+            'current_amount': remote.currentAmount,
+            'targetAmount': remote.targetAmount,
+            'target_amount': remote.targetAmount,
+            'deadline': DateTime.fromMillisecondsSinceEpoch(remote.targetDate).toIso8601String(),
+            'targetDate': remote.targetDate,
+            'target_date': remote.targetDate,
+            'createdAt': remote.createdAt,
+            'created_at': remote.createdAt,
+            'updatedAt': remote.updatedAt,
+            'updated_at': remote.updatedAt,
+            'status': remote.status,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // 5. SYNC DEBTS
+      final debtSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('debts')
+          .get();
+      final remoteDebts = debtSnapshot.docs
+          .map((doc) => DebtRecord.fromMap(doc.data()))
+          .toList();
+
+      final localDebts = await getAllDebtRecords(userId);
+
+      final debtsToPush = <DebtRecord>[];
+      for (final local in localDebts) {
+        final remote = remoteDebts.firstWhere((d) => d.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt > remote.updatedAt) {
+          debtsToPush.add(local);
+        }
+      }
+      for (final remote in remoteDebts) {
+        final local = localDebts.firstWhere((d) => d.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt > local.updatedAt) {
+          await _insertWithCompatibleColumns(db, 'debts', {
+            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'userId': userId,
+            'user_id': userId,
+            'title': remote.title,
+            'lender': remote.lenderName,
+            'lenderName': remote.lenderName,
+            'lender_name': remote.lenderName,
+            'totalAmount': remote.totalAmount,
+            'total_amount': remote.totalAmount,
+            'paidAmount': remote.paidAmount,
+            'paid_amount': remote.paidAmount,
+            'monthlyPayment': remote.monthlyPayment,
+            'monthly_payment': remote.monthlyPayment,
+            'interestRate': remote.interestRate,
+            'interest_rate': remote.interestRate,
+            'dueDate': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'due_date': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'nextDueDate': remote.nextDueDate,
+            'next_due_date': remote.nextDueDate,
+            'createdAt': remote.createdAt,
+            'created_at': remote.createdAt,
+            'updatedAt': remote.updatedAt,
+            'updated_at': remote.updatedAt,
+            'status': remote.status,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // 6. SYNC INSTALLMENTS
+      final installmentSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('installments')
+          .get();
+      final remoteInstallments = installmentSnapshot.docs
+          .map((doc) => InstallmentPlan.fromMap(doc.data()))
+          .toList();
+
+      final localInstallments = await getAllInstallmentPlans(userId);
+
+      final installmentsToPush = <InstallmentPlan>[];
+      for (final local in localInstallments) {
+        final remote = remoteInstallments.firstWhere((i) => i.id == local.id, orElse: () => null as dynamic);
+        if (local.updatedAt > remote.updatedAt) {
+          installmentsToPush.add(local);
+        }
+      }
+      for (final remote in remoteInstallments) {
+        final local = localInstallments.firstWhere((i) => i.id == remote.id, orElse: () => null as dynamic);
+        if (remote.updatedAt > local.updatedAt) {
+          await _insertWithCompatibleColumns(db, 'installments', {
+            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'userId': userId,
+            'user_id': userId,
+            'icon': remote.icon,
+            'title': remote.title,
+            'totalAmount': remote.totalAmount,
+            'total_amount': remote.totalAmount,
+            'paidAmount': remote.paidAmount,
+            'paid_amount': remote.paidAmount,
+            'monthlyPayment': remote.monthlyPayment,
+            'monthly_payment': remote.monthlyPayment,
+            'currentPeriod': remote.paidPeriods,
+            'current_period': remote.paidPeriods,
+            'paidPeriods': remote.paidPeriods,
+            'paid_periods': remote.paidPeriods,
+            'totalPeriods': remote.totalPeriods,
+            'total_periods': remote.totalPeriods,
+            'nextDueDate': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'next_due_date': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'nextDueDateEpoch': remote.nextDueDate,
+            'next_due_date_epoch': remote.nextDueDate,
+            'createdAt': remote.createdAt,
+            'created_at': remote.createdAt,
+            'updatedAt': remote.updatedAt,
+            'updated_at': remote.updatedAt,
+            'status': remote.status,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      // Execute batch write to Firestore for items updated locally
+      if (walletsToPush.isNotEmpty ||
+          txToPush.isNotEmpty ||
+          budgetsToPush.isNotEmpty ||
+          savingsToPush.isNotEmpty ||
+          debtsToPush.isNotEmpty ||
+          installmentsToPush.isNotEmpty) {
+        await _firestoreService.batchWrite(
+          wallets: walletsToPush,
+          transactions: txToPush,
+          budgets: budgetsToPush,
+          savings: savingsToPush,
+          debts: debtsToPush,
+          installments: installmentsToPush,
+        );
+      }
+
+      _notifyTransactionChanged(userId);
+    } catch (e) {
+      print("Lỗi syncWithFirebase: $e");
+    }
+  }
+
+  // ========== AUTH SESSION FUNCTIONS ==========
+
+  Future<Map<String, dynamic>?> getAuthSessionByUserId(String userId) async {
+    if (kIsWeb) {
+      final profile = await _firestoreService.getProfile();
+      if (profile != null) return profile;
+      final user = FirebaseAuth.instance.currentUser;
+      return {
+        'userId': userId,
+        'user_id': userId,
+        'email': user?.email ?? '',
+        'displayName': user?.displayName ?? '',
+        'photoURL': user?.photoURL ?? '',
+        'photo_url': user?.photoURL ?? '',
+        'role': 'user',
+      };
+    }
+    final db = await _databaseHelper.database;
+    final rows = await db.query(
+      'auth_session',
+      where: 'userId = ?',
+      whereArgs: [userId],
       limit: 1,
     );
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final spent = await getSumExpenseByCategory(
-      userId,
-      categoryId,
-      month,
-      year,
-    );
-
-    if (existing.isNotEmpty) {
-      // Update existing budget
-      await db.update(
-        'budgets',
-        {
-          'limitAmount': limitAmount,
-          'updatedAt': now,
-          'status': _resolveBudgetStatus(spent.round(), limitAmount),
-        },
-        where: 'userId = ? AND categoryId = ? AND month = ? AND year = ?',
-        whereArgs: [userId, categoryId, month, year],
-      );
-      return false;
-    } else {
-      // Create new budget
-      await db.insert('budgets', {
-        'id': '${categoryId}_${userId}_${month}_${year}',
-        'userId': userId,
-        'categoryId': categoryId,
-        'categoryName': category?.name ?? 'Không rõ',
-        'icon': category?.icon ?? '🏷️',
-        'month': month,
-        'year': year,
-        'limitAmount': limitAmount,
-        'spentAmount': spent.round(),
-        'createdAt': now,
-        'updatedAt': now,
-        'status': _resolveBudgetStatus(spent.round(), limitAmount),
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-      return true;
-    }
+    if (rows.isEmpty) return null;
+    return rows.first;
   }
 
-  /// Get budget status for all categories
-  Future<Map<String, dynamic>> getBudgetStatus(
-    String userId,
-    int month,
-    int year,
-  ) async {
-    final budgets = await getBudgets(userId, month, year);
-    double totalLimit = 0;
-    double totalSpent = 0;
-
-    for (final budget in budgets) {
-      totalLimit += budget.limitAmount;
-      totalSpent += budget.spentAmount;
+  Future<void> upsertAuthSession(Map<String, dynamic> payload) async {
+    if (kIsWeb) {
+      await _firestoreService.updateProfile(payload);
+      return;
     }
-
-    return {
-      'totalLimit': totalLimit,
-      'totalSpent': totalSpent,
-      'remaining': totalLimit - totalSpent,
-      'percentUsed': totalLimit > 0
-          ? ((totalSpent / totalLimit) * 100).toStringAsFixed(1)
-          : '0',
-      'budgets': budgets,
-    };
+    final db = await _databaseHelper.database;
+    await db.insert(
+      'auth_session',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ========== HELPER FUNCTIONS FOR MODEL CONVERSION ==========
@@ -986,116 +2247,7 @@ class FinanceRepository {
     );
   }
 
-  // ========== AUTH SESSION FUNCTIONS ==========
-
-  Future<Map<String, dynamic>?> getAuthSessionByUserId(String userId) async {
-    final db = await _databaseHelper.database;
-    final rows = await db.query(
-      'auth_session',
-      where: 'userId = ?',
-      whereArgs: [userId],
-      limit: 1,
-    );
-
-    if (rows.isEmpty) return null;
-    return rows.first;
-  }
-
-  Future<void> upsertAuthSession(Map<String, dynamic> payload) async {
-    final db = await _databaseHelper.database;
-    await db.insert(
-      'auth_session',
-      payload,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> getWalletsByUserId(String userId) async {
-    final db = await _databaseHelper.database;
-    // Use rawQuery with COALESCE to handle both userId and user_id columns for backward compatibility
-    final rows = await db.rawQuery(
-      'SELECT * FROM wallets WHERE COALESCE(userId, user_id) = ? ORDER BY name ASC',
-      [userId],
-    );
-    return rows;
-  }
-
-  Future<double> getTotalWalletBalance(String userId) async {
-    final db = await _databaseHelper.database;
-    // Use COALESCE to handle both userId and user_id columns for backward compatibility
-    final rows = await db.rawQuery(
-      'SELECT SUM(balance) AS total FROM wallets WHERE COALESCE(userId, user_id) = ?',
-      [userId],
-    );
-
-    return (rows.first['total'] as num?)?.toDouble() ?? 0;
-  }
-
-  Future<int> getTransactionCountByUserId(String userId) async {
-    final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
-    final rows = await db.rawQuery(
-      'SELECT COUNT(*) AS total FROM transactions WHERE $userColumn = ?',
-      [userId],
-    );
-    return (rows.first['total'] as num?)?.toInt() ?? 0;
-  }
-
-  /// Creates default wallets for a user if they don't have any
-  /// Seeds them with the user's actual transaction balance
-  Future<void> ensureDefaultWalletsForUser(String userId) async {
-    final db = await _databaseHelper.database;
-
-    // Check if user already has any wallets
-    final walletCount =
-        Sqflite.firstIntValue(
-          await db.rawQuery(
-            'SELECT COUNT(*) FROM wallets WHERE COALESCE(userId, user_id) = ?',
-            [userId],
-          ),
-        ) ??
-        0;
-
-    // If user has no wallets, create default ones
-    if (walletCount == 0) {
-      // Calculate user's actual balance from transactions
-      final rows = await db.rawQuery(
-        '''
-        SELECT 
-          SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
-          SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
-        FROM transactions 
-        WHERE COALESCE(userId, user_id) = ?
-      ''',
-        [userId],
-      );
-
-      double totalIncome = (rows.first['totalIncome'] as num?)?.toDouble() ?? 0;
-      double totalExpense =
-          (rows.first['totalExpense'] as num?)?.toDouble() ?? 0;
-      double balance = totalIncome - totalExpense;
-
-      await db.transaction((txn) async {
-        await txn.insert('wallets', {
-          'id': 'wallet_cash_${userId}',
-          'name': 'Ví tiền mặt',
-          'balance': balance,
-          'userId': userId,
-          'user_id': userId, // For backward compatibility
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-        await txn.insert('wallets', {
-          'id': 'wallet_bank_${userId}',
-          'name': 'Tài khoản ngân hàng',
-          'balance': 0,
-          'userId': userId,
-          'user_id': userId, // For backward compatibility
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-      });
-    }
-  }
-
-  Map<String, Object?> _transactionToRow(TransactionModel transaction) {
+  Map<String, dynamic> _transactionToRow(TransactionModel transaction) {
     final transactionDateIso = transaction.transactionDate.toIso8601String();
     final createdAtIso = transaction.createdAt.toIso8601String();
     final updatedAtIso = transaction.updatedAt.toIso8601String();
@@ -1119,10 +2271,25 @@ class FinanceRepository {
       'created_at': createdAtIso,
       'updatedAt': updatedAtIso,
       'updated_at': updatedAtIso,
+      'isDeleted': transaction.isDeleted ? 1 : 0,
+      'receiptImageUrl': transaction.receiptImageUrl,
+      'tags': transaction.tags != null ? jsonEncode(transaction.tags) : null,
+      'recurringId': transaction.recurringId,
     };
   }
 
   TransactionModel _transactionFromRow(Map<String, Object?> row) {
+    List<String>? parsedTags;
+    final rawTags = row['tags']?.toString();
+    if (rawTags != null && rawTags.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawTags);
+        if (decoded is List) {
+          parsedTags = decoded.map((e) => e.toString()).toList();
+        }
+      } catch (_) {}
+    }
+
     return TransactionModel(
       id: row['id']?.toString() ?? '',
       userId: row['userId']?.toString() ?? row['user_id']?.toString() ?? '',
@@ -1154,6 +2321,10 @@ class FinanceRepository {
             row['transaction_date'] ??
             row['date'],
       ),
+      isDeleted: _asInt(row['isDeleted']) == 1,
+      receiptImageUrl: row['receiptImageUrl']?.toString(),
+      tags: parsedTags,
+      recurringId: row['recurringId']?.toString(),
     );
   }
 
@@ -1191,10 +2362,11 @@ class FinanceRepository {
           : category?.icon ?? '🏷️',
       month: _asInt(row['month']) ?? DateTime.now().month,
       year: _asInt(row['year']) ?? DateTime.now().year,
-      limitAmount: limitAmount,
-      spentAmount: spentAmount,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
+      limitAmount: limitAmount.toDouble(),
+      spentAmount: spentAmount.toDouble(),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(createdAt),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAt),
+      isActive: true,
       status: row['status']?.toString().isNotEmpty == true
           ? row['status'].toString()
           : '',

@@ -47,11 +47,12 @@ class _LoginPageState extends State<LoginPage>
 
   Future<void> login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      if (mounted)
+      if (mounted) {
         SnackbarUtils.showError(
           context,
           "Vui lòng nhập đầy đủ email và mật khẩu".xtr(context),
         );
+      }
       return;
     }
     try {

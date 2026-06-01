@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 // Đảm bảo đường dẫn import đúng với cấu trúc dự án của bạn
 import '../../domain/model/transaction_model.dart';
 import '../../data/repository/transaction_repository.dart';
+import '../../services/sync_service.dart';
 
 class TransactionController extends ChangeNotifier {
   static const String _demoUserId = 'user_001';
@@ -53,6 +54,7 @@ class TransactionController extends ChangeNotifier {
       final effectiveUserId = _resolveUserId();
       final normalizedTx = tx.copyWith(userId: effectiveUserId);
       await _repository.addTransaction(normalizedTx, effectiveUserId);
+      SyncService().triggerImmediateSync();
       await fetchAllTransactions(
         effectiveUserId,
       ); // Cập nhật lại dữ liệu mới nhất
@@ -67,6 +69,7 @@ class TransactionController extends ChangeNotifier {
     try {
       final effectiveUserId = _resolveUserId();
       await _repository.deleteTransaction(transactionId, effectiveUserId);
+      SyncService().triggerImmediateSync();
       await fetchAllTransactions(effectiveUserId);
     } catch (e) {
       debugPrint("Lỗi khi xóa giao dịch: $e");

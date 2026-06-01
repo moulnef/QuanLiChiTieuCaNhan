@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/bank_interest.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/services/ocr_service.dart';
 
 // Helper formatters
@@ -20,13 +22,17 @@ class DebtTabPage extends StatefulWidget {
 }
 
 class _DebtTabPageState extends State<DebtTabPage> {
+  final FirestoreService _firestoreService = FirestoreService();
   final OCRService _ocrService = OCRService();
+  String _filter = 'active'; // 'all', 'active' (chưa xong), 'settled' (đã xong)
 
   @override
   void dispose() {
     _ocrService.dispose();
     super.dispose();
   }
+
+  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
   Future<void> _scanAmount(TextEditingController controller) async {
     if (kIsWeb) {
@@ -54,45 +60,45 @@ class _DebtTabPageState extends State<DebtTabPage> {
     controller.text = amount.toStringAsFixed(0);
   }
 
-  // Logic thanh toán nợ
-  Future<void> _handlePay(FinanceDebtItem item) async {
-    final financeProvider = Provider.of<FinanceProvider>(
-      context,
-      listen: false,
-    );
+  Future<void> _handlePay(DebtRecord item) async {
+    final cleanName = item.lenderName.replaceAll('cho_vay|', '').replaceAll('di_vay|', '');
+    final isChoVay = item.lenderName.startsWith('cho_vay|');
 
     final amount = await _showAmountDialog(
-      title: 'Thanh toán khoản vay',
-      actionLabel: 'Thanh toán',
+      title: isChoVay ? 'Thu nợ từ $cleanName' : 'Thanh toán nợ cho $cleanName',
+      actionLabel: 'Xác nhận',
       maxAmount: item.remainingAmount,
     );
 
-    if (amount == null) return;
+    if (!mounted || amount == null) return;
 
-    Future.microtask(() async {
-      try {
-        await financeProvider.payDebt(item.id, amount);
+    try {
+      final newPaid = item.paidAmount + amount;
+      final isSettled = newPaid >= item.totalAmount;
+      final updated = item.copyWith(
+        paidAmount: newPaid,
+        status: isSettled ? 'settled' : 'active',
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
 
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Đã thanh toán ${formatCurrency(amount)} cho "${item.title}"',
-            ),
-            behavior: SnackBarBehavior.floating,
+      await context.read<FinanceProvider>().updateDebtRecord(updated);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isChoVay
+                ? 'Đã thu ${formatCurrency(amount)} từ "$cleanName" ${isSettled ? '🎉 Đã tất toán!' : ''}'
+                : 'Đã trả ${formatCurrency(amount)} cho "$cleanName" ${isSettled ? '🎉 Đã tất toán!' : ''}',
           ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<int?> _showAmountDialog({
@@ -124,7 +130,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
                 keyboardType: TextInputType.number,
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: 'Số tiền thanh toán',
+                  labelText: 'Số tiền',
                   suffixText: '₫',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -139,8 +145,9 @@ class _DebtTabPageState extends State<DebtTabPage> {
                 validator: (value) {
                   final val = int.tryParse(value ?? '');
                   if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                  if (maxAmount != null && val > maxAmount)
-                    return 'Vượt quá số nợ còn lại';
+                  if (maxAmount != null && val > maxAmount) {
+                    return 'Vượt quá số dư còn lại';
+                  }
                   return null;
                 },
               ),
@@ -160,8 +167,8 @@ class _DebtTabPageState extends State<DebtTabPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEEF2FF),
-              foregroundColor: const Color(0xFF4F46E5),
+              backgroundColor: const Color(0xFFEFF6FF),
+              foregroundColor: const Color(0xFF2563EB),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -183,84 +190,184 @@ class _DebtTabPageState extends State<DebtTabPage> {
     );
   }
 
-  Future<void> _openCreateSheet() async {
-    final created = await showModalBottomSheet<bool>(
+  void _showAddDebtSheet([DebtRecord? record]) {
+    showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AddLoanSheet(),
-    );
-
-    if (!mounted) return;
-    if (created == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đã tạo khoản vay mới'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading && provider.debts.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final items = provider.debts;
-        if (items.isEmpty) return _buildEmptyState();
-
-        return RefreshIndicator(
-          onRefresh: provider.loadFinanceData,
-          child: ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: ClampingScrollPhysics(),
-            ),
-            padding: const EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 20,
-              bottom: 100,
-            ),
-            itemCount: items.length + 1,
-            itemBuilder: (context, index) {
-              if (index == items.length) return _buildAddButton();
-              final item = items[index];
-              return _DebtCard(item: item, onPay: () => _handlePay(item));
-            },
-          ),
-        );
-      },
+      builder: (_) => _AddDebtSheet(
+        userId: _currentUserId,
+        debtRecord: record,
+      ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 64,
-            color: Colors.grey[400],
+  Future<bool?> _confirmDelete(DebtRecord item) {
+    final cleanName = item.lenderName.replaceAll('cho_vay|', '').replaceAll('di_vay|', '');
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Xác nhận xóa', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Bạn có chắc chắn muốn xóa khoản vay nợ với "$cleanName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
           ),
-          const SizedBox(height: 16),
-          const Text('Chưa có khoản vay', style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          _buildAddButton(),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAddButton() {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        // Filter tabs
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              _buildFilterChip('all', 'Tất cả'),
+              const SizedBox(width: 8),
+              _buildFilterChip('active', 'Chưa xong'),
+              const SizedBox(width: 8),
+              _buildFilterChip('settled', 'Đã xong'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<DebtRecord>>(
+            stream: _firestoreService.streamDebts(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              var items = snapshot.data ?? [];
+              
+              // Apply UI filter
+              if (_filter == 'active') {
+                items = items.where((e) => e.status != 'settled').toList();
+              } else if (_filter == 'settled') {
+                items = items.where((e) => e.status == 'settled').toList();
+              }
+
+              if (items.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                itemCount: items.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == items.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: _AddButton(onPressed: () => _showAddDebtSheet()),
+                    );
+                  }
+
+                  final item = items[index];
+                  return Dismissible(
+                    key: Key(item.id),
+                    direction: DismissDirection.endToStart,
+                    confirmDismiss: (_) => _confirmDelete(item),
+                    onDismissed: (_) async {
+                      try {
+                        await context.read<FinanceProvider>().deleteDebt(item.id);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Đã xóa khoản vay nợ')),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Không thể xóa: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    },
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                    ),
+                    child: GestureDetector(
+                      onTap: () => _showAddDebtSheet(item),
+                      child: _DebtCard(
+                        item: item,
+                        onPay: () => _handlePay(item),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip(String value, String label) {
+    final isSelected = _filter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (val) {
+        if (val) setState(() => _filter = value);
+      },
+      selectedColor: const Color(0xFF2563EB).withOpacity(0.15),
+      labelStyle: TextStyle(
+        color: isSelected ? const Color(0xFF1D4ED8) : const Color(0xFF64748B),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            const Text('Chưa có khoản vay nợ', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 20),
+            _AddButton(onPressed: () => _showAddDebtSheet()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _AddButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: _openCreateSheet,
+      onPressed: onPressed,
       icon: const Icon(Icons.add_rounded),
-      label: const Text('Thêm khoản vay mới'),
+      label: const Text('Thêm khoản vay nợ mới'),
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, 54),
         foregroundColor: const Color(0xFF2563EB),
@@ -272,16 +379,24 @@ class _DebtTabPageState extends State<DebtTabPage> {
 }
 
 class _DebtCard extends StatelessWidget {
-  const _DebtCard({required this.item, required this.onPay});
-  final FinanceDebtItem item;
+  final DebtRecord item;
   final VoidCallback onPay;
+
+  const _DebtCard({required this.item, required this.onPay});
 
   @override
   Widget build(BuildContext context) {
-    double progress = (item.paidAmount / item.totalAmount).clamp(0.0, 1.0);
-    Color alertColor = (item.daysLeft < 0)
-        ? Colors.redAccent
-        : (item.daysLeft <= 7 ? Colors.orange : const Color(0xFF2563EB));
+    final isChoVay = item.lenderName.startsWith('cho_vay|');
+    final cleanName = item.lenderName.replaceAll('cho_vay|', '').replaceAll('di_vay|', '');
+    final themeColor = isChoVay ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    
+    double progress = item.totalAmount > 0 ? (item.paidAmount / item.totalAmount).clamp(0.0, 1.0) : 0.0;
+    int percent = (progress * 100).toInt();
+    final isSettled = item.paidAmount >= item.totalAmount || item.status == 'settled';
+
+    final dueDateTime = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
+    final daysLeft = dueDateTime.difference(DateTime.now()).inDays;
+    final isOverdue = dueDateTime.isBefore(DateTime.now()) && !isSettled;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -305,52 +420,89 @@ class _DebtCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: themeColor.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(item.icon, style: const TextStyle(fontSize: 28)),
+                child: Icon(
+                  isChoVay ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                  color: themeColor,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: Color(0xFF1E293B),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cleanName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              color: Color(0xFF1E293B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: themeColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            isChoVay ? 'Cho vay' : 'Đi vay',
+                            style: TextStyle(
+                              color: themeColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (isSettled)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Đã xong ✓',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      item.lender,
+                      item.title.isNotEmpty ? item.title : 'Không có ghi chú',
                       style: const TextStyle(
-                        color: Color(0xFF94A3B8),
+                        color: Color(0xFF64748B),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: alertColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  item.interestText,
-                  style: TextStyle(
-                    color: alertColor,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
+              const SizedBox(width: 8),
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  color: themeColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 20,
                 ),
               ),
             ],
@@ -361,7 +513,7 @@ class _DebtCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: AlwaysStoppedAnimation(alertColor),
+              valueColor: AlwaysStoppedAnimation(themeColor),
               minHeight: 10,
             ),
           ),
@@ -370,47 +522,73 @@ class _DebtCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _AmountColumn(
-                label: 'Đã trả',
+                label: 'Đã thanh toán',
                 amount: item.paidAmount,
-                color: const Color(0xFF10B981),
+                color: themeColor,
               ),
               _AmountColumn(
-                label: 'Còn lại',
+                label: 'Chưa thanh toán',
                 amount: item.remainingAmount,
-                color: Colors.redAccent,
+                color: const Color(0xFF1E293B),
                 isRight: true,
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _TextInfoColumn(
-                label: 'Trả mỗi tháng',
-                value: formatCurrency(item.monthlyPayment),
+              Text(
+                'Tổng gốc:',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
               ),
-              _TextInfoColumn(
-                label: 'Hạn tiếp theo',
-                value: formatDate(item.dueDate),
-                isRight: true,
-                valueColor: alertColor,
+              Text(
+                formatCurrency(item.totalAmount),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1E293B)),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 6),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _CardButton(
-                  text: 'Thanh toán nợ',
-                  onPressed: onPay,
-                  color: const Color(0xFFF59E0B).withOpacity(0.08),
-                  textColor: const Color(0xFFD97706),
+              Text(
+                isSettled ? 'Đã tất toán lúc:' : (isOverdue ? 'Quá hạn:' : 'Thời hạn còn lại:'),
+                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              Text(
+                isSettled
+                    ? formatDate(DateTime.fromMillisecondsSinceEpoch(item.updatedAt))
+                    : (isOverdue
+                        ? 'Quá hạn ${daysLeft.abs()} ngày (Hạn: ${formatDate(dueDateTime)})'
+                        : 'Còn $daysLeft ngày (Hạn: ${formatDate(dueDateTime)})'),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isSettled
+                      ? Colors.green
+                      : (isOverdue ? Colors.redAccent : const Color(0xFF475569)),
                 ),
               ),
             ],
           ),
+          if (!isSettled) ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _CardButton(
+                    text: isChoVay ? 'Ghi nhận thu nợ' : 'Ghi nhận trả nợ',
+                    onPressed: onPay,
+                    color: themeColor.withOpacity(0.08),
+                    textColor: themeColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -422,6 +600,7 @@ class _AmountColumn extends StatelessWidget {
   final int amount;
   final Color color;
   final bool isRight;
+
   const _AmountColumn({
     required this.label,
     required this.amount,
@@ -432,9 +611,7 @@ class _AmountColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+      crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -458,52 +635,12 @@ class _AmountColumn extends StatelessWidget {
   }
 }
 
-class _TextInfoColumn extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isRight;
-  final Color? valueColor;
-  const _TextInfoColumn({
-    required this.label,
-    required this.value,
-    this.isRight = false,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF94A3B8),
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            color: valueColor ?? const Color(0xFF475569),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _CardButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
   final Color color;
   final Color textColor;
+
   const _CardButton({
     required this.text,
     required this.onPressed,
@@ -536,286 +673,244 @@ class _CardButton extends StatelessWidget {
   }
 }
 
-class _AddLoanSheet extends StatefulWidget {
-  const _AddLoanSheet();
+class _AddDebtSheet extends StatefulWidget {
+  final String userId;
+  final DebtRecord? debtRecord;
+
+  const _AddDebtSheet({
+    required this.userId,
+    this.debtRecord,
+  });
+
   @override
-  State<_AddLoanSheet> createState() => _AddLoanSheetState();
+  State<_AddDebtSheet> createState() => _AddDebtSheetState();
 }
 
-class _AddLoanSheetState extends State<_AddLoanSheet> {
+class _AddDebtSheetState extends State<_AddDebtSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
+  final _nameController = TextEditingController();
   final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
 
-  BankInterest? selectedBank;
-  int? selectedTerm;
-  double monthlyAmount = 0;
-  DateTime? nextDueDate;
+  String _selectedType = 'cho_vay'; // 'cho_vay' or 'di_vay'
+  DateTime _selectedDate = DateTime.now().add(const Duration(days: 30));
 
-  void _calculateLoan() {
-    final amountText = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (selectedBank != null && selectedTerm != null && amountText.isNotEmpty) {
-      double principal = double.tryParse(amountText) ?? 0;
-      double rate = selectedBank!.rates[selectedTerm!]!;
-
-      setState(() {
-        monthlyAmount = context.read<FinanceProvider>().calculateMonthlyPayment(
-          principal,
-          rate,
-          selectedTerm!,
-        );
-      });
+  @override
+  void initState() {
+    super.initState();
+    if (widget.debtRecord != null) {
+      final isChoVay = widget.debtRecord!.lenderName.startsWith('cho_vay|');
+      _selectedType = isChoVay ? 'cho_vay' : 'di_vay';
+      _nameController.text = widget.debtRecord!.lenderName
+          .replaceAll('cho_vay|', '')
+          .replaceAll('di_vay|', '');
+      _amountController.text = widget.debtRecord!.totalAmount.toString();
+      _noteController.text = widget.debtRecord!.title;
+      _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.debtRecord!.nextDueDate);
     }
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
+    _nameController.dispose();
     _amountController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.debtRecord != null;
+    final themeColor = _selectedType == 'cho_vay' ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+
     return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       padding: EdgeInsets.fromLTRB(
         20,
         20,
         20,
         MediaQuery.of(context).viewInsets.bottom + 30,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-
-              const Text(
-                'Khoản vay mới',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              const SizedBox(height: 20),
+              Text(
+                isEdit ? 'Chỉnh sửa khoản vay nợ' : 'Khoản vay nợ mới',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 20),
+              Center(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'cho_vay',
+                      label: Text('Tôi cho vay'),
+                      icon: Icon(Icons.arrow_upward_rounded),
+                    ),
+                    ButtonSegment(
+                      value: 'di_vay',
+                      label: Text('Tôi đi vay'),
+                      icon: Icon(Icons.arrow_downward_rounded),
+                    ),
+                  ],
+                  selected: {_selectedType},
+                  onSelectionChanged: (set) => setState(() => _selectedType = set.first),
+                  style: SegmentedButton.styleFrom(
+                    selectedBackgroundColor: themeColor.withOpacity(0.15),
+                    selectedForegroundColor: themeColor,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: _selectedType == 'cho_vay' ? 'Tên người vay' : 'Tên chủ nợ',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+                validator: (v) => v!.trim().isEmpty ? 'Vui lòng nhập tên đối tác' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Số tiền gốc',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  suffixText: '₫',
+                ),
+                validator: (v) {
+                  final val = int.tryParse(v!.trim());
+                  if (val == null || val <= 0) return 'Số tiền không hợp lệ';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _noteController,
+                decoration: InputDecoration(
+                  labelText: 'Ghi chú (Tùy chọn)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                tileColor: const Color(0xFFF8FAFC),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                title: const Text(
+                  'Hạn thanh toán',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                trailing: Text(
+                  formatDate(_selectedDate),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null && mounted) {
+                    setState(() => _selectedDate = picked);
+                  }
+                },
               ),
               const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: themeColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: () async {
+                    if (!_formKey.currentState!.validate()) return;
 
-              _buildTextField(
-                _titleController,
-                'Tên khoản vay (ví dụ: Vay mua xe)',
+                    final name = _nameController.text.trim();
+                    final note = _noteController.text.trim();
+                    final totalAmt = int.parse(_amountController.text.trim());
+                    
+                    final compositeLenderName = '${_selectedType}|${name}';
+
+                    final debt = DebtRecord(
+                      id: widget.debtRecord?.id ?? 'debt_${DateTime.now().millisecondsSinceEpoch}',
+                      userId: widget.userId,
+                      title: note,
+                      lenderName: compositeLenderName,
+                      totalAmount: totalAmt,
+                      paidAmount: widget.debtRecord?.paidAmount ?? 0,
+                      monthlyPayment: widget.debtRecord?.monthlyPayment ?? 0,
+                      interestRate: widget.debtRecord?.interestRate ?? 0.0,
+                      nextDueDate: _selectedDate.millisecondsSinceEpoch,
+                      createdAt: widget.debtRecord?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
+                      updatedAt: DateTime.now().millisecondsSinceEpoch,
+                      status: (widget.debtRecord?.paidAmount ?? 0) >= totalAmt ? 'settled' : 'active',
+                    );
+
+                    try {
+                      if (isEdit) {
+                        await context.read<FinanceProvider>().updateDebtRecord(debt);
+                      } else {
+                        await context.read<FinanceProvider>().addDebtRecordDirect(debt);
+                      }
+
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isEdit
+                                ? 'Đã cập nhật khoản vay nợ'
+                                : 'Đã thêm khoản vay nợ mới',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                  child: Text(
+                    isEdit ? 'Cập nhật khoản vay nợ' : 'Lưu khoản vay nợ',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-
-              _buildBankDropdown(),
-              const SizedBox(height: 16),
-
-              _buildTextField(
-                _amountController,
-                'Tổng số tiền vay',
-                isNumber: true,
-                onChanged: (_) => _calculateLoan(),
-              ),
-              const SizedBox(height: 16),
-
-              if (selectedBank != null) ...[
-                _buildTermDropdown(),
-                const SizedBox(height: 16),
-              ],
-
-              if (monthlyAmount > 0) _buildLoanSummary(),
-
-              const SizedBox(height: 16),
-              _buildDatePicker(context),
-
-              const SizedBox(height: 24),
-              _buildSubmitButton(),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoanSummary() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
-      ),
-      child: Column(
-        children: [
-          _rowInfo(
-            'Lãi suất áp dụng',
-            '${selectedBank!.rates[selectedTerm!]}% / năm',
-          ),
-          const Divider(),
-          _rowInfo(
-            'Trả mỗi tháng (Gốc + Lãi)',
-            formatCurrency(monthlyAmount),
-            isBold: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBankDropdown() {
-    return DropdownButtonFormField<BankInterest>(
-      decoration: _inputDecoration('Ngân hàng cho vay'),
-      items: loanBankData
-          .map((bank) => DropdownMenuItem(value: bank, child: Text(bank.name)))
-          .toList(),
-      onChanged: (value) {
-        setState(() {
-          selectedBank = value;
-          selectedTerm = null;
-          monthlyAmount = 0;
-        });
-      },
-    );
-  }
-
-  Widget _buildTermDropdown() {
-    return DropdownButtonFormField<int>(
-      decoration: _inputDecoration('Kỳ hạn vay'),
-      items: selectedBank!.rates.keys
-          .map(
-            (term) => DropdownMenuItem(value: term, child: Text('$term tháng')),
-          )
-          .toList(),
-      onChanged: (value) {
-        setState(() {
-          selectedTerm = value;
-          _calculateLoan();
-        });
-      },
-    );
-  }
-
-  InputDecoration _inputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-    );
-  }
-
-  Widget _rowInfo(String label, String value, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Color(0xFF64748B))),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: const Color(0xFF1E293B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDatePicker(BuildContext context) {
-    return InkWell(
-      onTap: () async {
-        DateTime? picked = await showDatePicker(
-          context: context,
-          initialDate: DateTime.now().add(const Duration(days: 30)),
-          firstDate: DateTime.now(),
-          lastDate: DateTime(2100),
-        );
-        if (picked != null) setState(() => nextDueDate = picked);
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              nextDueDate == null
-                  ? 'Ngày đến hạn tiếp theo'
-                  : 'Ngày đến hạn: ${formatDate(nextDueDate!)}',
-            ),
-            const Icon(Icons.calendar_today, size: 20, color: Colors.blue),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String label, {
-    bool isNumber = false,
-    ValueChanged<String>? onChanged,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: _inputDecoration(label),
-      onChanged: onChanged,
-      validator: (v) => v!.isEmpty ? 'Vui lòng nhập' : null,
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2563EB),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          elevation: 0,
-        ),
-        onPressed: () async {
-          if (_formKey.currentState!.validate() &&
-              selectedBank != null &&
-              selectedTerm != null &&
-              nextDueDate != null) {
-            await context.read<FinanceProvider>().addDebtRecord(
-              title: _titleController.text,
-              lender: selectedBank!.name,
-              totalAmount: (monthlyAmount * selectedTerm!).round(),
-              monthlyPayment: monthlyAmount.round(),
-              dueDate: nextDueDate!,
-              interestText: '${selectedBank!.rates[selectedTerm!]}%/năm',
-            );
-            if (mounted) Navigator.pop(context, true);
-          }
-        },
-        child: const Text(
-          'Lưu khoản vay',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
           ),
         ),
       ),
@@ -823,7 +918,12 @@ class _AddLoanSheetState extends State<_AddLoanSheet> {
   }
 }
 
-/// Public alias để finance_screen có thể dùng trực tiếp
-class AddLoanSheetPublic extends _AddLoanSheet {
-  const AddLoanSheetPublic();
+class AddLoanSheetPublic extends StatelessWidget {
+  const AddLoanSheetPublic({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return _AddDebtSheet(
+      userId: FirebaseAuth.instance.currentUser?.uid ?? 'user_001',
+    );
+  }
 }

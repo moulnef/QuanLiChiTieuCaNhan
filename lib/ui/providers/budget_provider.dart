@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
 import 'package:flutter/foundation.dart';
+import '../../services/sync_service.dart';
 
 class BudgetProvider extends ChangeNotifier {
   BudgetProvider([FinanceRepository? repository])
@@ -85,9 +85,34 @@ class BudgetProvider extends ChangeNotifier {
     _errorMessage = null;
     try {
       await _repository.createBudget(budget);
+      SyncService().triggerImmediateSync();
       await loadMonthlyBudgets(budget.userId, budget.month, budget.year);
     } catch (e) {
       _errorMessage = 'Không thể lưu ngân sách: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> updateBudget(Budget budget) async {
+    _errorMessage = null;
+    try {
+      await _repository.upsertBudget(budget);
+      SyncService().triggerImmediateSync();
+      await loadMonthlyBudgets(budget.userId, budget.month, budget.year);
+    } catch (e) {
+      _errorMessage = 'Không thể cập nhật ngân sách: $e';
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBudget(String budgetId, String userId) async {
+    _errorMessage = null;
+    try {
+      await _repository.deleteBudget(userId, budgetId);
+      SyncService().triggerImmediateSync();
+      await loadMonthlyBudgets(userId, _selectedMonth, _selectedYear);
+    } catch (e) {
+      _errorMessage = 'Không thể xóa ngân sách: $e';
       rethrow;
     }
   }

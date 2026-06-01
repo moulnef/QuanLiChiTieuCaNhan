@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Budget {
   final String id;
   final String userId;
@@ -6,13 +8,15 @@ class Budget {
   final String icon;
   final int month;
   final int year;
-  final int limitAmount;
-  final int spentAmount;
-  final int createdAt;
-  final int updatedAt;
+  final double limitAmount;
+  final double spentAmount;
+  final String currency;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool isActive;
   final String status;
 
-  const Budget({
+  Budget({
     required this.id,
     required this.userId,
     required this.categoryId,
@@ -20,16 +24,21 @@ class Budget {
     required this.icon,
     required this.month,
     required this.year,
-    required this.limitAmount,
-    required this.spentAmount,
-    required this.createdAt,
-    required this.updatedAt,
+    required num limitAmount,
+    required num spentAmount,
+    this.currency = 'VND',
+    required dynamic createdAt,
+    required dynamic updatedAt,
+    this.isActive = true,
     required this.status,
-  });
+  }) : limitAmount = limitAmount.toDouble(),
+       spentAmount = spentAmount.toDouble(),
+       createdAt = _parseDate(createdAt),
+       updatedAt = _parseDate(updatedAt);
 
-  int get remainingAmount {
+  double get remainingAmount {
     final value = limitAmount - spentAmount;
-    return value < 0 ? 0 : value;
+    return value < 0 ? 0.0 : value;
   }
 
   int get progressPercent {
@@ -45,10 +54,12 @@ class Budget {
     String? icon,
     int? month,
     int? year,
-    int? limitAmount,
-    int? spentAmount,
-    int? createdAt,
-    int? updatedAt,
+    double? limitAmount,
+    double? spentAmount,
+    String? currency,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isActive,
     String? status,
   }) {
     return Budget(
@@ -61,8 +72,10 @@ class Budget {
       year: year ?? this.year,
       limitAmount: limitAmount ?? this.limitAmount,
       spentAmount: spentAmount ?? this.spentAmount,
+      currency: currency ?? this.currency,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isActive: isActive ?? this.isActive,
       status: status ?? this.status,
     );
   }
@@ -78,26 +91,63 @@ class Budget {
       'year': year,
       'limitAmount': limitAmount,
       'spentAmount': spentAmount,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'currency': currency,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
+      'isActive': isActive,
       'status': status,
     };
   }
 
-  factory Budget.fromMap(Map<String, dynamic> map) {
+  Map<String, dynamic> toSqliteMap() {
+    return {
+      'id': id,
+      'userId': userId,
+      'user_id': userId,
+      'categoryId': categoryId,
+      'category_id': categoryId,
+      'categoryName': categoryName,
+      'category_name': categoryName,
+      'icon': icon,
+      'month': month,
+      'year': year,
+      'limitAmount': limitAmount.round(),
+      'limit_amount': limitAmount.round(),
+      'spentAmount': spentAmount.round(),
+      'spent_amount': spentAmount.round(),
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updatedAt': updatedAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
+      'status': status,
+    };
+  }
+
+  factory Budget.fromMap(Map<String, dynamic> map, [String? docId]) {
     return Budget(
-      id: map['id'],
-      userId: map['userId'],
-      categoryId: map['categoryId'],
-      categoryName: map['categoryName'],
-      icon: map['icon'],
-      month: map['month'],
-      year: map['year'],
-      limitAmount: map['limitAmount'],
-      spentAmount: map['spentAmount'],
-      createdAt: map['createdAt'],
-      updatedAt: map['updatedAt'],
-      status: map['status'],
+      id: docId ?? map['id'] ?? '',
+      userId: map['userId'] ?? map['user_id'] ?? '',
+      categoryId: map['categoryId'] ?? map['category_id'] ?? '',
+      categoryName: map['categoryName'] ?? map['category_name'] ?? '',
+      icon: map['icon'] ?? '',
+      month: map['month'] ?? 1,
+      year: map['year'] ?? DateTime.now().year,
+      limitAmount: (map['limitAmount'] ?? map['limit_amount'] ?? 0).toDouble(),
+      spentAmount: (map['spentAmount'] ?? map['spent_amount'] ?? 0).toDouble(),
+      currency: map['currency'] ?? 'VND',
+      createdAt: map['createdAt'] ?? map['created_at'],
+      updatedAt: map['updatedAt'] ?? map['updated_at'],
+      isActive: map['isActive'] ?? true,
+      status: map['status'] ?? 'active',
     );
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
   }
 }

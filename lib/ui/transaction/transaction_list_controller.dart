@@ -176,10 +176,11 @@ class TransactionListController extends Notifier<TransactionListState> {
     double income = 0;
     double expense = 0;
     for (var tx in result) {
-      if (tx.type == 'income')
+      if (tx.type == 'income') {
         income += tx.amount;
-      else
+      } else {
         expense += tx.amount;
+      }
     }
 
     // Cập nhật lại state cuối cùng để UI render
