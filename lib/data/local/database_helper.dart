@@ -289,7 +289,13 @@ class DatabaseHelper {
   }
 
   Future<void> _migrateAllTablesForSync(Database db) async {
-    final tables = ['transactions', 'budgets', 'savings', 'installments', 'debts'];
+    final tables = [
+      'transactions',
+      'budgets',
+      'savings',
+      'installments',
+      'debts',
+    ];
     for (final table in tables) {
       await _addColumnIfMissing(db, table, 'isSynced INTEGER DEFAULT 0');
     }

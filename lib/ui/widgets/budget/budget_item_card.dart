@@ -95,7 +95,7 @@ class BudgetItemCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${budget.progressPercent}% ' + 'đã dùng'.xtr(context),
+                      '${budget.progressPercent}% ${'đã dùng'.xtr(context)}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,

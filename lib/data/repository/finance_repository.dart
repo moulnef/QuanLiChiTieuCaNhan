@@ -1870,14 +1870,16 @@ class FinanceRepository {
       final walletsToPush = <WalletModel>[];
       for (final local in localWallets) {
         final remote = remoteWallets.firstWhere((w) => w.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           walletsToPush.add(local);
         }
       }
       for (final remote in remoteWallets) {
         final local = localWallets.firstWhere((w) => w.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('wallets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          final map = Map<String, dynamic>.from(remote.toSqliteMap());
+          map['isSynced'] = 1;
+          await db.insert('wallets', map, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
 
@@ -1901,14 +1903,16 @@ class FinanceRepository {
       final txToPush = <TransactionModel>[];
       for (final local in localTx) {
         final remote = remoteTx.firstWhere((t) => t.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           txToPush.add(local);
         }
       }
       for (final remote in remoteTx) {
         final local = localTx.firstWhere((t) => t.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('transactions', _transactionToRow(remote), conflictAlgorithm: ConflictAlgorithm.replace);
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          final map = Map<String, dynamic>.from(_transactionToRow(remote));
+          map['isSynced'] = 1;
+          await db.insert('transactions', map, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
 
@@ -1932,14 +1936,16 @@ class FinanceRepository {
       final budgetsToPush = <Budget>[];
       for (final local in localBudgets) {
         final remote = remoteBudgets.firstWhere((b) => b.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           budgetsToPush.add(local);
         }
       }
       for (final remote in remoteBudgets) {
         final local = localBudgets.firstWhere((b) => b.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('budgets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          final map = Map<String, dynamic>.from(remote.toSqliteMap());
+          map['isSynced'] = 1;
+          await db.insert('budgets', map, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
 
@@ -1958,13 +1964,13 @@ class FinanceRepository {
       final savingsToPush = <SavingGoal>[];
       for (final local in localSavings) {
         final remote = remoteSavings.firstWhere((s) => s.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           savingsToPush.add(local);
         }
       }
       for (final remote in remoteSavings) {
         final local = localSavings.firstWhere((s) => s.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'savings', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -1983,6 +1989,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -2002,13 +2009,13 @@ class FinanceRepository {
       final debtsToPush = <DebtRecord>[];
       for (final local in localDebts) {
         final remote = remoteDebts.firstWhere((d) => d.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           debtsToPush.add(local);
         }
       }
       for (final remote in remoteDebts) {
         final local = localDebts.firstWhere((d) => d.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'debts', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -2034,6 +2041,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -2053,13 +2061,13 @@ class FinanceRepository {
       final installmentsToPush = <InstallmentPlan>[];
       for (final local in localInstallments) {
         final remote = remoteInstallments.firstWhere((i) => i.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           installmentsToPush.add(local);
         }
       }
       for (final remote in remoteInstallments) {
         final local = localInstallments.firstWhere((i) => i.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'installments', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -2087,6 +2095,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -2106,6 +2115,28 @@ class FinanceRepository {
           debts: debtsToPush,
           installments: installmentsToPush,
         );
+
+        // Mark pushed items as synced locally
+        final localBatch = db.batch();
+        for (final item in walletsToPush) {
+          localBatch.update('wallets', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id]);
+        }
+        for (final item in txToPush) {
+          localBatch.update('transactions', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id]);
+        }
+        for (final item in budgetsToPush) {
+          localBatch.update('budgets', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id]);
+        }
+        for (final item in savingsToPush) {
+          localBatch.update('savings', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id.toString()]);
+        }
+        for (final item in debtsToPush) {
+          localBatch.update('debts', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id.toString()]);
+        }
+        for (final item in installmentsToPush) {
+          localBatch.update('installments', {'isSynced': 1}, where: 'id = ?', whereArgs: [item.id.toString()]);
+        }
+        await localBatch.commit(noResult: true);
       }
 
       _notifyTransactionChanged(userId);

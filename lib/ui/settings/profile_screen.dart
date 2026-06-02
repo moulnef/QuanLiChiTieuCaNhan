@@ -35,7 +35,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final FinanceRepository _repository = FinanceRepository();
 
   bool _isNotifyEnabled = true;
-  bool _isSyncEnabled = true;
+  final bool _isSyncEnabled = true;
 
   String _displayName = 'Người dùng';
   String _email = 'Chưa cập nhật';
@@ -973,7 +973,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               );
-              statusText = "${syncProvider.pendingCount} " + "bản ghi chờ đồng bộ".xtr(context);
+              statusText = "${syncProvider.pendingCount} ${"bản ghi chờ đồng bộ".xtr(context)}";
             } else {
               iconColor = const Color(0xFF10B981); // Green
               trailingWidget = const Icon(Icons.cloud_done_outlined, color: Color(0xFF10B981), size: 20);
@@ -985,7 +985,7 @@ class _ProfilePageState extends State<ProfilePage> {
         final lastSyncTimeStr = syncProvider.lastSyncTime != null
             ? DateFormat('HH:mm dd/MM/yyyy').format(syncProvider.lastSyncTime!)
             : "Chưa đồng bộ lần nào".xtr(context);
-        final subtitle = "Lần cuối: ".xtr(context) + lastSyncTimeStr + " • " + "Tự động đồng bộ khi có kết nối".xtr(context);
+        final subtitle = "${"Lần cuối: ".xtr(context)}$lastSyncTimeStr • ${"Tự động đồng bộ khi có kết nối".xtr(context)}";
 
         final showRetryButton = syncProvider.status == SyncStatus.error;
 
@@ -1051,7 +1051,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           if (context.mounted && result != null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Đã đồng bộ ".xtr(context) + "${result.successCount} " + "bản ghi thành công!".xtr(context)),
+                                content: Text("${"Đã đồng bộ ".xtr(context)}${result.successCount} ${"bản ghi thành công!".xtr(context)}"),
                                 backgroundColor: const Color(0xFF10B981),
                               ),
                             );
@@ -1060,7 +1060,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Đồng bộ thất bại: ".xtr(context) + "$e"),
+                                content: Text("${"Đồng bộ thất bại: ".xtr(context)}$e"),
                                 backgroundColor: const Color(0xFFEF4444),
                               ),
                             );

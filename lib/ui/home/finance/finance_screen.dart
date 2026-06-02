@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/finance_stat_card.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
@@ -57,10 +60,13 @@ class FinanceScreen extends StatelessWidget {
 }
 
 class _FinanceHeader extends StatelessWidget {
-  final FirestoreService _firestoreService = FirestoreService();
+  const _FinanceHeader();
 
   @override
   Widget build(BuildContext context) {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+    final repository = context.read<FinanceRepository>();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 54, 16, 20),
@@ -91,7 +97,7 @@ class _FinanceHeader extends StatelessWidget {
             children: [
               Expanded(
                 child: StreamBuilder<List<SavingGoal>>(
-                  stream: _firestoreService.streamSavings(),
+                  stream: repository.streamSavings(userId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
                     final count = list.where((item) => item.status != 'completed' && item.currentAmount < item.targetAmount).length;
@@ -106,7 +112,7 @@ class _FinanceHeader extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: StreamBuilder<List<InstallmentPlan>>(
-                  stream: _firestoreService.streamInstallments(),
+                  stream: repository.streamInstallments(userId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
                     final count = list.where((item) => item.status != 'completed' && item.paidAmount < item.totalAmount).length;
@@ -121,7 +127,7 @@ class _FinanceHeader extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: StreamBuilder<List<DebtRecord>>(
-                  stream: _firestoreService.streamDebts(),
+                  stream: repository.streamDebts(userId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
                     final count = list.where((item) => item.status != 'settled' && item.paidAmount < item.totalAmount).length;

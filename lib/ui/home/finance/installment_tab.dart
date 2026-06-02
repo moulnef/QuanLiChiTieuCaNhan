@@ -61,7 +61,7 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
               Text('Số tiền cần trả: ${formatCurrency(amount)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
               const SizedBox(height: 16),
               DropdownButtonFormField<WalletModel>(
-                value: selectedWallet,
+                initialValue: selectedWallet,
                 items: wallets.map((w) => DropdownMenuItem(
                   value: w,
                   child: Text('${w.name} (${formatCurrency(w.balance)})'),
@@ -187,7 +187,7 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<InstallmentPlan>>(
-      stream: _firestoreService.streamInstallments(),
+      stream: _repository.streamInstallments(_currentUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -699,7 +699,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: _selectedBank,
+                initialValue: _selectedBank,
                 items: _banks.map((b) => DropdownMenuItem(
                   value: b,
                   child: Text(b),
@@ -719,7 +719,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<int>(
-                value: _selectedPeriod,
+                initialValue: _selectedPeriod,
                 items: _periods.map((p) => DropdownMenuItem(
                   value: p,
                   child: Text('$p tháng - Lãi ${_interestRates[p]}%/năm'),

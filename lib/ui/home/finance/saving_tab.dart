@@ -46,7 +46,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  initialValue: selectedWallet,
                   items: wallets.map((w) => DropdownMenuItem(
                     value: w,
                     child: Text('${w.name} (${formatCurrency(w.balance)})'),
@@ -121,7 +121,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  initialValue: selectedWallet,
                   items: wallets.map((w) => DropdownMenuItem(
                     value: w,
                     child: Text('${w.name} (${formatCurrency(w.balance)})'),
@@ -364,7 +364,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<SavingGoal>>(
-      stream: _firestoreService.streamSavings(),
+      stream: _repository.streamSavings(_currentUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());

@@ -89,7 +89,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  initialValue: selectedWallet,
                   items: wallets.map((w) => DropdownMenuItem(
                     value: w,
                     child: Text('${w.name} (${formatCurrency(w.balance)})'),
@@ -282,7 +282,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
         ),
         Expanded(
           child: StreamBuilder<List<DebtRecord>>(
-            stream: _firestoreService.streamDebts(),
+            stream: _repository.streamDebts(_currentUserId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -913,7 +913,7 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
               if (_selectedType == 'di_vay') ...[
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
-                  value: _selectedBank,
+                  initialValue: _selectedBank,
                   items: _banks.map((b) => DropdownMenuItem(
                     value: b,
                     child: Text(b),
@@ -960,7 +960,7 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
                   ),
                   if (_receiveToWallet) ...[
                     DropdownButtonFormField<WalletModel>(
-                      value: _selectedWallet,
+                      initialValue: _selectedWallet,
                       items: _wallets.map((w) => DropdownMenuItem(
                         value: w,
                         child: Text('${w.name} (${formatCurrency(w.balance)})'),
@@ -1060,7 +1060,7 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
                     final totalAmt = int.parse(clean);
                     
                     final bankSuffix = _selectedType == 'di_vay' ? ' - $_selectedBank' : '';
-                    final compositeLenderName = '${_selectedType}|${name}${bankSuffix}';
+                    final compositeLenderName = '$_selectedType|$name$bankSuffix';
 
                     final monthlyVal = _selectedType == 'di_vay' ? _calculatedMonthlyPayment : 0;
                     final rate = _selectedType == 'di_vay' ? (_bankRates[_selectedBank] ?? 0.0) : 0.0;

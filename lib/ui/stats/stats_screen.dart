@@ -279,7 +279,7 @@ class _StatsPageState extends State<StatsPage> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final monthLabel = 'Tháng '.xtr(context) + '${now.month}/${now.year}';
+    final monthLabel = '${'Tháng '.xtr(context)}${now.month}/${now.year}';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF),

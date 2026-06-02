@@ -74,9 +74,8 @@ service cloud.firestore {
       match /debts/{debtId} {
         allow read, write: if isOwner(userId)
           && (request.resource == null || (
-               request.resource.data.amount is number &&
-               request.resource.data.amount > 0 &&
-               request.resource.data.type in ['lend', 'borrow']
+               request.resource.data.totalAmount is number &&
+               request.resource.data.totalAmount >= 0
              ));
       }
 
