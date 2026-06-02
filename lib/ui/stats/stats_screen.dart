@@ -155,13 +155,7 @@ class _StatsPageState extends State<StatsPage> {
       }
     }
 
-    final groupedMap = <String, double>{};
-    for (final entry in catMap.entries) {
-      final groupName = _mapToGroup(entry.key);
-      groupedMap[groupName] = (groupedMap[groupName] ?? 0) + entry.value;
-    }
-
-    final sortedCats = groupedMap.entries.toList()
+    final sortedCats = catMap.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     _totalIncome = income;

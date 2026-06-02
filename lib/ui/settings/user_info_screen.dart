@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/snackbar_utils.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
@@ -24,6 +26,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
   late TextEditingController _dobController;
 
   bool _isLoading = false;
+  String _photoUrl = '';
 
   String get _currentUserId => _user?.uid ?? _demoUserId;
 
@@ -34,6 +37,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
     _emailController = TextEditingController(text: _user?.email ?? "");
     _phoneController = TextEditingController(text: "");
     _dobController = TextEditingController(text: "");
+    _photoUrl = _user?.photoURL ?? '';
     _loadProfileFromDatabase();
   }
 
@@ -67,8 +71,116 @@ class _UserInfoPageState extends State<UserInfoPage> {
         _dobController.text = parsedDob == null
             ? rawDob
             : DateFormat('dd/MM/yyyy').format(parsedDob);
+        _photoUrl = session['photoURL']?.toString() ?? session['photo_url']?.toString() ?? (_user?.photoURL ?? '');
       });
     } catch (_) {
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Chọn nguồn ảnh đại diện'.xtr(context),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEEF2FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Color(0xFF6D28D9),
+                    ),
+                  ),
+                  title: Text(
+                    'Chụp ảnh mới'.xtr(context),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF7ED),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.photo_library_rounded,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  title: Text(
+                    'Chọn từ thư viện'.xtr(context),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 150,
+        maxHeight: 150,
+        imageQuality: 65,
+      );
+
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        final base64Image = 'data:image/png;base64,${base64Encode(bytes)}';
+        setState(() {
+          _photoUrl = base64Image;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.showError(context, 'Lỗi chọn ảnh: $e');
+      }
     }
   }
 
@@ -111,6 +223,9 @@ class _UserInfoPageState extends State<UserInfoPage> {
           // SQLite profile update is still saved even when Firebase requires re-auth.
         }
       }
+      if (_photoUrl != _user?.photoURL && !_photoUrl.startsWith('data:') && _photoUrl.length <= 2048) {
+        await _user?.updatePhotoURL(_photoUrl);
+      }
 
       DateTime? parsedDob;
       if (_dobController.text.trim().isNotEmpty) {
@@ -128,6 +243,8 @@ class _UserInfoPageState extends State<UserInfoPage> {
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'dateOfBirth': parsedDob?.toIso8601String() ?? '',
+        'photoURL': _photoUrl,
+        'photo_url': _photoUrl,
       });
 
       if (mounted) {
@@ -191,46 +308,84 @@ class _UserInfoPageState extends State<UserInfoPage> {
                     color: const Color(0xFFF5F7FA),
                     child: Column(
                       children: [
-                        Stack(
-                          children: [
-                            Container(
-                              width: 86,
-                              height: 86,
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF1A1A2E,
-                                ).withOpacity(0.08),
-                                shape: BoxShape.circle,
+                        GestureDetector(
+                          onTap: _pickImage,
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 86,
+                                height: 86,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A1A2E).withOpacity(0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: _photoUrl.isNotEmpty
+                                      ? (_photoUrl.startsWith('data:image') || !_photoUrl.startsWith('http')
+                                          ? Image.memory(
+                                              base64Decode(_photoUrl.split(',').last),
+                                              fit: BoxFit.cover,
+                                              width: 86,
+                                              height: 86,
+                                              errorBuilder: (_, __, ___) => Center(
+                                                child: Text(
+                                                  initial,
+                                                  style: const TextStyle(
+                                                    fontSize: 36,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF1A1A2E),
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                          : Image.network(
+                                              _photoUrl,
+                                              fit: BoxFit.cover,
+                                              width: 86,
+                                              height: 86,
+                                              errorBuilder: (_, __, ___) => Center(
+                                                child: Text(
+                                                  initial,
+                                                  style: const TextStyle(
+                                                    fontSize: 36,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF1A1A2E),
+                                                  ),
+                                                ),
+                                              ),
+                                            ))
+                                      : Center(
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(
+                                              fontSize: 36,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF1A1A2E),
+                                            ),
+                                          ),
+                                        ),
+                                ),
                               ),
-                              child: Center(
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w700,
+                              Positioned(
+                                bottom: 2,
+                                right: 2,
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: const BoxDecoration(
                                     color: Color(0xFF1A1A2E),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt_outlined,
+                                    color: Colors.white,
+                                    size: 14,
                                   ),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              bottom: 2,
-                              right: 2,
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF1A1A2E),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt_outlined,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Text(

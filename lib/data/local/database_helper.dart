@@ -5,7 +5,7 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 5;
+  static const int _databaseVersion = 6;
 
   DatabaseHelper._init();
 
@@ -36,6 +36,7 @@ class DatabaseHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await _createAllTables(db);
     await _migrateTransactionsColumns(db);
+    await _migrateAuthSessionColumns(db);
     await _migrateAllTablesForSync(db);
   }
 
@@ -213,6 +214,11 @@ class DatabaseHelper {
         photoURL TEXT,
         photo_url TEXT,
         role TEXT,
+        token TEXT,
+        lastLogin INTEGER,
+        isLoggedIn INTEGER,
+        phone TEXT,
+        dateOfBirth TEXT,
         createdAt INTEGER,
         created_at INTEGER,
         updatedAt INTEGER,
@@ -233,6 +239,7 @@ class DatabaseHelper {
     ''');
 
     await _migrateTransactionsColumns(db);
+    await _migrateAuthSessionColumns(db);
     await _migrateAllTablesForSync(db);
   }
 
@@ -264,6 +271,20 @@ class DatabaseHelper {
 
     for (final columnDef in requiredColumns) {
       await _addColumnIfMissing(db, 'transactions', columnDef);
+    }
+  }
+
+  Future<void> _migrateAuthSessionColumns(Database db) async {
+    const requiredColumns = <String>[
+      'token TEXT',
+      'lastLogin INTEGER',
+      'isLoggedIn INTEGER',
+      'phone TEXT',
+      'dateOfBirth TEXT',
+    ];
+
+    for (final columnDef in requiredColumns) {
+      await _addColumnIfMissing(db, 'auth_session', columnDef);
     }
   }
 

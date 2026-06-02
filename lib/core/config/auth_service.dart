@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../data/local/category_data.dart';
 import '../../domain/model/wallet_model.dart';
@@ -27,16 +28,14 @@ class AuthService {
 
   Future<void> signOut() => _auth.signOut();
 
-  Future<void> registerAfterOTP(String email, String password) async {
-    _log('Bắt đầu đăng ký tài khoản cho email: $email');
-    
-    // 1. Tạo tài khoản Firebase Auth
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-
-    final uid = credential.user!.uid;
+  Future<void> initializeNewUserData(
+    String uid,
+    String email, {
+    String? displayName,
+    String? photoURL,
+  }) async {
+    final finalDisplayName = displayName ?? email.split('@')[0];
+    final finalPhotoURL = photoURL ?? '';
 
     // 2. Tạo document users/{userId}/profile/user_profile
     await _firestore
@@ -46,8 +45,8 @@ class AuthService {
         .doc('user_profile')
         .set({
       'email': email,
-      'displayName': email.split('@')[0],
-      'photoURL': '',
+      'displayName': finalDisplayName,
+      'photoURL': finalPhotoURL,
       'emailVerified': true,
       'createdAt': FieldValue.serverTimestamp(),
       'uid': uid,
@@ -57,8 +56,8 @@ class AuthService {
     // Ngoài ra, để tương thích ngược với code cũ mong muốn document tại users/{userId} chứa thông tin này:
     await _firestore.collection('users').doc(uid).set({
       'email': email,
-      'displayName': email.split('@')[0],
-      'photoURL': '',
+      'displayName': finalDisplayName,
+      'photoURL': finalPhotoURL,
       'emailVerified': true,
       'createdAt': FieldValue.serverTimestamp(),
       'uid': uid,
@@ -118,6 +117,70 @@ class AuthService {
     
     await batch.commit();
     _log('Khởi tạo dữ liệu người dùng mới thành công cho $uid');
+  }
+
+  Future<void> registerAfterOTP(String email, String password) async {
+    _log('Bắt đầu đăng ký tài khoản cho email: $email');
+    
+    // 1. Tạo tài khoản Firebase Auth
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    final uid = credential.user!.uid;
+    await initializeNewUserData(uid, email);
+  }
+
+  Future<String?> loginWithGoogle() async {
+    try {
+      _log('Bắt đầu đăng nhập bằng Google');
+      
+      // 1. Kích hoạt luồng đăng nhập Google
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        return 'Người dùng đã hủy đăng nhập.';
+      }
+
+      // 2. Lấy thông tin xác thực từ tài khoản Google
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // 3. Tạo credential cho Firebase
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // 4. Đăng nhập vào Firebase bằng Google credential
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user;
+
+      if (user == null) {
+        return 'Không thể xác thực với Firebase.';
+      }
+
+      // 5. Kiểm tra tài khoản đã tồn tại trên Firestore chưa
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      if (!userDoc.exists) {
+        _log('Tài khoản mới đăng nhập lần đầu. Tiến hành tạo dữ liệu mặc định.');
+        await initializeNewUserData(
+          user.uid,
+          user.email ?? '',
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        );
+      } else {
+        _log('Tài khoản Google đã tồn tại.');
+      }
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      _log('Lỗi Firebase Auth khi đăng nhập Google: ${e.code} - ${e.message}');
+      return e.message ?? 'Đã có lỗi xác thực xảy ra';
+    } catch (e) {
+      _log('Lỗi khi đăng nhập Google: $e');
+      return e.toString();
+    }
   }
 
   Future<String?> login(String email, String password) async {

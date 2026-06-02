@@ -307,6 +307,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         amount: amount,
         type: _currentType,
         categoryId: _categoryId,
+        categoryName: _selectedCategory?.name ?? _categoryId,
         transactionDate: _selectedDate,
         note: _noteInput.text,
       ),

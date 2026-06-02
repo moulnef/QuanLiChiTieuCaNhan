@@ -2149,11 +2149,28 @@ class FinanceRepository {
       return;
     }
     final db = await _databaseHelper.database;
+    final userId = payload['userId'] ?? payload['user_id'] ?? '';
+
+    final existing = userId.isNotEmpty ? await getAuthSessionByUserId(userId) : null;
+    final mergedPayload = <String, dynamic>{};
+    if (existing != null) {
+      mergedPayload.addAll(existing);
+    }
+    mergedPayload.addAll(payload);
+
     await db.insert(
       'auth_session',
-      payload,
+      mergedPayload,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    try {
+      if (userId.isNotEmpty && userId != demoUserId && await _isOnline()) {
+        await _firestoreService.updateProfile(mergedPayload);
+      }
+    } catch (e) {
+      print("Lỗi đồng bộ profile: $e");
+    }
   }
 
   // ========== HELPER FUNCTIONS FOR MODEL CONVERSION ==========
@@ -2298,9 +2315,9 @@ class FinanceRepository {
       categoryId:
           row['categoryId']?.toString() ?? row['category_id']?.toString() ?? '',
       categoryName:
-          row['categoryName']?.toString() ??
-          row['category_name']?.toString() ??
-          _resolveCategoryName(row['categoryId'] ?? row['category_id']),
+          (row['categoryName']?.toString() ?? row['category_name']?.toString() ?? '').isNotEmpty
+              ? (row['categoryName']?.toString() ?? row['category_name']?.toString() ?? '')
+              : _resolveCategoryName(row['categoryId'] ?? row['category_id']),
       type: row['type']?.toString() ?? 'expense',
       amount: _asDouble(row['amount']),
       note: row['note']?.toString() ?? '',
@@ -2374,13 +2391,17 @@ class FinanceRepository {
   }
 
   String _resolveCategoryName(Object? categoryId) {
-    return _findCategory(categoryId?.toString() ?? '')?.name ?? 'Không rõ';
+    final idStr = categoryId?.toString() ?? '';
+    if (idStr.isEmpty) return 'Khác';
+    final found = _findCategory(idStr);
+    if (found != null) return found.name;
+    return idStr;
   }
 
-  CategoryModel? _findCategory(String categoryId) {
-    if (categoryId.isEmpty) return null;
+  CategoryModel? _findCategory(String categoryIdOrName) {
+    if (categoryIdOrName.isEmpty) return null;
     for (final category in CategoryData.getAllCategories()) {
-      if (category.id == categoryId) {
+      if (category.id == categoryIdOrName || category.name == categoryIdOrName) {
         return category;
       }
     }

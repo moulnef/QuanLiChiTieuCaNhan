@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../domain/model/transaction_model.dart';
 import '../../domain/services/ocr_service.dart';
@@ -212,45 +214,205 @@ class _MainScreenState extends State<MainScreen>
     _pushInCurrentTab(const ChatbotScreen());
   }
 
+  Future<ImageSource?> _showSourceSelectionSheet() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Chọn nguồn quét hóa đơn',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEEF2FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Color(0xFF6D28D9),
+                    ),
+                  ),
+                  title: const Text(
+                    'Chụp ảnh mới bằng Camera',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  subtitle: const Text('Dùng camera chụp trực tiếp hóa đơn'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF7ED),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.photo_library_rounded,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  title: const Text(
+                    'Chọn từ Thư viện ảnh',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  subtitle: const Text('Chọn ảnh hóa đơn có sẵn từ máy'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPermissionDeniedSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  void _showPermanentlyDeniedDialog(String permissionName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text('Quyền $permissionName bị từ chối'),
+        content: Text(
+          'Bạn đã từ chối quyền truy cập $permissionName vĩnh viễn. Vui lòng mở Cài đặt thiết bị để cấp quyền này cho ứng dụng.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6D28D9),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Mở Cài đặt'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleInvoiceScan() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (_isMenuOpen) _toggleMenu();
 
-    if (image != null) {
+    final ImageSource? source = await _showSourceSelectionSheet();
+    if (source == null) return;
+
+    if (source == ImageSource.camera) {
+      final cameraStatus = await Permission.camera.status;
+      if (cameraStatus.isDenied) {
+        final requestResult = await Permission.camera.request();
+        if (requestResult.isDenied) {
+          _showPermissionDeniedSnackBar('Cần cấp quyền truy cập Camera để chụp ảnh hóa đơn.');
+          return;
+        } else if (requestResult.isPermanentlyDenied) {
+          _showPermanentlyDeniedDialog('Camera');
+          return;
+        }
+      } else if (cameraStatus.isPermanentlyDenied) {
+        _showPermanentlyDeniedDialog('Camera');
+        return;
+      }
+    }
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: source);
+
+      if (image != null) {
+        if (!mounted) return;
+
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(
+            child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+          ),
+        );
+
+        final result = await _ocrService.scanReceiptPath(image.path);
+
+        if (!mounted) return;
+        Navigator.pop(context);
+
+        if (result != null && result['amount'] != null) {
+          _openCreateTransactionPage(
+            editData: TransactionModel(
+              amount: (result['amount'] as num).toDouble(),
+              categoryId: '',
+              type: 'expense',
+              transactionDate: DateTime.now(),
+              note: 'Quét từ hóa đơn',
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không tìm thấy số tiền hợp lệ trong ảnh!'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
       if (!mounted) return;
-      _toggleMenu();
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Có lỗi xảy ra khi quét: $e'),
+          backgroundColor: Colors.redAccent,
         ),
       );
-
-      final result = await _ocrService.scanReceiptPath(image.path);
-
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      if (result != null && result['amount'] != null) {
-        _openCreateTransactionPage(
-          editData: TransactionModel(
-            amount: (result['amount'] as num).toDouble(),
-            categoryId: '',
-            type: 'expense',
-            transactionDate: DateTime.now(),
-            note: 'Quét từ hóa đơn',
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không tìm thấy số tiền hợp lệ trong ảnh!'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
     }
   }
 
@@ -343,7 +505,7 @@ class _MainScreenState extends State<MainScreen>
                         mainAxisSize: MainAxisSize.max,
                         children: [
                           _buildIconOption(
-                            icon: Icons.document_scanner_rounded,
+                            icon: Icons.camera_alt_rounded,
                             bgColor: Colors.orange.shade50,
                             iconColor: Colors.orange,
                             onTap: _handleInvoiceScan,

@@ -77,6 +77,19 @@ class AuthProvider extends ChangeNotifier {
     return result;
   }
 
+  Future<String?> loginWithGoogle() async {
+    _log('loginWithGoogle() được gọi: ${DateTime.now()}');
+    _isLoading = true;
+    notifyListeners();
+
+    final result = await _authService.loginWithGoogle();
+    _log('loginWithGoogle() trả về: ${result ?? "success"} tại ${DateTime.now()}');
+
+    _isLoading = false;
+    notifyListeners();
+    return result;
+  }
+
   Future<void> signOut() => _authService.signOut();
 
   @override

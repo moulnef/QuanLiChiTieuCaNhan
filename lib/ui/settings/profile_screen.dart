@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
@@ -40,6 +41,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _email = 'Chưa cập nhật';
   double _walletBalance = 0;
   int _transactionCount = 0;
+  String _photoUrl = '';
 
   String get _currentUserId => user?.uid ?? _demoUserId;
 
@@ -74,6 +76,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _email = session?['email']?.toString().isNotEmpty == true
             ? session!['email'].toString()
             : (user?.email ?? 'Chưa cập nhật');
+        _photoUrl = session?['photoURL']?.toString() ?? session?['photo_url']?.toString() ?? (user?.photoURL ?? '');
         _walletBalance = totalWallet;
         _transactionCount = transactionCount;
         _isNotifyEnabled = notifyEnabledPref && hasOSPermission;
@@ -91,6 +94,7 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _displayName = user?.displayName ?? 'Người dùng';
         _email = user?.email ?? 'Chưa cập nhật';
+        _photoUrl = user?.photoURL ?? '';
         _isNotifyEnabled = localNotify;
       });
     }
@@ -427,15 +431,52 @@ class _ProfilePageState extends State<ProfilePage> {
                               width: 2,
                             ),
                           ),
-                          child: Center(
-                            child: Text(
-                              initial,
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: _photoUrl.isNotEmpty
+                                ? (_photoUrl.startsWith('data:image') || !_photoUrl.startsWith('http')
+                                    ? Image.memory(
+                                        base64Decode(_photoUrl.split(',').last),
+                                        fit: BoxFit.cover,
+                                        width: 68,
+                                        height: 68,
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Image.network(
+                                        _photoUrl,
+                                        fit: BoxFit.cover,
+                                        width: 68,
+                                        height: 68,
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ))
+                                : Center(
+                                    child: Text(
+                                      initial,
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
                           ),
                         ),
                         Positioned(
