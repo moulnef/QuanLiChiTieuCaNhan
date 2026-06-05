@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import 'transaction_list_controller.dart';
+import 'transaction_controller.dart';
 import '../transaction/create_transaction_page.dart';
 import '../../data/local/category_data.dart';
 import '../../domain/model/transaction_model.dart';
 import '../../domain/model/category_model.dart';
 import '../../services/translation_service.dart';
 import '../../utils/app_localizer.dart';
+import '../../utils/currency_formatter.dart';
 
 class TransactionListPage extends ConsumerStatefulWidget {
   final bool forceShowBackButton;
@@ -118,8 +122,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
       }
     });
   }
-
-  @override
+  @override
   Widget build(BuildContext context) {
     final state = ref.watch(transactionListControllerProvider);
     _queueCategoryTranslations(state);
@@ -142,13 +145,13 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
             ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                colors: [Color(0xFF6C3FD9), Color(0xFF8B5CF6)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(32),
-                bottomRight: Radius.circular(32),
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
               ),
             ),
             child: _isSearchMode
@@ -169,10 +172,10 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         child: Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
+                              color: Colors.white.withOpacity(0.3),
                             ),
                           ),
                           child: TextField(
@@ -184,13 +187,13 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             decoration: InputDecoration(
                               hintText: "Tìm kiếm...".xtr(context),
                               hintStyle: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
+                                color: Colors.white.withOpacity(0.7),
                                 fontSize: 15,
                               ),
                               border: InputBorder.none,
                               prefixIcon: Icon(
                                 Icons.search,
-                                color: Colors.white.withValues(alpha: 0.7),
+                                color: Colors.white.withOpacity(0.7),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
@@ -273,11 +276,8 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 horizontal: 14,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withOpacity(0.25),
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.22),
-                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -312,43 +312,14 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
           // --- ACTIVE FILTER CHIP BAR ---
           _buildActiveFilterBar(state),
 
-          // --- SUMMARY BOXES ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatBox(
-                    "Thu nhập".xtr(context),
-                    "+${_formatMoney(state.totalIncome)} đ",
-                    const Color(0xFF10B981),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildStatBox(
-                    "Chi tiêu".xtr(context),
-                    "-${_formatMoney(state.totalExpense)} đ",
-                    const Color(0xFFEF4444),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildStatBox(
-                    "Tổng".xtr(context),
-                    "${totalBalance < 0 ? '-' : ''}${_formatMoney(totalBalance.abs())} đ",
-                    const Color(0xFF1D4ED8),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // --- SUMMARY CARDS ---
+          _buildSummaryCards(state),
 
           // --- DANH SÁCH GIAO DỊCH ---
           Expanded(
             child: state.transactions.when(
               loading: () => const Center(
-                child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+                child: CircularProgressIndicator(color: Color(0xFF6C3FD9)),
               ),
               error: (err, stack) =>
                   Center(child: Text('Lỗi: $err'.xtr(context))),
@@ -357,12 +328,33 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(40),
-                      child: Text(
-                        "Không có giao dịch nào.".xtr(context),
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 15,
-                        ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6C3FD9).withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.receipt,
+                              size: 64,
+                              color: Color(0xFF6C3FD9),
+                            ),
+                          ).animate().fade(duration: 400.ms).scale(delay: 100.ms, duration: 400.ms),
+                          const SizedBox(height: 24),
+                          Text(
+                            "Chưa có giao dịch nào\nHãy thêm giao dịch đầu tiên!".xtr(context),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -402,126 +394,167 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                 style: const TextStyle(
                                   color: Color(0xFF64748B),
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                 ),
                               ),
                               Text(
-                                "${dailyTotal < 0 ? '-' : (dailyTotal > 0 ? '+' : '')}${_formatMoney(dailyTotal.abs())} đ",
+                                "${dailyTotal < 0 ? '-' : (dailyTotal > 0 ? '+' : '')}${formatVND(dailyTotal.abs())}",
                                 style: const TextStyle(
-                                  color: Color(0xFF1E293B),
+                                  color: Color(0xFF6C3FD9),
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         ...txList.map((tx) {
-                          final isExpense = tx.type == 'expense';
+                          final isIncome = tx.type == 'income';
                           final category = _resolveCategoryModel(tx);
 
-                          return _ScaleOnTap(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CreateTransactionPage(editData: tx),
-                              ),
-                            ),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.03),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            child: Dismissible(
+                              key: Key(tx.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(
-                                        color: (category?.color ?? Colors.grey)
-                                            .withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Icon(
-                                        category?.iconData ??
-                                            Icons.receipt_long,
-                                        color: category?.color ?? Colors.grey,
-                                        size: 22,
-                                      ),
+                                child: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                              onDismissed: (direction) async {
+                                try {
+                                  await ref.read(transactionControllerProvider.notifier).deleteTransaction(tx.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Đã xóa giao dịch'.xtr(context)),
+                                      backgroundColor: const Color(0xFF334155),
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            tx.note.isNotEmpty
-                                                ? tx.note
-                                                : _displayTransactionCategory(
-                                                    tx,
-                                                  ),
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _displayTransactionCategory(tx),
-                                            style: const TextStyle(
-                                              color: Color(0xFF94A3B8),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Lỗi: $e'.xtr(context)),
+                                      backgroundColor: const Color(0xFFEF4444),
                                     ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
+                                  );
+                                }
+                              },
+                              child: _ScaleOnTap(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        CreateTransactionPage(editData: tx),
+                                  ),
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
+                                    ),
+                                    child: Row(
                                       children: [
-                                        Text(
-                                          "${isExpense ? '-' : '+'}${_formatMoney(tx.amount)} đ",
-                                          style: TextStyle(
-                                            color: isExpense
-                                                ? const Color(0xFFEF4444)
-                                                : const Color(0xFF10B981),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: (category?.color ?? Colors.grey)
+                                                .withOpacity(0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            category?.iconData ??
+                                                Icons.receipt_long,
+                                            color: category?.color ?? Colors.grey,
+                                            size: 22,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          DateFormat('HH:mm').format(tx.date),
-                                          style: const TextStyle(
-                                            color: Color(0xFF94A3B8),
-                                            fontSize: 12,
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                tx.note.isNotEmpty
+                                                    ? tx.note
+                                                    : _displayTransactionCategory(
+                                                        tx,
+                                                      ),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15,
+                                                  color: Color(0xFF1E293B),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              if (tx.note.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _displayTransactionCategory(tx),
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF94A3B8),
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ],
                                           ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              "${isIncome ? '+' : '-'}${formatVND(tx.amount)}",
+                                              style: TextStyle(
+                                                color: isIncome
+                                                    ? const Color(0xFF22C55E)
+                                                    : const Color(0xFFEF4444),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              DateFormat('HH:mm').format(tx.date),
+                                              style: const TextStyle(
+                                                color: Color(0xFF94A3B8),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -543,47 +576,96 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
           ),
         ],
       ),
+      floatingActionButton: canGoBack
+          ? GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CreateTransactionPage(),
+                ),
+              ),
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6C3FD9), Color(0xFF8B5CF6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6C3FD9).withOpacity(0.4),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 36,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
   Widget _buildTabBar(TransactionListState state, dynamic controller) {
     const tabs = ['Tất cả', 'Thu nhập', 'Chi tiêu'];
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: tabs.map((tab) {
           final isSelected = state.currentTab == tab;
           return Expanded(
-            child: _ScaleOnTap(
-              onTap: () => controller.changeTab(tab),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF6D28D9)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Text(
-                  tab.xtr(context),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFF64748B),
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 14,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _ScaleOnTap(
+                onTap: () => controller.changeTab(tab),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: isSelected
+                        ? const LinearGradient(
+                            colors: [Color(0xFF6C3FD9), Color(0xFF8B5CF6)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isSelected ? null : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: isSelected
+                        ? null
+                        : Border.all(
+                            color: const Color(0xFFE2E8F0),
+                            width: 1,
+                          ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFF6C3FD9).withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      tab.xtr(context),
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : const Color(0xFF64748B),
+                        fontWeight: isSelected ? FontWeight.bold : const TextStyle().fontWeight,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -594,43 +676,94 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     );
   }
 
-  Widget _buildStatBox(String title, String amount, Color color) {
+  Widget _buildSummaryCards(TransactionListState state) {
+    double totalBalance = state.totalIncome - state.totalExpense;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: _buildSummaryColumn(
+              title: "Thu nhập".xtr(context),
+              amount: state.totalIncome,
+              color: const Color(0xFF22C55E),
+              prefix: "+",
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            amount,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+          Container(
+            width: 1,
+            height: 32,
+            color: const Color(0xFFE2E8F0),
+          ),
+          Expanded(
+            child: _buildSummaryColumn(
+              title: "Chi tiêu".xtr(context),
+              amount: state.totalExpense,
+              color: const Color(0xFFEF4444),
+              prefix: "-",
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ),
+          Container(
+            width: 1,
+            height: 32,
+            color: const Color(0xFFE2E8F0),
+          ),
+          Expanded(
+            child: _buildSummaryColumn(
+              title: "Tổng".xtr(context),
+              amount: totalBalance,
+              color: const Color(0xFF6C3FD9),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSummaryColumn({
+    required String title,
+    required double amount,
+    required Color color,
+    String prefix = "",
+  }) {
+    String formatted = formatVNDCompact(amount);
+    String displayStr = (prefix.isNotEmpty && amount > 0) ? "$prefix$formatted" : formatted;
+    
+    return Column(
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          displayStr,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 

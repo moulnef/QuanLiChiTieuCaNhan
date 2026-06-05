@@ -637,7 +637,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         ? -100
         : (_isMenuOpen ? 130 : 50);
     final double chatbotOpacity =
-        (hideAssistiveOverlays || _isNestedRouteActive) ? 0.0 : 1.0;
+        (hideAssistiveOverlays || _isNestedRouteActive || _selectedIndex != 0) ? 0.0 : 1.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF),

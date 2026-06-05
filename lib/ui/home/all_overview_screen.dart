@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/currency_formatter.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/budget/add_budget_form_sheet.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/finance/saving_tab.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/finance/installment_tab.dart';
@@ -222,21 +223,21 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
                   children: [
                     _QuickStat(
                       label: 'Tổng thu'.xtr(context),
-                      value: financeProvider.totalIncome.toStringAsFixed(0),
+                      value: formatVNDCompact(financeProvider.totalIncome),
                       icon: Icons.savings_outlined,
                       iconColor: const Color(0xFF4ADE80),
                     ),
                     const SizedBox(width: 8),
                     _QuickStat(
                       label: 'Tổng chi'.xtr(context),
-                      value: financeProvider.totalExpense.toStringAsFixed(0),
+                      value: formatVNDCompact(financeProvider.totalExpense),
                       icon: Icons.credit_card_outlined,
                       iconColor: const Color(0xFF93C5FD),
                     ),
                     const SizedBox(width: 8),
                     _QuickStat(
                       label: 'Số dư'.xtr(context),
-                      value: financeProvider.totalBalance.toStringAsFixed(0),
+                      value: formatVNDCompact(financeProvider.totalBalance),
                       icon: Icons.account_balance_outlined,
                       iconColor: const Color(0xFFFBBF24),
                     ),
@@ -406,7 +407,7 @@ class _FinanceTab extends StatelessWidget {
                   children: [
                     _FinanceChip(
                       label: 'Đang tiết kiệm'.xtr(context),
-                      value: _formatCompactMoney(
+                      value: formatVNDCompact(
                         financeProvider.totalSavingAmount.toDouble(),
                       ),
                       color: _C.green,
@@ -414,7 +415,7 @@ class _FinanceTab extends StatelessWidget {
                     const SizedBox(width: 8),
                     _FinanceChip(
                       label: 'Còn trả góp'.xtr(context),
-                      value: _formatCompactMoney(
+                      value: formatVNDCompact(
                         financeProvider.totalInstallmentRemaining.toDouble(),
                       ),
                       color: _C.primary,
@@ -422,7 +423,7 @@ class _FinanceTab extends StatelessWidget {
                     const SizedBox(width: 8),
                     _FinanceChip(
                       label: 'Còn vay'.xtr(context),
-                      value: _formatCompactMoney(
+                      value: formatVNDCompact(
                         financeProvider.totalDebtRemaining.toDouble(),
                       ),
                       color: _C.red,
@@ -524,9 +525,9 @@ class _SavingTabContent extends StatelessWidget {
                 ? '${'Còn '.xtr(context)}$daysLeft${' ngày'.xtr(context)}'
                 : '${'Đã quá hạn '.xtr(context)}${daysLeft.abs()}${' ngày'.xtr(context)}',
             leftLabel: 'Hiện tại'.xtr(context),
-            leftValue: _formatMoney(item.currentAmount.toDouble()),
+            leftValue: formatVND(item.currentAmount.toDouble()),
             rightLabel: 'Mục tiêu'.xtr(context),
-            rightValue: _formatMoney(item.targetAmount.toDouble()),
+            rightValue: formatVND(item.targetAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             primaryButtonText: '+ Nạp tiền'.xtr(context),
@@ -581,9 +582,9 @@ class _InstallmentTabContent extends StatelessWidget {
             subtitle:
                 '${'Đã trả '.xtr(context)}${item.currentPeriod}/${item.totalPeriods}${' kỳ'.xtr(context)}',
             leftLabel: 'Gốc + Lãi'.xtr(context),
-            leftValue: _formatMoney(item.totalAmount.toDouble()),
+            leftValue: formatVND(item.totalAmount.toDouble()),
             rightLabel: 'Còn nợ'.xtr(context),
-            rightValue: _formatMoney(item.remainingAmount.toDouble()),
+            rightValue: formatVND(item.remainingAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
@@ -637,9 +638,9 @@ class _DebtTabContent extends StatelessWidget {
             title: item.title,
             subtitle: item.lender,
             leftLabel: 'Tổng vay'.xtr(context),
-            leftValue: _formatMoney(item.totalAmount.toDouble()),
+            leftValue: formatVND(item.totalAmount.toDouble()),
             rightLabel: 'Còn lại'.xtr(context),
-            rightValue: _formatMoney(item.remainingAmount.toDouble()),
+            rightValue: formatVND(item.remainingAmount.toDouble()),
             progressPercent: progress.clamp(0, 100),
             progressColor: item.color,
             alertMessage:
@@ -690,20 +691,7 @@ class _InlineFinanceEmptyState extends StatelessWidget {
   }
 }
 
-String _formatMoney(double amount) {
-  final formatter = NumberFormat('#,###', 'vi_VN');
-  return '${formatter.format(amount.round())} đ';
-}
 
-String _formatCompactMoney(double amount) {
-  if (amount >= 1000000) {
-    return '${(amount / 1000000).toStringAsFixed(1)}tr';
-  }
-  if (amount >= 1000) {
-    return '${(amount / 1000).toStringAsFixed(0)}k';
-  }
-  return amount.toStringAsFixed(0);
-}
 
 const double _financeSheetBottomReserve = 128;
 
@@ -1250,7 +1238,7 @@ Future<void> _openCreateLoanSheet(
                         final interestText = interest.isEmpty
                             ? (monthlyPayment > 0
                                   ? 'Trả mỗi tháng '.xtr(context) +
-                                        _formatMoney(monthlyPayment.toDouble())
+                                        formatVND(monthlyPayment.toDouble())
                                   : 'Chưa cập nhật lãi suất'.xtr(context))
                             : '${'Lãi suất '.xtr(context)}$interest%';
 
@@ -1429,6 +1417,8 @@ class _QuickStat extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             Text(
               label,
@@ -1597,6 +1587,20 @@ class _BudgetMiniCard extends StatelessWidget {
               minHeight: 5,
             ),
           ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Đã chi: '.xtr(context) + formatVND(budget.spentAmount),
+                style: const TextStyle(fontSize: 11, color: _C.textLight),
+              ),
+              Text(
+                'Giới hạn: '.xtr(context) + formatVND(budget.limitAmount),
+                style: const TextStyle(fontSize: 11, color: _C.textLight),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1658,7 +1662,7 @@ class _TransactionCard extends StatelessWidget {
           style: const TextStyle(fontSize: 12, color: _C.textLight),
         ),
         trailing: Text(
-          "${transaction.type == 'income' ? '+' : '-'}${transaction.amount.toStringAsFixed(0)} VNĐ",
+          "${transaction.type == 'income' ? '+' : '-'}${formatVND(transaction.amount.abs())}",
           style: TextStyle(
             color: transaction.type == 'income' ? _C.green : _C.red,
             fontWeight: FontWeight.w800,

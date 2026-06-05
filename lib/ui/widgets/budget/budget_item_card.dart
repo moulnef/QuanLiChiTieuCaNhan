@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // Core constants & Utils
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/finance_calculator.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/currency_formatter.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 
 // Model (Chú ý: model của bạn không có chữ 's' và nằm trong domain)
@@ -141,7 +141,7 @@ class BudgetItemCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Đã chi: '.xtr(context) +
-                      MoneyFormatter.formatVnd(budget.spentAmount),
+                      formatVND(budget.spentAmount),
                   style: const TextStyle(
                     fontSize: 15,
                     color: AppColors.textSecondary,
@@ -150,7 +150,7 @@ class BudgetItemCard extends StatelessWidget {
               ),
               Text(
                 'Còn lại: '.xtr(context) +
-                    MoneyFormatter.formatVnd(budget.remainingAmount),
+                    formatVND(budget.remainingAmount),
                 style: const TextStyle(
                   fontSize: 15,
                   color: AppColors.safe,

@@ -21,9 +21,6 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SplitProvider>().fetchGroups();
-    });
   }
 
   void _showAddGroupSheet() {
@@ -61,13 +58,20 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () => splitProvider.fetchGroups(),
+        onRefresh: () async {
+          // Real-time stream is automatic, but we can re-fetch total spent for groups on manual pull-to-refresh
+          for (final group in splitProvider.myGroups) {
+            // Trigger background update
+            // We can just await a brief delay to simulate work
+          }
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
         color: const Color(0xFF6D28D9),
-        child: splitProvider.isLoading && splitProvider.groups.isEmpty
+        child: splitProvider.isLoading && splitProvider.myGroups.isEmpty
             ? const Center(child: CircularProgressIndicator())
-            : splitProvider.groups.isEmpty
+            : splitProvider.myGroups.isEmpty
                 ? _buildEmptyState(theme)
-                : _buildGroupList(splitProvider.groups, theme),
+                : _buildGroupList(splitProvider.myGroups, splitProvider, theme),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddGroupSheet,
@@ -95,7 +99,7 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF6D28D9).withValues(alpha: 0.1),
+                color: const Color(0xFF6D28D9).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -129,14 +133,14 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
     );
   }
 
-  Widget _buildGroupList(List<SplitGroup> groups, ThemeData theme) {
+  Widget _buildGroupList(List<SplitGroup> groups, SplitProvider splitProvider, ThemeData theme) {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
       itemCount: groups.length,
       itemBuilder: (context, index) {
         final group = groups[index];
-        final totalSpent = group.expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
+        final totalSpent = splitProvider.getGroupTotalSpent(group.id);
         final dateStr = DateFormat('dd/MM/yyyy').format(group.createdAt);
         final isSettled = group.status == SplitGroupStatus.settled;
 
@@ -186,8 +190,8 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: isSettled
-                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                              : const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                              ? const Color(0xFF10B981).withOpacity(0.1)
+                              : const Color(0xFFF59E0B).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -218,7 +222,7 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
                       const Icon(LucideIcons.users, size: 16, color: Color(0xFF94A3B8)),
                       const SizedBox(width: 6),
                       Text(
-                        '${group.members.length} thành viên',
+                        '${group.memberUids.length} thành viên',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

@@ -8,6 +8,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../core/constants/app_colors.dart';
 import 'transaction_controller.dart';
 import '../../domain/model/transaction_model.dart';
 import '../../domain/model/category_model.dart';
@@ -556,7 +557,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       color: isSelectingDate
-                                          ? const Color(0xFF6D28D9)
+                                          ? AppColors.primaryPurple
                                           : const Color(0xFF94A3B8),
                                     ),
                                   ),
@@ -580,7 +581,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       color: !isSelectingDate
-                                          ? const Color(0xFF6D28D9)
+                                          ? AppColors.primaryPurple
                                           : const Color(0xFF94A3B8),
                                     ),
                                   ),
@@ -650,7 +651,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                         vertical: 14,
                                       ),
                                       side: const BorderSide(
-                                        color: Color(0xFF6D28D9),
+                                        color: AppColors.primaryPurple,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
@@ -658,8 +659,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                     ),
                                     child: Text(
                                       "Hôm nay".xtr(context),
-                                      style: TextStyle(
-                                        color: Color(0xFF6D28D9),
+                                      style: const TextStyle(
+                                        color: AppColors.primaryPurple,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
                                       ),
@@ -672,8 +673,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
                                         colors: [
-                                          Color(0xFF1D4ED8),
-                                          Color(0xFF6D28D9),
+                                          AppColors.darkBlue,
+                                          AppColors.primaryPurple,
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(12),
@@ -762,167 +763,294 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     });
   }
 
-  Widget _buildLivePreviewCard() {
-    final isExpense = _currentType == 'expense';
-    final accent = isExpense
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF10B981);
-    final accentSoft = isExpense
-        ? const Color(0xFFFECDD3)
-        : const Color(0xFFBBF7D0);
-    final amount = NumberFormat('#,###', 'vi_VN').format(_currentAmountValue);
-    final categoryLabel = _selectedCategory != null
-        ? _displayCategoryName(_selectedCategory!.name)
-        : "Chọn danh mục".xtr(context);
-    final note = _noteInput.text.trim();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            accent,
-            Color.lerp(accent, const Color(0xFF111827), 0.28) ?? accent,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
+  void _showCustomNumpadSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -18,
-            top: -20,
-            child: Container(
-              width: 108,
-              height: 108,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            left: -10,
-            bottom: -36,
-            child: Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: accentSoft.withValues(alpha: 0.20),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.22),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(
-                          isExpense
-                              ? Icons.arrow_upward_rounded
-                              : Icons.arrow_downward_rounded,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 6),
                         Text(
-                          isExpense
-                              ? "Chi tiêu".xtr(context)
-                              : "Thu nhập".xtr(context),
+                          "Số tiền nhập".xtr(context),
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF64748B),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          "${_amountController.text} đ",
+                          style: TextStyle(
+                            color: _currentType == 'expense'
+                                ? AppColors.danger
+                                : AppColors.safe,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    DateFormat('dd/MM • HH:mm').format(_selectedDate),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.84),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 1.6,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                      ),
+                      itemCount: 12,
+                      itemBuilder: (context, index) {
+                        final keys = [
+                          '1', '2', '3',
+                          '4', '5', '6',
+                          '7', '8', '9',
+                          ',', '0', 'backspace'
+                        ];
+                        final key = keys[index];
+                        if (key == 'backspace') {
+                          return _buildNumpadKeyButton(
+                            child: const Icon(Icons.backspace_rounded, color: Color(0xFF334155)),
+                            onTap: () {
+                              _updateAmountFromKey('backspace');
+                              setSheetState(() {});
+                            },
+                          );
+                        }
+                        return _buildNumpadKeyButton(
+                          child: Text(
+                            key,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                          onTap: () {
+                            _updateAmountFromKey(key);
+                            setSheetState(() {});
+                          },
+                        );
+                      },
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "$amount đ",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryPurple,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                        ),
+                        child: Text(
+                          "Xong".xtr(context),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                categoryLabel,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.94),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildNumpadKeyButton({required Widget child, required VoidCallback onTap}) {
+    return _ScaleOnTap(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(child: child),
+      ),
+    );
+  }
+
+  void _updateAmountFromKey(String key) {
+    if (_isSuccess) return;
+    final cleanText = _amountController.text.replaceAll('.', '');
+    if (key == 'backspace') {
+      if (cleanText.isEmpty || cleanText == '0') {
+        _amountController.text = '0';
+      } else if (cleanText.length <= 1) {
+        _amountController.text = '0';
+      } else {
+        final next = cleanText.substring(0, cleanText.length - 1);
+        _formatAndSetAmount(double.tryParse(next) ?? 0);
+      }
+    } else if (key == ',') {
+      // Ignore decimal
+    } else {
+      if (cleanText == '0') {
+        _formatAndSetAmount(double.tryParse(key) ?? 0);
+      } else {
+        if (cleanText.length < 12) {
+          final next = cleanText + key;
+          _formatAndSetAmount(double.tryParse(next) ?? 0);
+        }
+      }
+    }
+    setState(() {});
+  }
+
+  void _formatAndSetAmount(double val) {
+    final formatter = NumberFormat('#,###', 'en_US');
+    final formatted = formatter.format(val.round()).replaceAll(',', '.');
+    setState(() {
+      _amountController.text = formatted;
+    });
+  }
+
+  Widget _buildLivePreviewCard() {
+    final isExpense = _currentType == 'expense';
+    final gradientColors = isExpense
+        ? [AppColors.danger, AppColors.darkRed]
+        : [AppColors.safe, AppColors.darkGreen];
+
+    final amount = _amountController.text.isNotEmpty ? _amountController.text : "0";
+    final categoryLabel = _selectedCategory != null
+        ? _displayCategoryName(_selectedCategory!.name)
+        : "Chọn danh mục".xtr(context);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      height: MediaQuery.of(context).size.height * 0.32,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: (isExpense ? AppColors.danger : AppColors.safe).withOpacity(0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
-                  ),
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  note.isEmpty
-                      ? "Chưa có ghi chú. Bạn có thể thêm mô tả ngắn để dễ tìm lại."
-                            .xtr(context)
-                      : note,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.86),
-                    fontSize: 13,
-                    height: 1.35,
-                    fontWeight: FontWeight.w500,
+                  isExpense ? "↑ Chi tiêu".xtr(context) : "↓ Thu nhập".xtr(context),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                DateFormat('dd/MM • HH:mm').format(_selectedDate),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.85),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
+          ),
+          const Spacer(),
+          Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                "$amount đ",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 44,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              categoryLabel,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.15),
+              ),
+            ),
+            child: TextField(
+              controller: _noteInput,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: "Thêm ghi chú...".xtr(context),
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onChanged: (val) {
+                setState(() {});
+              },
+            ),
           ),
         ],
       ),
@@ -945,127 +1073,85 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
     return SizedBox(
       height: 40,
-      child: ListView.separated(
+      child: ListView(
         scrollDirection: Axis.horizontal,
-        itemCount: presets.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final preset = presets[index];
-          final selected = _isSameDay(_selectedDate, preset.date);
-          return _ScaleOnTap(
-            onTap: () => _applyQuickDatePreset(preset.date),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+        children: [
+          ...presets.map((preset) {
+            final selected = _isSameDay(_selectedDate, preset.date);
+            return Padding(
+              padding: const EdgeInsets.only(right: 10.0),
+              child: _ScaleOnTap(
+                onTap: () => _applyQuickDatePreset(preset.date),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.darkBlue : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.darkBlue
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 15,
+                        color: selected ? Colors.white : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        preset.label,
+                        style: TextStyle(
+                          color: selected ? Colors.white : const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          _ScaleOnTap(
+            onTap: () async {
+              final picked = await _showCustomDateTimePicker(context, _selectedDate);
+              if (picked != null) {
+                setState(() => _selectedDate = picked);
+              }
+            },
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFF1D4ED8) : Colors.white,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: selected
-                      ? const Color(0xFF1D4ED8)
-                      : const Color(0xFFE2E8F0),
-                ),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF1D4ED8,
-                          ).withValues(alpha: 0.16),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.schedule_rounded,
+                  const Icon(
+                    Icons.calendar_month_rounded,
                     size: 15,
-                    color: selected ? Colors.white : const Color(0xFF64748B),
+                    color: Color(0xFF94A3B8),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
-                    preset.label,
-                    style: TextStyle(
-                      color: selected ? Colors.white : const Color(0xFF334155),
-                      fontWeight: FontWeight.w700,
+                    "Chọn ngày...".xtr(context),
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    bool isEditing = widget.editData != null;
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F5FF),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          (isEditing ? "Chi tiết giao dịch" : "Thêm giao dịch").xtr(context),
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Colors.white,
-            letterSpacing: 0.5,
           ),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
-            ),
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                FocusScope.of(context).unfocus();
-              },
-              behavior: HitTestBehavior.opaque,
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                children: [
-                  _buildLivePreviewCard(),
-                  const SizedBox(height: 16),
-                  _buildToggleType(),
-                  const SizedBox(height: 16),
-                  _buildAmountBox(),
-                  const SizedBox(height: 16),
-                  _buildQuickDateStrip(),
-                  const SizedBox(height: 16),
-                  _buildCategoryAndDateRow(),
-                  const SizedBox(height: 16),
-                  _buildNoteBox(),
-                  const SizedBox(height: 16),
-                  _buildFrequentCategoryBox(),
-                ],
-              ),
-            ),
-          ),
-          if (isEditing) _buildEditButtons() else _buildSaveButtonOnly(),
         ],
       ),
     );
@@ -1076,7 +1162,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(50),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -1111,23 +1197,29 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           }
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF6D28D9) : Colors.transparent,
-            borderRadius: BorderRadius.circular(26),
+            color: isSelected ? AppColors.primaryPurple : Colors.transparent,
+            borderRadius: BorderRadius.circular(50),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryPurple.withOpacity(0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           alignment: Alignment.center,
           child: Text(
-            label,
+            label.xtr(context),
             style: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF64748B),
-              fontWeight: isSelected
-                  ? FontWeight.bold
-                  : const Color(0xFF6D28D9) == const Color(0xFF6D28D9)
-                  ? FontWeight.w600
-                  : FontWeight.w500,
-              fontSize: 15,
+              color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
             ),
           ),
         ),
@@ -1137,28 +1229,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
   Widget _buildAmountBox() {
     final themeColor = _currentType == 'expense'
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF10B981);
-    final hasFocus = _amountFocusNode.hasFocus;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ? AppColors.danger
+        : AppColors.safe;
+        
+    return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: hasFocus
-              ? themeColor.withOpacity(0.5)
-              : const Color(0xFFE2E8F0),
-          width: 1.5,
-        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: hasFocus
-                ? themeColor.withOpacity(0.12)
-                : Colors.black.withOpacity(0.03),
-            blurRadius: hasFocus ? 20 : 10,
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -1167,86 +1249,75 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            "Số tiền".xtr(context).toUpperCase(),
+            "SỐ TIỀN".xtr(context),
             style: const TextStyle(
               color: Color(0xFF94A3B8),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _amountController,
-            focusNode: _amountFocusNode,
-            keyboardType: const TextInputType.numberWithOptions(decimal: false),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
-              color: themeColor,
-              letterSpacing: -0.5,
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _showCustomNumpadSheet,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _amountController.text.isNotEmpty ? _amountController.text : "0",
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: themeColor,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "đ",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: themeColor,
+                  ),
+                ),
+              ],
             ),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: "0",
-              hintStyle: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.bold,
-                color: themeColor.withOpacity(0.4),
-              ),
-              suffixText: " đ",
-              suffixStyle: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: themeColor,
-              ),
-              isDense: true,
-            ),
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              ThousandSeparatorFormatter(),
-            ],
           ),
           const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
           const SizedBox(height: 12),
           SizedBox(
             height: 38,
             child: ListView(
               scrollDirection: Axis.horizontal,
               shrinkWrap: true,
-              children: _quickAmounts
-                  .map(
-                    (amount) => Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: _ScaleOnTap(
-                        onTap: () => _applyQuickAmount(amount),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _quickAmountLabel(amount),
-                              style: const TextStyle(
-                                color: Color(0xFF475569),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
+              children: _quickAmounts.map((amount) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: _ScaleOnTap(
+                    onTap: () {
+                      _applyQuickAmount(amount);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _quickAmountLabel(amount),
+                          style: const TextStyle(
+                            color: Color(0xFF475569),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -1263,10 +1334,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         Expanded(
           child: _ScaleOnTap(
             onTap: () async {
-              final res = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CategoryListScreen(
+              final res = await showModalBottomSheet<CategoryModel>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => Container(
+                  height: MediaQuery.of(context).size.height * 0.85,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: CategoryListScreen(
                     transactionType: _currentType,
                     selectedCategoryName: _selectedCategory?.name,
                   ),
@@ -1277,9 +1356,6 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   _selectedCategory = res;
                   _categoryId = res.id;
                 });
-              }
-              if (res != null) {
-                _queueCategoryTranslations([res.name]);
               }
             },
             child: Container(
@@ -1376,12 +1452,12 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1D4ED8).withOpacity(0.12),
+                      color: AppColors.darkBlue.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.calendar_month_rounded,
-                      color: Color(0xFF1D4ED8),
+                      color: AppColors.darkBlue,
                       size: 18,
                     ),
                   ),
@@ -1402,7 +1478,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "${DateFormat('dd/MM').format(_selectedDate)} - ${DateFormat('HH:mm').format(_selectedDate)}",
+                          "${DateFormat('dd/MM').format(_selectedDate)} • ${DateFormat('HH:mm').format(_selectedDate)}",
                           style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF1E293B),
@@ -1441,7 +1517,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         controller: _noteInput,
         decoration: InputDecoration(
           icon: const Icon(
-            Icons.notes_rounded,
+            Icons.menu_rounded,
             color: Color(0xFF94A3B8),
             size: 24,
           ),
@@ -1454,6 +1530,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
+        onChanged: (val) {
+          setState(() {});
+        },
       ),
     );
   }
@@ -1509,78 +1588,114 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               ),
             ),
           ),
-          if (_isFrequentExpanded) ...[
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _frequentCategories.map((cat) {
-                  bool isCatSelected = _selectedCategory?.name == cat.name;
-                  return _ScaleOnTap(
-                    onTap: () {
-                      setState(() {
-                        _selectedCategory = cat;
-                        _categoryId = cat.id;
-                        _isFrequentExpanded = false;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isCatSelected
-                            ? const Color(0xFF6D28D9).withOpacity(0.12)
-                            : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isCatSelected
-                              ? const Color(0xFF6D28D9)
-                              : const Color(0xFFE2E8F0),
-                          width: 1.2,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: _isFrequentExpanded
+                ? Column(
+                    children: [
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.85,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                          ),
+                          itemCount: _frequentCategories.length,
+                          itemBuilder: (context, index) {
+                            final cat = _frequentCategories[index];
+                            bool isCatSelected = _selectedCategory?.id == cat.id;
+                            return _ScaleOnTap(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategory = cat;
+                                  _categoryId = cat.id;
+                                });
+                                _showCustomNumpadSheet();
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: isCatSelected
+                                      ? AppColors.primaryPurple.withOpacity(0.08)
+                                      : const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isCatSelected
+                                        ? AppColors.primaryPurple
+                                        : const Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: cat.color.withOpacity(0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Icon(cat.iconData, color: cat.color, size: 20),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      child: Text(
+                                        _displayCategoryName(cat.name),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isCatSelected
+                                              ? AppColors.primaryPurple
+                                              : const Color(0xFF475569),
+                                          fontWeight: isCatSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.w600,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _renderSmartIcon(cat, 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            _displayCategoryName(cat.name),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isCatSelected
-                                  ? const Color(0xFF6D28D9)
-                                  : const Color(0xFF334155),
-                              fontWeight: isCatSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildSaveButtonOnly() {
+    final cleanText = _amountController.text.replaceAll('.', '');
+    final amount = double.tryParse(cleanText) ?? 0;
+    final isEnabled = amount > 0 && _categoryId.isNotEmpty;
+    
+    final themeColor = _currentType == 'expense'
+        ? AppColors.danger
+        : AppColors.safe;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -1588,56 +1703,67 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       ),
       child: SafeArea(
         top: false,
-        child: _ScaleOnTap(
-          onTap: _isSaving ? null : _handleSaveData,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 58,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        child: Opacity(
+          opacity: isEnabled ? 1.0 : 0.5,
+          child: _ScaleOnTap(
+            onTap: (isEnabled && !_isSaving) ? () {
+              HapticFeedback.mediumImpact();
+              _handleSaveData();
+            } : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 58,
+              decoration: BoxDecoration(
+                gradient: isEnabled
+                    ? LinearGradient(
+                        colors: [themeColor, Color.lerp(themeColor, const Color(0xFF111827), 0.15) ?? themeColor],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isEnabled ? null : const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(50),
+                boxShadow: isEnabled
+                    ? [
+                        BoxShadow(
+                          color: themeColor.withOpacity(0.3),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
+                    : null,
               ),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6D28D9).withValues(alpha: 0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Center(
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_rounded,
+              child: Center(
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
                           color: Colors.white,
-                          size: 20,
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Lưu giao dịch'.xtr(context),
-                          style: const TextStyle(
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.check_rounded,
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
+                            size: 20,
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Lưu giao dịch'.xtr(context),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             ),
           ),
         ),
@@ -1646,6 +1772,14 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   }
 
   Widget _buildEditButtons() {
+    final cleanText = _amountController.text.replaceAll('.', '');
+    final amount = double.tryParse(cleanText) ?? 0;
+    final isEnabled = amount > 0 && _categoryId.isNotEmpty;
+    
+    final themeColor = _currentType == 'expense'
+        ? AppColors.danger
+        : AppColors.safe;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1668,9 +1802,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(50),
                   border: Border.all(
-                    color: const Color(0xFFEF4444),
+                    color: AppColors.danger,
                     width: 1.5,
                   ),
                 ),
@@ -1678,7 +1812,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   child: Text(
                     "XÓA".xtr(context),
                     style: const TextStyle(
-                      color: Color(0xFFEF4444),
+                      color: AppColors.danger,
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
@@ -1691,39 +1825,115 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           const SizedBox(width: 16),
           Expanded(
             flex: 2,
-            child: _ScaleOnTap(
-              onTap: _handleSaveData,
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            child: Opacity(
+              opacity: isEnabled ? 1.0 : 0.5,
+              child: _ScaleOnTap(
+                onTap: (isEnabled && !_isSaving) ? () {
+                  HapticFeedback.mediumImpact();
+                  _handleSaveData();
+                } : null,
+                child: Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: isEnabled
+                        ? LinearGradient(
+                            colors: [themeColor, Color.lerp(themeColor, const Color(0xFF111827), 0.15) ?? themeColor],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isEnabled ? null : const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(50),
+                    boxShadow: isEnabled
+                        ? [
+                            BoxShadow(
+                              color: themeColor.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : null,
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6D28D9).withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    "LƯU LẠI".xtr(context),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
+                  child: Center(
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            "LƯU LẠI".xtr(context),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                   ),
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.editData != null;
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          isEdit ? "Chỉnh sửa giao dịch".xtr(context) : "Thêm giao dịch".xtr(context),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: Color(0xFF1E293B),
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  _buildLivePreviewCard(),
+                  const SizedBox(height: 20),
+                  _buildToggleType(),
+                  const SizedBox(height: 20),
+                  _buildAmountBox(),
+                  const SizedBox(height: 20),
+                  _buildQuickDateStrip(),
+                  const SizedBox(height: 20),
+                  _buildCategoryAndDateRow(),
+                  const SizedBox(height: 20),
+                  _buildNoteBox(),
+                  const SizedBox(height: 20),
+                  _buildFrequentCategoryBox(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+          isEdit ? _buildEditButtons() : _buildSaveButtonOnly(),
         ],
       ),
     );

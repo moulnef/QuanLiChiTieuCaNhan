@@ -19,4 +19,10 @@ class AppColors {
 
   static const Color softGreen = Color(0xFFEAFBF4);
   static const Color progressBackground = Color(0xFFECEFF5);
+
+  // Redesign Colors
+  static const Color primaryPurple = Color(0xFF6C3FD9);
+  static const Color darkBlue = Color(0xFF1D4ED8);
+  static const Color darkRed = Color(0xFFDC2626);
+  static const Color darkGreen = Color(0xFF16A34A);
 }

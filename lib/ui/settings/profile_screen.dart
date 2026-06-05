@@ -11,6 +11,7 @@ import 'app_feedback_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../utils/app_localizer.dart';
+import '../../utils/currency_formatter.dart';
 import '../providers/sync_provider.dart';
 import '../../services/sync_service.dart';
 import '../../services/notification_service.dart';
@@ -125,8 +126,8 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final double dynamicBottomSpace =
-        MediaQuery.of(context).padding.bottom + _profileBottomReserve;
+    // web layout bottom space
+    final double dynamicBottomSpace = kIsWeb ? 24.0 : 140.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
@@ -401,7 +402,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       child: Stack(
         children: [
-          // Thêm các vòng tròn trang trí giống trang chủ
           Positioned(
             right: -30,
             top: -20,
@@ -440,20 +440,20 @@ class _ProfilePageState extends State<ProfilePage> {
                     Color dotColor;
                     switch (syncProvider.status) {
                       case SyncStatus.syncing:
-                        dotColor = const Color(0xFFF59E0B); // Yellow
+                        dotColor = const Color(0xFFF59E0B);
                         break;
                       case SyncStatus.success:
-                        dotColor = const Color(0xFF10B981); // Green
+                        dotColor = const Color(0xFF10B981);
                         break;
                       case SyncStatus.error:
                       case SyncStatus.offline:
-                        dotColor = const Color(0xFFEF4444); // Red
+                        dotColor = const Color(0xFFEF4444);
                         break;
                       case SyncStatus.idle:
                       default:
                         dotColor = syncProvider.pendingCount > 0
-                            ? const Color(0xFFF59E0B) // Yellow
-                            : const Color(0xFF10B981); // Green
+                            ? const Color(0xFFF59E0B)
+                            : const Color(0xFF10B981);
                         break;
                     }
 
@@ -464,10 +464,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           width: 68,
                           height: 68,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: Colors.white.withOpacity(0.15),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
+                              color: Colors.white,
                               width: 2,
                             ),
                           ),
@@ -492,9 +492,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               color: dotColor,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: const Color(
-                                  0xFF1D4ED8,
-                                ), // matched gradient background
+                                color: const Color(0xFF1D4ED8),
                                 width: 2,
                               ),
                             ),
@@ -506,59 +504,68 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(width: 18),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _displayName,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.55,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _displayName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _email,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withValues(alpha: 0.7),
+                        const SizedBox(height: 4),
+                        Text(
+                          _email,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.4),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.verified_rounded,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                "Đã xác minh".xtr(context),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified_rounded,
-                              size: 13,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              "Đã xác minh".xtr(context),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 GestureDetector(
@@ -613,26 +620,20 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _formatMoney(double amount) {
-    try {
-      final formatter = NumberFormat('#,###', 'vi_VN');
-      final formatted = formatter.format(amount.round());
-      return '$formattedđ';
-    } catch (_) {
-      return '${amount.toStringAsFixed(0)}đ';
-    }
+    return formatVND(amount);
   }
 
   Widget _statCard(String value, String label, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
@@ -641,12 +642,15 @@ class _ProfilePageState extends State<ProfilePage> {
           children: [
             Icon(icon, size: 20, color: const Color(0xFF6D28D9)),
             const SizedBox(height: 8),
-            Text(
-              value.isEmpty ? "--" : value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value.isEmpty ? "--" : value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ),
             const SizedBox(height: 2),

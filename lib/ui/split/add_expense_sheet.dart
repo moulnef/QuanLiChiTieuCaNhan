@@ -5,10 +5,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/split_group.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/split_member.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/split_expense.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 import '../providers/split_provider.dart';
+import '../providers/auth_provider.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   final SplitGroup group;
@@ -35,12 +35,16 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   @override
   void initState() {
     super.initState();
-    // Default payer is the first member (usually the creator/current user)
-    _selectedPayerId = widget.group.members.isNotEmpty ? widget.group.members.first.id : '';
+    
+    // Set default payer to the current user if they are a member, otherwise first member
+    final currentUserId = context.read<AuthProvider>().currentUser?.uid ?? '';
+    _selectedPayerId = widget.group.memberUids.contains(currentUserId)
+        ? currentUserId
+        : (widget.group.memberUids.isNotEmpty ? widget.group.memberUids.first : '');
     
     // Initialize custom share controllers
-    for (final member in widget.group.members) {
-      _customShareControllers[member.id] = TextEditingController();
+    for (final uid in widget.group.memberUids) {
+      _customShareControllers[uid] = TextEditingController();
     }
 
     _amountController.addListener(_onAmountChanged);
@@ -74,11 +78,11 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       _splitType = type;
       if (type == SplitType.custom && _totalAmount > 0) {
         // Pre-populate custom controllers with equal share as a starting point
-        final equalShare = (_totalAmount / widget.group.members.length).roundToDouble();
+        final equalShare = (_totalAmount / widget.group.memberUids.length).roundToDouble();
         final formatter = NumberFormat('#,###', 'vi_VN');
         
-        for (final member in widget.group.members) {
-          _customShareControllers[member.id]?.text = formatter.format(equalShare);
+        for (final uid in widget.group.memberUids) {
+          _customShareControllers[uid]?.text = formatter.format(equalShare);
         }
       }
     });
@@ -89,6 +93,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     final description = _descriptionController.text.trim();
     final totalAmount = _totalAmount;
+    final currentUserId = context.read<AuthProvider>().currentUser?.uid ?? '';
 
     if (totalAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -103,16 +108,16 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     final Map<String, double> shares = {};
 
     if (_splitType == SplitType.equal) {
-      final share = totalAmount / widget.group.members.length;
-      for (final member in widget.group.members) {
-        shares[member.id] = share;
+      final share = totalAmount / widget.group.memberUids.length;
+      for (final uid in widget.group.memberUids) {
+        shares[uid] = share;
       }
     } else {
       double customSum = 0;
-      for (final member in widget.group.members) {
-        final shareCleanText = _customShareControllers[member.id]?.text.replaceAll(RegExp(r'\D'), '') ?? '';
+      for (final uid in widget.group.memberUids) {
+        final shareCleanText = _customShareControllers[uid]?.text.replaceAll(RegExp(r'\D'), '') ?? '';
         final shareVal = double.tryParse(shareCleanText) ?? 0.0;
-        shares[member.id] = shareVal;
+        shares[uid] = shareVal;
         customSum += shareVal;
       }
 
@@ -140,16 +145,18 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     final expenseId = const Uuid().v4();
     final newExpense = SplitExpense(
       id: expenseId,
+      groupId: widget.group.id,
       description: description,
       amount: totalAmount,
-      paidBy: _selectedPayerId,
+      paidByUid: _selectedPayerId,
+      createdByUid: currentUserId,
       splitType: _splitType,
       shares: shares,
       createdAt: DateTime.now(),
     );
 
     try {
-      await context.read<SplitProvider>().addExpense(widget.group.id, newExpense);
+      await context.read<SplitProvider>().addExpense(newExpense);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,9 +180,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final splitProvider = context.watch<SplitProvider>();
     final totalAmount = _totalAmount;
-    final equalSharePreview = widget.group.members.isNotEmpty ? totalAmount / widget.group.members.length : 0.0;
+    final equalSharePreview = widget.group.memberUids.isNotEmpty ? totalAmount / widget.group.memberUids.length : 0.0;
 
     return Container(
       decoration: const BoxDecoration(
@@ -184,8 +191,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       ),
       padding: EdgeInsets.only(
         top: 24,
-        left: 24,
-        right: 24,
+        left: 16,
+        right: 16,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: Form(
@@ -290,10 +297,11 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   filled: true,
                   fillColor: const Color(0xFFF8F9FE),
                 ),
-                items: widget.group.members.map((member) {
+                items: widget.group.memberUids.map((uid) {
+                  final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên';
                   return DropdownMenuItem<String>(
-                    value: member.id,
-                    child: Text(member.name),
+                    value: uid,
+                    child: Text(name),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -304,27 +312,23 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               ),
               const SizedBox(height: 20),
               // Split Type Toggle
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Hình thức chia tiền',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      children: [
-                        _splitTypeButton('Chia đều', SplitType.equal),
-                        _splitTypeButton('Tùy chỉnh', SplitType.custom),
-                      ],
-                    ),
-                  ),
-                ],
+              const Text(
+                'Hình thức chia tiền',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(child: _splitTypeButton('Chia đều', SplitType.equal)),
+                    Expanded(child: _splitTypeButton('Tùy chỉnh', SplitType.custom)),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               // Equal Split preview or Custom shares inputs
@@ -342,7 +346,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Chia đều cho ${widget.group.members.length} người. Mỗi người chịu ${_currencyFormat.format(equalSharePreview)}.',
+                          'Chia đều cho ${widget.group.memberUids.length} người. Mỗi người chịu ${_currencyFormat.format(equalSharePreview)}.',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -362,7 +366,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
                     ),
                     const SizedBox(height: 10),
-                    ...widget.group.members.map((member) {
+                    ...widget.group.memberUids.map((uid) {
+                      final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên';
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Row(
@@ -370,7 +375,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                             Expanded(
                               flex: 3,
                               child: Text(
-                                member.name,
+                                name,
                                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF334155)),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -380,7 +385,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                             Expanded(
                               flex: 2,
                               child: TextFormField(
-                                controller: _customShareControllers[member.id],
+                                controller: _customShareControllers[uid],
                                 keyboardType: TextInputType.number,
                                 inputFormatters: [ThousandsSeparatorInputFormatter()],
                                 textAlign: TextAlign.right,
@@ -431,14 +436,15 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     return GestureDetector(
       onTap: () => _onSplitTypeChanged(type),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withOpacity(0.05),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),

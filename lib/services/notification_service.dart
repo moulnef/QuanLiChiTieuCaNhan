@@ -317,6 +317,19 @@ class NotificationService {
     }
   }
 
+  Future<void> sendNotification({
+    required String userId,
+    required String title,
+    required String body,
+    required String relatedId,
+    NotificationType type = NotificationType.transactionExpense,
+  }) async {
+    if (userId.isEmpty) return;
+    final canNotify = await _ensureReadyForPush(userId);
+    if (!canNotify) return;
+    await _triggerPushAndSave(userId, type, title, body, relatedId);
+  }
+
   Future<void> _triggerPushAndSave(
     String userId,
     NotificationType type,

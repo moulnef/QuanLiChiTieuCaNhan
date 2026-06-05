@@ -1,11 +1,11 @@
 class SplitDebt {
-  final String from; // memberId
-  final String to; // memberId
+  final String fromUid;
+  final String toUid;
   final double amount;
 
   SplitDebt({
-    required this.from,
-    required this.to,
+    required this.fromUid,
+    required this.toUid,
     required this.amount,
   });
 }
