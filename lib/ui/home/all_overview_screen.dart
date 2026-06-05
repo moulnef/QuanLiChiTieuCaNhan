@@ -12,6 +12,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/budget_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/finance_calculator.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
@@ -283,13 +284,15 @@ class _AllOverviewScreenState extends State<AllOverviewScreen>
 class _HomeTab extends StatelessWidget {
   final List<Budget> budgets;
   final FirestoreService firestoreService;
+  final FinanceRepository _repository = FinanceRepository();
 
-  const _HomeTab({required this.budgets, required this.firestoreService});
+  _HomeTab({required this.budgets, required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
     return StreamBuilder<List<TransactionModel>>(
-      stream: firestoreService.streamTransactions(),
+      stream: _repository.streamTransactions(userId),
       builder: (context, snapshot) {
         final transactions = snapshot.data ?? [];
 
@@ -337,7 +340,7 @@ class _HomeTab extends StatelessWidget {
               ...transactions.take(5).map((tx) {
                 return _TransactionCard(
                   transaction: tx,
-                  onDelete: () => firestoreService.deleteTransaction(tx.id),
+                  onDelete: () => _repository.deleteTransaction(userId, tx.id),
                 );
               }),
           ],
@@ -356,7 +359,7 @@ class _FinanceTab extends StatelessWidget {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, _) {
         return DefaultTabController(
-          length: 2,
+          length: 3,
           child: Column(
             children: [
               Container(
@@ -375,6 +378,7 @@ class _FinanceTab extends StatelessWidget {
                   tabs: [
                     Tab(text: 'Tiết kiệm'.xtr(context)),
                     Tab(text: 'Trả góp'.xtr(context)),
+                    Tab(text: 'Vay nợ'.xtr(context)),
                   ],
                 ),
               ),
@@ -401,14 +405,23 @@ class _FinanceTab extends StatelessWidget {
                       ),
                       color: _C.primary,
                     ),
+                    const SizedBox(width: 8),
+                    _FinanceChip(
+                      label: 'Còn vay'.xtr(context),
+                      value: _formatCompactMoney(
+                        financeProvider.totalDebtRemaining.toDouble(),
+                      ),
+                      color: _C.red,
+                    ),
                   ],
                 ),
               ),
               Expanded(
                 child: TabBarView(
                   children: [
-                    _SavingTabContent(provider: financeProvider),
-                    _InstallmentTabContent(provider: financeProvider),
+                    const SavingTabPage(),
+                    const InstallmentTabPage(),
+                    const DebtTabPage(),
                   ],
                 ),
               ),

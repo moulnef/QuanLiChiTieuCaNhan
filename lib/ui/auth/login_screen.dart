@@ -111,6 +111,39 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
+  Future<void> _loginWithGoogle() async {
+    try {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: true,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6D28D9)),
+        ),
+      );
+
+      final result = await context.read<AuthProvider>().signInWithGoogle();
+
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+      if (!mounted) return;
+
+      if (result != null) {
+        SnackbarUtils.showError(context, result);
+      }
+    } catch (e) {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+      if (mounted) {
+        SnackbarUtils.showError(context, e.toString());
+      }
+    }
+  }
+
   Future<void> _openForgotPasswordPage() async {
     await Navigator.push(
       context,
@@ -248,7 +281,7 @@ class _LoginPageState extends State<LoginPage>
                         child: _buildSocialButton(
                           icon: Icons.g_mobiledata_rounded,
                           label: 'Google',
-                          onTap: () {},
+                          onTap: _loginWithGoogle,
                         ),
                       ),
                       const SizedBox(width: 16),

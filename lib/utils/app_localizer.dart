@@ -100,6 +100,9 @@ class AppLocalizer {
     'Họ tên, ngày sinh': 'Full name, date of birth',
     'Đổi mật khẩu': 'Change password',
     'Cập nhật mật khẩu': 'Update password',
+    'Góp ý và đánh giá ứng dụng': 'Feedback and app rating',
+    'Gửi nhận xét và chấm điểm từ 1 đến 5 sao':
+        'Send feedback and rate from 1 to 5 stars',
     'Nhắc nhở thanh toán': 'Payment reminder',
     'Thông báo trước 3 ngày': 'Remind 3 days before',
     'Đồng bộ đám mây': 'Cloud sync',
@@ -142,9 +145,10 @@ class AppLocalizer {
 
     // Status and buttons
     'Đã xác minh': 'Verified',
-    'Đăng xuất': 'Logout',
+    'Đăng xuất': 'Log out',
     'Bảng điều khiển quản trị': 'Admin Dashboard',
     'Mở trang dashboard dành cho admin': 'Open the admin dashboard',
+    'Người dùng': 'User',
 
     // Cloud sync UI
     'Đang đồng bộ...': 'Syncing...',

@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/auth_service.dart';
-import '../../services/login_tutorial_service.dart';
 import '../../services/sync_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -78,6 +77,17 @@ class AuthProvider extends ChangeNotifier {
     return result;
   }
 
+  Future<String?> signInWithGoogle() async {
+    _isLoading = true;
+    notifyListeners();
+
+    final result = await _authService.signInWithGoogle();
+
+    _isLoading = false;
+    notifyListeners();
+    return result;
+  }
+
   Future<String?> sendPasswordResetEmail(String email) async {
     try {
       await _authService.sendPasswordResetEmail(email);
@@ -99,10 +109,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    final userId = _currentUser?.uid;
-    if (userId != null) {
-      await LoginTutorialService.resetForUser(userId);
-    }
     await _authService.signOut();
   }
 

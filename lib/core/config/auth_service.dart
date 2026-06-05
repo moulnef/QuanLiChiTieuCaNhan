@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../data/local/category_data.dart';
 import '../../domain/model/wallet_model.dart';
@@ -16,6 +17,7 @@ class AuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   void _log(String message) {
     if (kDebugMode) {
@@ -25,7 +27,10 @@ class AuthService {
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    await _googleSignIn.signOut();
+    await _auth.signOut();
+  }
 
   Future<void> sendPasswordResetEmail(String email) async {
     final normalizedEmail = email.trim();
@@ -40,17 +45,83 @@ class AuthService {
   }
 
   Future<void> registerAfterOTP(String email, String password) async {
-    _log('Báº¯t Ä‘áº§u Ä‘Äƒng kÃ½ tÃ i khoáº£n cho email: $email');
+    _log('Bắt đầu đăng ký tài khoản cho email: $email');
 
-    // 1. Táº¡o tÃ i khoáº£n Firebase Auth
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
 
     final uid = credential.user!.uid;
+    await _initializeUserData(
+      uid: uid,
+      email: email,
+      displayName: email.split('@')[0],
+      photoURL: '',
+      markNeedsTutorial: true,
+    );
+    _log('Khởi tạo dữ liệu người dùng mới thành công cho $uid');
+  }
 
-    // 2. Táº¡o document users/{userId}/profile/user_profile
+  Future<String?> signInWithGoogle() async {
+    try {
+      UserCredential result;
+      String fallbackEmail = '';
+      String fallbackName = '';
+      String fallbackPhoto = '';
+
+      if (kIsWeb) {
+        result = await _auth.signInWithPopup(GoogleAuthProvider());
+      } else {
+        final googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) {
+          return 'Đã hủy đăng nhập Google.';
+        }
+
+        fallbackEmail = googleUser.email;
+        fallbackName = googleUser.displayName ?? googleUser.email;
+        fallbackPhoto = googleUser.photoUrl ?? '';
+
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        result = await _auth.signInWithCredential(credential);
+      }
+
+      final user = result.user;
+      if (user == null) {
+        return 'Không thể xác thực tài khoản Google.';
+      }
+
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final isNewUser = result.additionalUserInfo?.isNewUser == true;
+      if (isNewUser || !userDoc.exists) {
+        await _initializeUserData(
+          uid: user.uid,
+          email: user.email ?? fallbackEmail,
+          displayName: user.displayName ?? fallbackName,
+          photoURL: user.photoURL ?? fallbackPhoto,
+          markNeedsTutorial: isNewUser,
+        );
+      }
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message ?? 'Không thể đăng nhập bằng Google.';
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<void> _initializeUserData({
+    required String uid,
+    required String email,
+    required String displayName,
+    required String photoURL,
+    required bool markNeedsTutorial,
+  }) async {
     await _firestore
         .collection('users')
         .doc(uid)
@@ -58,26 +129,26 @@ class AuthService {
         .doc('user_profile')
         .set({
           'email': email,
-          'displayName': email.split('@')[0],
-          'photoURL': '',
+          'displayName': displayName,
+          'photoURL': photoURL,
           'emailVerified': true,
           'createdAt': FieldValue.serverTimestamp(),
           'uid': uid,
           'role': 'user',
+          'needsTutorial': markNeedsTutorial,
         }, SetOptions(merge: true));
 
-    // NgoÃ i ra, Ä‘á»ƒ tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i code cÅ© mong muá»‘n document táº¡i users/{userId} chá»©a thÃ´ng tin nÃ y:
     await _firestore.collection('users').doc(uid).set({
       'email': email,
-      'displayName': email.split('@')[0],
-      'photoURL': '',
+      'displayName': displayName,
+      'photoURL': photoURL,
       'emailVerified': true,
       'createdAt': FieldValue.serverTimestamp(),
       'uid': uid,
       'role': 'user',
+      'needsTutorial': markNeedsTutorial,
     }, SetOptions(merge: true));
 
-    // 3. Táº¡o default settings cho users/{userId}/settings/app_settings
     await _firestore
         .collection('users')
         .doc(uid)
@@ -93,11 +164,10 @@ class AuthService {
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
 
-    // 4. Táº¡o default wallet (Tiá»n máº·t, balance = 0)
     final cashWallet = WalletModel(
       id: 'wallet_cash_$uid',
       userId: uid,
-      name: 'Tiá»n máº·t',
+      name: 'Tiền mặt',
       balance: 0,
       type: 'cash',
       color: Colors.green.value,
@@ -114,7 +184,6 @@ class AuthService {
         .doc(cashWallet.id)
         .set(cashWallet.toMap());
 
-    // 5. Táº¡o default categories (Äƒn uá»‘ng, di chuyá»ƒn, mua sáº¯m...)
     final defaultCategories = CategoryData.getAllCategories();
     final batch = _firestore.batch();
 
@@ -129,34 +198,31 @@ class AuthService {
     }
 
     await batch.commit();
-    _log('Khá»Ÿi táº¡o dá»¯ liá»‡u ngÆ°á»i dÃ¹ng má»›i thÃ nh cÃ´ng cho $uid');
   }
 
   Future<String?> login(String email, String password) async {
     try {
-      _log('1. Báº¯t Ä‘áº§u signInWithEmailAndPassword: ${DateTime.now()}');
+      _log('1. Bắt đầu signInWithEmailAndPassword: ${DateTime.now()}');
       final credential = await _auth
           .signInWithEmailAndPassword(email: email, password: password)
           .timeout(const Duration(seconds: 15));
-      _log('2. Firebase Auth pháº£n há»“i: ${DateTime.now()}');
+      _log('2. Firebase Auth phản hồi: ${DateTime.now()}');
 
-      return credential.user == null
-          ? 'KhÃ´ng thá»ƒ xÃ¡c thá»±c ngÆ°á»i dÃ¹ng.'
-          : null;
+      return credential.user == null ? 'Không thể xác thực người dùng.' : null;
     } on FirebaseAuthException catch (e) {
       _log(
-        'Lá»—i Firebase Auth: ${e.code} - ${e.message ?? 'no-message'} vÃ o lÃºc ${DateTime.now()}',
+        'Lỗi Firebase Auth: ${e.code} - ${e.message ?? 'no-message'} vào lúc ${DateTime.now()}',
       );
       if (e.code == 'user-not-found') {
-        return 'KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n nÃ y.';
+        return 'Không tìm thấy tài khoản này.';
       }
       if (e.code == 'wrong-password') {
-        return 'Máº­t kháº©u khÃ´ng chÃ­nh xÃ¡c.';
+        return 'Mật khẩu không chính xác.';
       }
-      return e.message ?? 'ÄÃ£ cÃ³ lá»—i xáº£y ra';
+      return e.message ?? 'Đã có lỗi xảy ra';
     } on TimeoutException {
-      _log('Timeout Ä‘Äƒng nháº­p Firebase Auth táº¡i ${DateTime.now()}');
-      return 'ÄÄƒng nháº­p quÃ¡ thá»i gian chá». Vui lÃ²ng kiá»ƒm tra máº¡ng vÃ  thá»­ láº¡i.';
+      _log('Timeout đăng nhập Firebase Auth tại ${DateTime.now()}');
+      return 'Đăng nhập quá thời gian chờ. Vui lòng kiểm tra mạng và thử lại.';
     } catch (e) {
       return e.toString();
     }
@@ -164,16 +230,16 @@ class AuthService {
 
   Future<String> getUserRole(String uid) async {
     try {
-      _log('3. Báº¯t Ä‘áº§u láº¥y role tá»« Firestore: ${DateTime.now()}');
+      _log('3. Bắt đầu lấy role từ Firestore: ${DateTime.now()}');
       final snapshot = await _firestore
           .collection('users')
           .doc(uid)
           .get()
           .timeout(const Duration(seconds: 8));
-      _log('4. Firestore tráº£ vá» role snapshot: ${DateTime.now()}');
+      _log('4. Firestore trả về role snapshot: ${DateTime.now()}');
 
       if (!snapshot.exists) {
-        // Dá»± phÃ²ng láº¥y tá»« subcollection profile
+        // Dự phòng lấy từ subcollection profile
         final profileSnapshot = await _firestore
             .collection('users')
             .doc(uid)
@@ -200,18 +266,18 @@ class AuthService {
 
       if (role is String && role.trim().isNotEmpty) {
         _log(
-          '5. Role há»£p lá»‡ = ${role.trim().toLowerCase()} táº¡i ${DateTime.now()}',
+          '5. Role hợp lệ = ${role.trim().toLowerCase()} tại ${DateTime.now()}',
         );
         return role.trim().toLowerCase();
       }
 
       _log(
-        '5. Role rá»—ng hoáº·c khÃ´ng há»£p lá»‡, fallback user táº¡i ${DateTime.now()}',
+        '5. Role rỗng hoặc không hợp lệ, fallback user tại ${DateTime.now()}',
       );
       return 'user';
     } catch (_) {
       _log(
-        'Lá»—i/timeout khi láº¥y role, fallback theo email táº¡i ${DateTime.now()}',
+        'Lỗi/timeout khi lấy role, fallback theo email tại ${DateTime.now()}',
       );
       return _auth.currentUser?.email?.toLowerCase() == _sampleAdminEmail
           ? 'admin'

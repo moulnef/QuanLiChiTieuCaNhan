@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/finance_calculator.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 
 // Model (Chú ý: model của bạn không có chữ 's' và nằm trong domain)
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/budget.dart';
@@ -15,10 +16,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 class BudgetItemCard extends StatelessWidget {
   final Budget budget;
 
-  const BudgetItemCard({
-    super.key,
-    required this.budget,
-  });
+  const BudgetItemCard({super.key, required this.budget});
 
   Color _getStatusColor() {
     switch (budget.status) {
@@ -75,10 +73,7 @@ class BudgetItemCard extends StatelessWidget {
                   color: const Color(0xFFFFF3F0),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(
-                  budget.icon,
-                  style: const TextStyle(fontSize: 24),
-                ),
+                child: Text(budget.icon, style: const TextStyle(fontSize: 24)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -86,7 +81,10 @@ class BudgetItemCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      budget.categoryName.xtrCategory(context),
+                      CategoryData.resolveDisplayName(
+                        budget.categoryId,
+                        budget.categoryName,
+                      ).xtrCategory(context),
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -105,11 +103,7 @@ class BudgetItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                _getStatusIcon(),
-                color: statusColor,
-                size: 28,
-              ),
+              Icon(_getStatusIcon(), color: statusColor, size: 28),
             ],
           ),
           const SizedBox(height: 14),
@@ -123,7 +117,8 @@ class BudgetItemCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Đã chi: '.xtr(context) + MoneyFormatter.formatVnd(budget.spentAmount),
+                  'Đã chi: '.xtr(context) +
+                      MoneyFormatter.formatVnd(budget.spentAmount),
                   style: const TextStyle(
                     fontSize: 15,
                     color: AppColors.textSecondary,
@@ -131,7 +126,8 @@ class BudgetItemCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'Còn lại: '.xtr(context) + MoneyFormatter.formatVnd(budget.remainingAmount),
+                'Còn lại: '.xtr(context) +
+                    MoneyFormatter.formatVnd(budget.remainingAmount),
                 style: const TextStyle(
                   fontSize: 15,
                   color: AppColors.safe,

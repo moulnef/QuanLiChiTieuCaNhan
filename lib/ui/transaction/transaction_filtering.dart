@@ -41,21 +41,25 @@ TransactionFilterResult filterAndSortTransactions({
   }
 
   if (selectedCategoryGroup != null) {
-    final selected = selectedCategoryGroup.toLowerCase();
+    final selected = CategoryData.normalizeLabel(
+      selectedCategoryGroup,
+    ).toLowerCase();
 
     result = result.where((tx) {
       final category =
           CategoryData.findByIdOrName(tx.categoryId) ??
           CategoryData.findByIdOrName(tx.categoryName);
       final candidates = <String>{
-        tx.categoryId.toLowerCase(),
-        tx.categoryName.toLowerCase(),
+        CategoryData.normalizeLabel(tx.categoryId).toLowerCase(),
+        CategoryData.normalizeLabel(tx.categoryName).toLowerCase(),
       };
       if (category != null) {
         candidates.add(category.id.toLowerCase());
         candidates.add(category.name.toLowerCase());
         if (category.group != null && category.group!.trim().isNotEmpty) {
-          candidates.add(category.group!.toLowerCase());
+          candidates.add(
+            CategoryData.normalizeLabel(category.group!).toLowerCase(),
+          );
         }
       }
       return candidates.contains(selected);

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -31,6 +30,15 @@ class _DebtTabPageState extends State<DebtTabPage> {
   final FinanceRepository _repository = FinanceRepository();
   final OCRService _ocrService = OCRService();
   String _filter = 'active'; // 'all', 'active' (chưa xong), 'settled' (đã xong)
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<FinanceProvider>().loadFinanceData(_currentUserId);
+    });
+  }
 
   @override
   void dispose() {
@@ -210,13 +218,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
     final wallet = result['wallet'] as WalletModel;
 
     try {
-      // 1. Cập nhật số dư ví
-      final newBalance = isChoVay
-          ? wallet.balance + amount
-          : wallet.balance - amount;
-      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
-
-      // 2. Tạo giao dịch tương ứng
+      // 1. Tạo giao dịch tương ứng. Repository sẽ tự cộng/trừ ví.
       final tx = TransactionModel(
         id: 'tx_debt_pay_${DateTime.now().millisecondsSinceEpoch}',
         userId: _currentUserId,
@@ -232,7 +234,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
       );
       await _repository.upsertTransaction(tx);
 
-      // 3. Cập nhật khoản vay nợ
+      // 2. Cập nhật khoản vay nợ
       final newPaid = item.paidAmount + amount;
       final isSettled = newPaid >= item.totalAmount;
       final updated = item.copyWith(
@@ -1271,11 +1273,6 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
                           _receiveToWallet &&
                           _selectedWallet != null &&
                           !isEdit) {
-                        final newBalance = _selectedWallet!.balance + totalAmt;
-                        await _repository.upsertWallet(
-                          _selectedWallet!.copyWith(balance: newBalance),
-                        );
-
                         final tx = TransactionModel(
                           id: 'tx_debt_inc_${DateTime.now().millisecondsSinceEpoch}',
                           userId: widget.userId,

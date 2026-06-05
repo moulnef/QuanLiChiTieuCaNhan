@@ -45,7 +45,10 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       _selectedCategoryId = widget.budget!.categoryId;
       _selectedCategoryName = widget.budget!.categoryName;
       _selectedIcon = widget.budget!.icon;
-      _limitController.text = NumberFormat('#,###', 'vi_VN').format(widget.budget!.limitAmount);
+      _limitController.text = NumberFormat(
+        '#,###',
+        'vi_VN',
+      ).format(widget.budget!.limitAmount);
       _selectedMonth = widget.budget!.month;
       _selectedYear = widget.budget!.year;
     } else {
@@ -65,18 +68,18 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategoryId == null || _selectedCategoryName == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Vui lòng chọn danh mục'.xtr(context))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vui lòng chọn danh mục'.xtr(context))),
+      );
       return;
     }
 
     final clean = _limitController.text.replaceAll(RegExp(r'\D'), '');
     final limitAmount = double.tryParse(clean) ?? 0;
     if (limitAmount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Hạn mức phải lớn hơn 0'.xtr(context))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Hạn mức phải lớn hơn 0'.xtr(context))),
+      );
       return;
     }
 
@@ -88,19 +91,25 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
         _selectedYear,
       );
 
-      final isDuplicate = existingBudgets.any((b) =>
-          b.categoryId == _selectedCategoryId &&
-          b.id != widget.budget?.id);
+      final isDuplicate = existingBudgets.any(
+        (b) => b.categoryId == _selectedCategoryId && b.id != widget.budget?.id,
+      );
 
       if (isDuplicate) {
         if (!mounted) return;
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            title: Text('Ngân sách đã tồn tại'.xtr(context), style: const TextStyle(fontWeight: FontWeight.bold)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Text(
+              'Ngân sách đã tồn tại'.xtr(context),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             content: Text(
-              'Danh mục này đã có thiết lập ngân sách cho Tháng $_selectedMonth/$_selectedYear. Vui lòng chỉnh sửa ngân sách hiện tại thay vì tạo mới.'.xtr(context),
+              'Danh mục này đã có thiết lập ngân sách cho Tháng $_selectedMonth/$_selectedYear. Vui lòng chỉnh sửa ngân sách hiện tại thay vì tạo mới.'
+                  .xtr(context),
             ),
             actions: [
               TextButton(
@@ -133,7 +142,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
       }
 
       final newBudget = Budget(
-        id: widget.budget?.id ?? 'budget_${DateTime.now().millisecondsSinceEpoch}',
+        id:
+            widget.budget?.id ??
+            'budget_${DateTime.now().millisecondsSinceEpoch}',
         userId: widget.userId,
         categoryId: _selectedCategoryId!,
         categoryName: _selectedCategoryName!,
@@ -152,7 +163,10 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi kiểm tra ngân sách: $e'.xtr(context)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Lỗi kiểm tra ngân sách: $e'.xtr(context)),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -232,7 +246,8 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   // Luôn hiển thị nếu có CategoryData làm dự phòng
                   if (expenseCategories.isEmpty) {
                     return Text(
-                      'Không tìm thấy danh mục chi tiêu nào trong tài khoản. Hãy tạo danh mục trước.'.xtr(context),
+                      'Không tìm thấy danh mục chi tiêu nào trong tài khoản. Hãy tạo danh mục trước.'
+                          .xtr(context),
                       style: const TextStyle(color: Colors.red, fontSize: 13),
                     );
                   }
@@ -251,7 +266,11 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                               style: const TextStyle(fontSize: 18),
                             ),
                             const SizedBox(width: 8),
-                            Text(item.name.xtrCategory(context)),
+                            Text(
+                              CategoryData.normalizeLabel(
+                                item.name,
+                              ).xtrCategory(context),
+                            ),
                           ],
                         ),
                       );
@@ -262,7 +281,9 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                       );
                       setState(() {
                         _selectedCategoryId = selected.id;
-                        _selectedCategoryName = selected.name;
+                        _selectedCategoryName = CategoryData.normalizeLabel(
+                          selected.name,
+                        );
                         _selectedIcon = selected.icon;
                       });
                     },
@@ -451,7 +472,10 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   ),
                   child: Text(
                     'Lưu ngân sách'.xtr(context),
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

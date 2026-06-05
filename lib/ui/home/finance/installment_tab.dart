@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
@@ -27,17 +26,25 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
   final FirestoreService _firestoreService = FirestoreService();
   final FinanceRepository _repository = FinanceRepository();
 
-  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+  String get _currentUserId =>
+      FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<FinanceProvider>().loadFinanceData(_currentUserId);
+    });
+  }
 
   void _showAddInstallmentSheet([InstallmentPlan? plan]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddInstallmentSheet(
-        userId: _currentUserId,
-        installmentPlan: plan,
-      ),
+      builder: (_) =>
+          _AddInstallmentSheet(userId: _currentUserId, installmentPlan: plan),
     );
   }
 
@@ -45,33 +52,53 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
     final walletsData = await _repository.getWalletsByUserId(_currentUserId);
     final wallets = walletsData.map((w) => WalletModel.fromMap(w)).toList();
     if (wallets.isEmpty) return null;
-    
-    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
+
+    WalletModel selectedWallet = wallets.firstWhere(
+      (w) => w.isDefault,
+      orElse: () => wallets.first,
+    );
 
     return showDialog<WalletModel>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Thanh toán trả góp kỳ này', style: TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Thanh toán trả góp kỳ này',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Số tiền cần trả: ${formatCurrency(amount)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              Text(
+                'Số tiền cần trả: ${formatCurrency(amount)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
               const SizedBox(height: 16),
               DropdownButtonFormField<WalletModel>(
                 value: selectedWallet,
-                items: wallets.map((w) => DropdownMenuItem(
-                  value: w,
-                  child: Text('${w.name} (${formatCurrency(w.balance)})'),
-                )).toList(),
+                items: wallets
+                    .map(
+                      (w) => DropdownMenuItem(
+                        value: w,
+                        child: Text('${w.name} (${formatCurrency(w.balance)})'),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) setState(() => selectedWallet = val);
                 },
                 decoration: InputDecoration(
                   labelText: 'Ví thanh toán',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -85,7 +112,10 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
               onPressed: () {
                 if (selectedWallet.balance < amount) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Không đủ số dư trong ví đã chọn!'), backgroundColor: Colors.red),
+                    const SnackBar(
+                      content: Text('Không đủ số dư trong ví đã chọn!'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                   return;
                 }
@@ -109,11 +139,7 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
     if (wallet == null || !mounted) return;
 
     try {
-      // 1. Trừ tiền ví nguồn
-      final newBalance = wallet.balance - amount;
-      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
-
-      // 2. Tạo giao dịch trả góp
+      // 1. Tạo giao dịch trả góp. Repository sẽ tự trừ ví.
       final tx = TransactionModel(
         id: 'tx_inst_pay_${DateTime.now().millisecondsSinceEpoch}',
         userId: _currentUserId,
@@ -122,17 +148,23 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
         categoryName: 'Trả góp',
         type: 'expense',
         amount: amount.toDouble(),
-        note: 'Thanh toán trả góp: ${item.title} (Kỳ ${item.paidPeriods + 1}/${item.totalPeriods})',
+        note:
+            'Thanh toán trả góp: ${item.title} (Kỳ ${item.paidPeriods + 1}/${item.totalPeriods})',
         transactionDate: DateTime.now(),
       );
       await _repository.upsertTransaction(tx);
 
-      // 3. Cập nhật trả góp
+      // 2. Cập nhật trả góp
       final newPeriods = item.paidPeriods + 1;
       final isCompleted = newPeriods >= item.totalPeriods;
-      final newPaidAmount = (item.paidAmount + amount).clamp(0, item.totalAmount);
-      
-      final currentDueDate = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
+      final newPaidAmount = (item.paidAmount + amount).clamp(
+        0,
+        item.totalAmount,
+      );
+
+      final currentDueDate = DateTime.fromMillisecondsSinceEpoch(
+        item.nextDueDate,
+      );
       final newDueDate = currentDueDate.add(const Duration(days: 30));
 
       final updated = item.copyWith(
@@ -144,7 +176,9 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
       );
 
       await context.read<FinanceProvider>().updateInstallmentPlan(updated);
-      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
+      await context.read<FinanceProvider>().refreshFinancialSummary(
+        _currentUserId,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -168,8 +202,13 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Xác nhận xóa', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Bạn có chắc chắn muốn xóa kế hoạch trả góp "${item.title}"?'),
+        title: const Text(
+          'Xác nhận xóa',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa kế hoạch trả góp "${item.title}"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -177,7 +216,10 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Xóa', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Xóa',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -189,7 +231,8 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
     return StreamBuilder<List<InstallmentPlan>>(
       stream: _firestoreService.streamInstallments(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -216,15 +259,22 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
               confirmDismiss: (_) => _confirmDelete(item),
               onDismissed: (_) async {
                 try {
-                  await context.read<FinanceProvider>().deleteInstallment(item.id);
+                  await context.read<FinanceProvider>().deleteInstallment(
+                    item.id,
+                  );
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Đã xóa kế hoạch trả góp "${item.title}"')),
+                    SnackBar(
+                      content: Text('Đã xóa kế hoạch trả góp "${item.title}"'),
+                    ),
                   );
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Không thể xóa: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text('Không thể xóa: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               },
@@ -235,7 +285,11 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
                   color: Colors.redAccent,
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               child: GestureDetector(
                 onTap: () => _showAddInstallmentSheet(item),
@@ -307,10 +361,15 @@ class _InstallmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    double progress = item.totalPeriods > 0 ? (item.paidPeriods / item.totalPeriods).clamp(0.0, 1.0) : 0.0;
+    double progress = item.totalPeriods > 0
+        ? (item.paidPeriods / item.totalPeriods).clamp(0.0, 1.0)
+        : 0.0;
     int percent = (progress * 100).toInt();
-    final isCompleted = item.paidPeriods >= item.totalPeriods || item.status == 'completed';
-    final nextDueDateTime = DateTime.fromMillisecondsSinceEpoch(item.nextDueDate);
+    final isCompleted =
+        item.paidPeriods >= item.totalPeriods || item.status == 'completed';
+    final nextDueDateTime = DateTime.fromMillisecondsSinceEpoch(
+      item.nextDueDate,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -361,7 +420,10 @@ class _InstallmentCard extends StatelessWidget {
                         if (isCompleted)
                           Container(
                             margin: const EdgeInsets.only(left: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.green.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -417,7 +479,8 @@ class _InstallmentCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _AmountColumn(
-                label: 'Đã trả (${item.paidPeriods}/${item.totalPeriods} tháng)',
+                label:
+                    'Đã trả (${item.paidPeriods}/${item.totalPeriods} tháng)',
                 amount: item.paidAmount,
                 color: const Color(0xFF8B5CF6),
               ),
@@ -435,11 +498,19 @@ class _InstallmentCard extends StatelessWidget {
             children: [
               Text(
                 'Số tiền mỗi tháng:',
-                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               Text(
                 formatCurrency(item.monthlyPayment),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1E293B)),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ],
           ),
@@ -480,7 +551,9 @@ class _AmountColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isRight
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -546,10 +619,7 @@ class _AddInstallmentSheet extends StatefulWidget {
   final String userId;
   final InstallmentPlan? installmentPlan;
 
-  const _AddInstallmentSheet({
-    required this.userId,
-    this.installmentPlan,
-  });
+  const _AddInstallmentSheet({required this.userId, this.installmentPlan});
 
   @override
   State<_AddInstallmentSheet> createState() => _AddInstallmentSheetState();
@@ -561,22 +631,35 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   final _totalController = TextEditingController();
 
   String _selectedBank = 'MB Bank';
-  final List<String> _banks = ['MB Bank', 'Vietcombank', 'Techcombank', 'BIDV', 'VietinBank'];
+  final List<String> _banks = [
+    'MB Bank',
+    'Vietcombank',
+    'Techcombank',
+    'BIDV',
+    'VietinBank',
+  ];
 
   int _selectedPeriod = 12;
   final List<int> _periods = [3, 6, 12, 24];
-  final Map<int, double> _interestRates = {
-    3: 6.0,
-    6: 7.2,
-    12: 8.2,
-    24: 9.0,
-  };
+  final Map<int, double> _interestRates = {3: 6.0, 6: 7.2, 12: 8.2, 24: 9.0};
 
   DateTime _selectedDate = DateTime.now();
   String _selectedEmoji = '🧾';
   int _calculatedMonthly = 0;
 
-  final List<String> _emojiList = ['🧾', '📱', '💻', '🚗', '🏍️', '🏠', '🎁', '✈️', '🎓', '💍', '🛋️'];
+  final List<String> _emojiList = [
+    '🧾',
+    '📱',
+    '💻',
+    '🚗',
+    '🏍️',
+    '🏠',
+    '🎁',
+    '✈️',
+    '🎓',
+    '💍',
+    '🛋️',
+  ];
 
   @override
   void initState() {
@@ -592,8 +675,13 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
       } else {
         _titleController.text = widget.installmentPlan!.title;
       }
-      _totalController.text = NumberFormat('#,###', 'vi_VN').format(widget.installmentPlan!.totalAmount);
-      _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.installmentPlan!.nextDueDate);
+      _totalController.text = NumberFormat(
+        '#,###',
+        'vi_VN',
+      ).format(widget.installmentPlan!.totalAmount);
+      _selectedDate = DateTime.fromMillisecondsSinceEpoch(
+        widget.installmentPlan!.nextDueDate,
+      );
       _selectedEmoji = widget.installmentPlan!.icon;
       if (_periods.contains(widget.installmentPlan!.totalPeriods)) {
         _selectedPeriod = widget.installmentPlan!.totalPeriods;
@@ -619,7 +707,8 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
       if (totalAmount > 0 && months > 0) {
         final monthlyRate = interest / 100 / 12;
         setState(() {
-          _calculatedMonthly = ((totalAmount / months) + (totalAmount * monthlyRate)).round();
+          _calculatedMonthly =
+              ((totalAmount / months) + (totalAmount * monthlyRate)).round();
         });
         return;
       }
@@ -664,18 +753,25 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               const SizedBox(height: 20),
               Text(
                 isEdit ? 'Chỉnh sửa trả góp' : 'Kế hoạch trả góp mới',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 20),
               TextFormField(
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: 'Tên vật phẩm/Khoản trả góp',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                 ),
-                validator: (v) => v!.trim().isEmpty ? 'Vui lòng nhập tên khoản trả góp' : null,
+                validator: (v) => v!.trim().isEmpty
+                    ? 'Vui lòng nhập tên khoản trả góp'
+                    : null,
               ),
               const SizedBox(height: 14),
               TextFormField(
@@ -684,7 +780,9 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                 inputFormatters: [ThousandsSeparatorInputFormatter()],
                 decoration: InputDecoration(
                   labelText: 'Tổng số tiền gốc',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   suffixText: '₫',
@@ -700,10 +798,9 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 value: _selectedBank,
-                items: _banks.map((b) => DropdownMenuItem(
-                  value: b,
-                  child: Text(b),
-                )).toList(),
+                items: _banks
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _selectedBank = val);
@@ -712,7 +809,9 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                 },
                 decoration: InputDecoration(
                   labelText: 'Ngân hàng/Đơn vị',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                 ),
@@ -720,10 +819,14 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               const SizedBox(height: 14),
               DropdownButtonFormField<int>(
                 value: _selectedPeriod,
-                items: _periods.map((p) => DropdownMenuItem(
-                  value: p,
-                  child: Text('$p tháng - Lãi ${_interestRates[p]}%/năm'),
-                )).toList(),
+                items: _periods
+                    .map(
+                      (p) => DropdownMenuItem(
+                        value: p,
+                        child: Text('$p tháng - Lãi ${_interestRates[p]}%/năm'),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _selectedPeriod = val);
@@ -732,7 +835,9 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                 },
                 decoration: InputDecoration(
                   labelText: 'Kỳ hạn & Lãi suất',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                 ),
@@ -740,7 +845,11 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               const SizedBox(height: 16),
               const Text(
                 'Chọn biểu tượng (Emoji)',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -759,14 +868,21 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                         margin: const EdgeInsets.only(right: 10),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF8B5CF6).withOpacity(0.15) : const Color(0xFFF1F5F9),
+                          color: isSelected
+                              ? const Color(0xFF8B5CF6).withOpacity(0.15)
+                              : const Color(0xFFF1F5F9),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF8B5CF6) : Colors.transparent,
+                            color: isSelected
+                                ? const Color(0xFF8B5CF6)
+                                : Colors.transparent,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 24),
+                        ),
                       ),
                     );
                   },
@@ -775,20 +891,32 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               const SizedBox(height: 16),
               ListTile(
                 tileColor: const Color(0xFFF8FAFC),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 title: Text(
-                  isEdit ? 'Ngày thanh toán tiếp theo' : 'Ngày bắt đầu thanh toán',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  isEdit
+                      ? 'Ngày thanh toán tiếp theo'
+                      : 'Ngày bắt đầu thanh toán',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 trailing: Text(
                   formatDate(_selectedDate),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _selectedDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 365),
+                    ),
                     lastDate: DateTime(2100),
                   );
                   if (picked != null) {
@@ -812,7 +940,11 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                     children: [
                       Text(
                         'Số tiền mỗi kỳ (gốc + lãi):',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       Text(
                         formatCurrency(_calculatedMonthly),
@@ -833,19 +965,27 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8B5CF6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                   onPressed: () async {
                     if (!_formKey.currentState!.validate()) return;
 
-                    final title = '${_titleController.text.trim()} - $_selectedBank';
-                    final cleanAmt = _totalController.text.replaceAll(RegExp(r'\D'), '');
+                    final title =
+                        '${_titleController.text.trim()} - $_selectedBank';
+                    final cleanAmt = _totalController.text.replaceAll(
+                      RegExp(r'\D'),
+                      '',
+                    );
                     final totalAmt = int.parse(cleanAmt);
                     final periods = _selectedPeriod;
-                    
+
                     final plan = InstallmentPlan(
-                      id: widget.installmentPlan?.id ?? 'installment_${DateTime.now().millisecondsSinceEpoch}',
+                      id:
+                          widget.installmentPlan?.id ??
+                          'installment_${DateTime.now().millisecondsSinceEpoch}',
                       userId: widget.userId,
                       title: title,
                       icon: _selectedEmoji,
@@ -855,16 +995,25 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                       paidPeriods: widget.installmentPlan?.paidPeriods ?? 0,
                       totalPeriods: periods,
                       nextDueDate: _selectedDate.millisecondsSinceEpoch,
-                      createdAt: widget.installmentPlan?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
+                      createdAt:
+                          widget.installmentPlan?.createdAt ??
+                          DateTime.now().millisecondsSinceEpoch,
                       updatedAt: DateTime.now().millisecondsSinceEpoch,
-                      status: (widget.installmentPlan?.paidPeriods ?? 0) >= periods ? 'completed' : 'active',
+                      status:
+                          (widget.installmentPlan?.paidPeriods ?? 0) >= periods
+                          ? 'completed'
+                          : 'active',
                     );
 
                     try {
                       if (isEdit) {
-                        await context.read<FinanceProvider>().updateInstallmentPlan(plan);
+                        await context
+                            .read<FinanceProvider>()
+                            .updateInstallmentPlan(plan);
                       } else {
-                        await context.read<FinanceProvider>().addInstallmentPlanDirect(plan);
+                        await context
+                            .read<FinanceProvider>()
+                            .addInstallmentPlanDirect(plan);
                       }
 
                       if (!mounted) return;
@@ -881,7 +1030,10 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                        SnackBar(
+                          content: Text('Lỗi: $e'),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                     }
                   },

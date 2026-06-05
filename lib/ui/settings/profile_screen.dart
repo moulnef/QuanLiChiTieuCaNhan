@@ -167,8 +167,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       _buildDivider(),
                       _buildItem(
                         icon: Icons.rate_review_outlined,
-                        label: 'Góp ý và đánh giá ứng dụng',
-                        subtitle: 'Gửi nhận xét và chấm điểm từ 1 đến 5 sao',
+                        label: 'Góp ý và đánh giá ứng dụng'.xtr(context),
+                        subtitle: 'Gửi nhận xét và chấm điểm từ 1 đến 5 sao'
+                            .xtr(context),
                         color: const Color(0xFFF59E0B),
                         onTap: _onFeedbackTap,
                       ),

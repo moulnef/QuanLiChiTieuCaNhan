@@ -27,19 +27,40 @@ class _SavingTabPageState extends State<SavingTabPage> {
   final FirestoreService _firestoreService = FirestoreService();
   final FinanceRepository _repository = FinanceRepository();
 
-  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
+  String get _currentUserId =>
+      FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
-  Future<Map<String, dynamic>?> _showDepositDialog(SavingGoal item, List<WalletModel> wallets) async {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<FinanceProvider>().loadFinanceData(_currentUserId);
+    });
+  }
+
+  Future<Map<String, dynamic>?> _showDepositDialog(
+    SavingGoal item,
+    List<WalletModel> wallets,
+  ) async {
     final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
+    WalletModel selectedWallet = wallets.firstWhere(
+      (w) => w.isDefault,
+      orElse: () => wallets.first,
+    );
 
     return showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Nạp tiền tiết kiệm', style: TextStyle(fontWeight: FontWeight.w700)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Nạp tiền tiết kiệm',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           content: Form(
             key: formKey,
             child: Column(
@@ -47,16 +68,24 @@ class _SavingTabPageState extends State<SavingTabPage> {
               children: [
                 DropdownButtonFormField<WalletModel>(
                   value: selectedWallet,
-                  items: wallets.map((w) => DropdownMenuItem(
-                    value: w,
-                    child: Text('${w.name} (${formatCurrency(w.balance)})'),
-                  )).toList(),
+                  items: wallets
+                      .map(
+                        (w) => DropdownMenuItem(
+                          value: w,
+                          child: Text(
+                            '${w.name} (${formatCurrency(w.balance)})',
+                          ),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => selectedWallet = val);
                   },
                   decoration: InputDecoration(
                     labelText: 'Nguồn tiền',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -68,13 +97,16 @@ class _SavingTabPageState extends State<SavingTabPage> {
                   decoration: InputDecoration(
                     suffixText: '₫',
                     hintText: 'Nhập số tiền...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   validator: (value) {
                     final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
                     final val = int.tryParse(clean);
                     if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                    if (val > selectedWallet.balance) return 'Không đủ số dư trong ví';
+                    if (val > selectedWallet.balance)
+                      return 'Không đủ số dư trong ví';
                     return null;
                   },
                 ),
@@ -104,17 +136,28 @@ class _SavingTabPageState extends State<SavingTabPage> {
     );
   }
 
-  Future<Map<String, dynamic>?> _showWithdrawDialog(SavingGoal item, List<WalletModel> wallets) async {
+  Future<Map<String, dynamic>?> _showWithdrawDialog(
+    SavingGoal item,
+    List<WalletModel> wallets,
+  ) async {
     final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    WalletModel selectedWallet = wallets.firstWhere((w) => w.isDefault, orElse: () => wallets.first);
+    WalletModel selectedWallet = wallets.firstWhere(
+      (w) => w.isDefault,
+      orElse: () => wallets.first,
+    );
 
     return showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Rút tiền tiết kiệm', style: TextStyle(fontWeight: FontWeight.w700)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Rút tiền tiết kiệm',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           content: Form(
             key: formKey,
             child: Column(
@@ -122,16 +165,24 @@ class _SavingTabPageState extends State<SavingTabPage> {
               children: [
                 DropdownButtonFormField<WalletModel>(
                   value: selectedWallet,
-                  items: wallets.map((w) => DropdownMenuItem(
-                    value: w,
-                    child: Text('${w.name} (${formatCurrency(w.balance)})'),
-                  )).toList(),
+                  items: wallets
+                      .map(
+                        (w) => DropdownMenuItem(
+                          value: w,
+                          child: Text(
+                            '${w.name} (${formatCurrency(w.balance)})',
+                          ),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => selectedWallet = val);
                   },
                   decoration: InputDecoration(
                     labelText: 'Ví nhận tiền',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -143,13 +194,16 @@ class _SavingTabPageState extends State<SavingTabPage> {
                   decoration: InputDecoration(
                     suffixText: '₫',
                     hintText: 'Nhập số tiền...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   validator: (value) {
                     final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
                     final val = int.tryParse(clean);
                     if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                    if (val > item.currentAmount) return 'Vượt quá số tiền tiết kiệm hiện có';
+                    if (val > item.currentAmount)
+                      return 'Vượt quá số tiền tiết kiệm hiện có';
                     return null;
                   },
                 ),
@@ -198,11 +252,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
     final wallet = result['wallet'] as WalletModel;
 
     try {
-      // 1. Trừ tiền ví nguồn
-      final newBalance = wallet.balance - amount;
-      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
-
-      // 2. Tạo giao dịch chuyển tiền vào quỹ
+      // 1. Tạo giao dịch chuyển tiền vào quỹ. Repository sẽ tự trừ ví.
       final tx = TransactionModel(
         id: 'tx_saving_dep_${DateTime.now().millisecondsSinceEpoch}',
         userId: _currentUserId,
@@ -216,7 +266,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
       );
       await _repository.upsertTransaction(tx);
 
-      // 3. Cộng tiền vào mục tiêu tiết kiệm
+      // 2. Cộng tiền vào mục tiêu tiết kiệm
       final newCurrent = item.currentAmount + amount;
       final completed = newCurrent >= item.targetAmount;
       final updated = item.copyWith(
@@ -226,17 +276,23 @@ class _SavingTabPageState extends State<SavingTabPage> {
       );
 
       await context.read<FinanceProvider>().updateSavingGoal(updated);
-      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
+      await context.read<FinanceProvider>().refreshFinancialSummary(
+        _currentUserId,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đã nạp ${formatCurrency(amount)} từ ví "${wallet.name}" vào "${item.title}" ${completed ? '🎉 Hoàn thành!' : ''}'),
+          content: Text(
+            'Đã nạp ${formatCurrency(amount)} từ ví "${wallet.name}" vào "${item.title}" ${completed ? '🎉 Hoàn thành!' : ''}',
+          ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -259,11 +315,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
     final wallet = result['wallet'] as WalletModel;
 
     try {
-      // 1. Cộng tiền vào ví chính được chọn
-      final newBalance = wallet.balance + amount;
-      await _repository.upsertWallet(wallet.copyWith(balance: newBalance));
-
-      // 2. Tạo giao dịch nhận tiền từ quỹ
+      // 1. Tạo giao dịch nhận tiền từ quỹ. Repository sẽ tự cộng ví.
       final tx = TransactionModel(
         id: 'tx_saving_wd_${DateTime.now().millisecondsSinceEpoch}',
         userId: _currentUserId,
@@ -277,7 +329,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
       );
       await _repository.upsertTransaction(tx);
 
-      // 3. Trừ tiền khỏi mục tiêu tiết kiệm
+      // 2. Trừ tiền khỏi mục tiêu tiết kiệm
       final newCurrent = item.currentAmount - amount;
       final updated = item.copyWith(
         currentAmount: newCurrent,
@@ -286,7 +338,9 @@ class _SavingTabPageState extends State<SavingTabPage> {
       );
 
       await context.read<FinanceProvider>().updateSavingGoal(updated);
-      await context.read<FinanceProvider>().refreshFinancialSummary(_currentUserId);
+      await context.read<FinanceProvider>().refreshFinancialSummary(
+        _currentUserId,
+      );
 
       if (!mounted) return;
 
@@ -295,8 +349,13 @@ class _SavingTabPageState extends State<SavingTabPage> {
         final shouldClose = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Đóng mục tiêu?', style: TextStyle(fontWeight: FontWeight.bold)),
-            content: Text('Mục tiêu "${item.title}" đã rút hết tiền. Bạn có muốn đóng mục tiêu tiết kiệm này không?'),
+            title: const Text(
+              'Đóng mục tiêu?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Text(
+              'Mục tiêu "${item.title}" đã rút hết tiền. Bạn có muốn đóng mục tiêu tiết kiệm này không?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -304,7 +363,13 @@ class _SavingTabPageState extends State<SavingTabPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Đồng ý', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Đồng ý',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -313,18 +378,28 @@ class _SavingTabPageState extends State<SavingTabPage> {
         if (shouldClose == true && mounted) {
           await context.read<FinanceProvider>().deleteSavingGoal(item.id);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Đã đóng và xóa mục tiêu tiết kiệm "${item.title}"')),
+            SnackBar(
+              content: Text(
+                'Đã đóng và xóa mục tiêu tiết kiệm "${item.title}"',
+              ),
+            ),
           );
           return;
         }
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã rút ${formatCurrency(amount)} về ví "${wallet.name}"')),
+        SnackBar(
+          content: Text(
+            'Đã rút ${formatCurrency(amount)} về ví "${wallet.name}"',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -333,10 +408,8 @@ class _SavingTabPageState extends State<SavingTabPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddSavingGoalSheet(
-        userId: _currentUserId,
-        savingGoal: savingGoal,
-      ),
+      builder: (_) =>
+          _AddSavingGoalSheet(userId: _currentUserId, savingGoal: savingGoal),
     );
   }
 
@@ -345,8 +418,13 @@ class _SavingTabPageState extends State<SavingTabPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Xác nhận xóa', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Bạn có chắc chắn muốn xóa mục tiêu tiết kiệm "${item.title}"?'),
+        title: const Text(
+          'Xác nhận xóa',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa mục tiêu tiết kiệm "${item.title}"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -354,7 +432,10 @@ class _SavingTabPageState extends State<SavingTabPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Xóa', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Xóa',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -366,7 +447,8 @@ class _SavingTabPageState extends State<SavingTabPage> {
     return StreamBuilder<List<SavingGoal>>(
       stream: _firestoreService.streamSavings(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -393,15 +475,24 @@ class _SavingTabPageState extends State<SavingTabPage> {
               confirmDismiss: (_) => _confirmDelete(item),
               onDismissed: (_) async {
                 try {
-                  await context.read<FinanceProvider>().deleteSavingGoal(item.id);
+                  await context.read<FinanceProvider>().deleteSavingGoal(
+                    item.id,
+                  );
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Đã xóa mục tiêu tiết kiệm "${item.title}"')),
+                    SnackBar(
+                      content: Text(
+                        'Đã xóa mục tiêu tiết kiệm "${item.title}"',
+                      ),
+                    ),
                   );
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Không thể xóa: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text('Không thể xóa: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               },
@@ -412,7 +503,11 @@ class _SavingTabPageState extends State<SavingTabPage> {
                   color: Colors.redAccent,
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               child: GestureDetector(
                 onTap: () => _showAddSavingSheet(item),
@@ -501,7 +596,8 @@ class _SavingGoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = (item.currentAmount / item.targetAmount).clamp(0.0, 1.0);
     final percent = (progress * 100).toInt();
-    final isCompleted = item.currentAmount >= item.targetAmount || item.status == 'completed';
+    final isCompleted =
+        item.currentAmount >= item.targetAmount || item.status == 'completed';
     final cardColor = _getColor();
 
     final deadlineDate = DateTime.fromMillisecondsSinceEpoch(item.targetDate);
@@ -557,7 +653,10 @@ class _SavingGoalCard extends StatelessWidget {
                         if (isCompleted)
                           Container(
                             margin: const EdgeInsets.only(left: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.green.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -578,10 +677,12 @@ class _SavingGoalCard extends StatelessWidget {
                       isCompleted
                           ? 'Đã hoàn thành mục tiêu!'
                           : (isOverdue
-                              ? 'Đã quá hạn ${daysLeft.abs()} ngày'
-                              : 'Còn $daysLeft ngày (Hạn: ${formatDate(deadlineDate)})'),
+                                ? 'Đã quá hạn ${daysLeft.abs()} ngày'
+                                : 'Còn $daysLeft ngày (Hạn: ${formatDate(deadlineDate)})'),
                       style: TextStyle(
-                        color: isOverdue ? Colors.redAccent : const Color(0xFF94A3B8),
+                        color: isOverdue
+                            ? Colors.redAccent
+                            : const Color(0xFF94A3B8),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -614,8 +715,17 @@ class _SavingGoalCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _AmountColumn(label: 'Hiện tại', amount: item.currentAmount, color: cardColor),
-              _AmountColumn(label: 'Mục tiêu', amount: item.targetAmount, color: const Color(0xFF1E293B), isRight: true),
+              _AmountColumn(
+                label: 'Hiện tại',
+                amount: item.currentAmount,
+                color: cardColor,
+              ),
+              _AmountColumn(
+                label: 'Mục tiêu',
+                amount: item.targetAmount,
+                color: const Color(0xFF1E293B),
+                isRight: true,
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -652,18 +762,36 @@ class _AmountColumn extends StatelessWidget {
   final Color color;
   final bool isRight;
 
-  const _AmountColumn({required this.label, required this.amount, required this.color, this.isRight = false});
+  const _AmountColumn({
+    required this.label,
+    required this.amount,
+    required this.color,
+    this.isRight = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isRight
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         Text(
           formatCurrency(amount),
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: color),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+            color: color,
+          ),
         ),
       ],
     );
@@ -676,7 +804,12 @@ class _CardButton extends StatelessWidget {
   final Color color;
   final Color textColor;
 
-  const _CardButton({required this.text, required this.onPressed, required this.color, required this.textColor});
+  const _CardButton({
+    required this.text,
+    required this.onPressed,
+    required this.color,
+    required this.textColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -691,7 +824,11 @@ class _CardButton extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             text,
-            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15),
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
           ),
         ),
       ),
@@ -703,10 +840,7 @@ class _AddSavingGoalSheet extends StatefulWidget {
   final String userId;
   final SavingGoal? savingGoal;
 
-  const _AddSavingGoalSheet({
-    required this.userId,
-    this.savingGoal,
-  });
+  const _AddSavingGoalSheet({required this.userId, this.savingGoal});
 
   @override
   State<_AddSavingGoalSheet> createState() => _AddSavingGoalSheetState();
@@ -721,7 +855,20 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
   String _selectedEmoji = '🎯';
   Color _selectedColor = AppColors.financeGreen;
 
-  final List<String> _emojiList = ['🎯', '🏍️', '📱', '💻', '💰', '🏠', '🚗', '✈️', '🗾', '🎒', '💍', '🎁'];
+  final List<String> _emojiList = [
+    '🎯',
+    '🏍️',
+    '📱',
+    '💻',
+    '💰',
+    '🏠',
+    '🚗',
+    '✈️',
+    '🗾',
+    '🎒',
+    '💍',
+    '🎁',
+  ];
 
   final List<Color> _colorList = [
     AppColors.financeGreen,
@@ -739,7 +886,10 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
     if (target <= current) return 0;
 
     final now = DateTime.now();
-    int monthsRemaining = ((_selectedDate.year - now.year) * 12) + _selectedDate.month - now.month;
+    int monthsRemaining =
+        ((_selectedDate.year - now.year) * 12) +
+        _selectedDate.month -
+        now.month;
     if (monthsRemaining <= 0) {
       monthsRemaining = 1;
     }
@@ -751,8 +901,13 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
     super.initState();
     if (widget.savingGoal != null) {
       _titleController.text = widget.savingGoal!.title;
-      _amountController.text = NumberFormat('#,###', 'vi_VN').format(widget.savingGoal!.targetAmount);
-      _selectedDate = DateTime.fromMillisecondsSinceEpoch(widget.savingGoal!.targetDate);
+      _amountController.text = NumberFormat(
+        '#,###',
+        'vi_VN',
+      ).format(widget.savingGoal!.targetAmount);
+      _selectedDate = DateTime.fromMillisecondsSinceEpoch(
+        widget.savingGoal!.targetDate,
+      );
       _selectedEmoji = widget.savingGoal!.icon;
       if (widget.savingGoal!.colorValue != null) {
         _selectedColor = Color(widget.savingGoal!.colorValue!);
@@ -799,8 +954,13 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
               ),
               const SizedBox(height: 20),
               Text(
-                widget.savingGoal != null ? 'Chỉnh sửa mục tiêu' : 'Mục tiêu tiết kiệm mới',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                widget.savingGoal != null
+                    ? 'Chỉnh sửa mục tiêu'
+                    : 'Mục tiêu tiết kiệm mới',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -846,7 +1006,11 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
               const SizedBox(height: 16),
               const Text(
                 'Chọn biểu tượng (Emoji)',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -865,14 +1029,21 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                         margin: const EdgeInsets.only(right: 10),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isSelected ? _selectedColor.withOpacity(0.15) : const Color(0xFFF1F5F9),
+                          color: isSelected
+                              ? _selectedColor.withOpacity(0.15)
+                              : const Color(0xFFF1F5F9),
                           border: Border.all(
-                            color: isSelected ? _selectedColor : Colors.transparent,
+                            color: isSelected
+                                ? _selectedColor
+                                : Colors.transparent,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 24),
+                        ),
                       ),
                     );
                   },
@@ -881,7 +1052,11 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
               const SizedBox(height: 18),
               const Text(
                 'Chọn màu sắc',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -902,7 +1077,9 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                           color: color,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: isSelected ? Colors.black87 : Colors.transparent,
+                            color: isSelected
+                                ? Colors.black87
+                                : Colors.transparent,
                             width: 3,
                           ),
                         ),
@@ -923,13 +1100,18 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                 ),
                 trailing: Text(
                   formatDate(_selectedDate),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _selectedDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 365),
+                    ),
                     lastDate: DateTime(2100),
                   );
                   if (picked != null) {
@@ -952,7 +1134,11 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                     children: [
                       const Text(
                         'Cần tiết kiệm mỗi tháng:',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
                       ),
                       Text(
                         formatCurrency(_calculatedMonthlySaving),
@@ -982,20 +1168,27 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                     if (!_formKey.currentState!.validate()) return;
 
                     final title = _titleController.text.trim();
-                    final cleanAmt = _amountController.text.replaceAll(RegExp(r'\D'), '');
+                    final cleanAmt = _amountController.text.replaceAll(
+                      RegExp(r'\D'),
+                      '',
+                    );
                     final targetAmt = int.parse(cleanAmt);
                     final currentAmt = widget.savingGoal?.currentAmount ?? 0;
                     final isDone = currentAmt >= targetAmt;
 
                     final goal = SavingGoal(
-                      id: widget.savingGoal?.id ?? 'saving_${DateTime.now().millisecondsSinceEpoch}',
+                      id:
+                          widget.savingGoal?.id ??
+                          'saving_${DateTime.now().millisecondsSinceEpoch}',
                       userId: widget.userId,
                       title: title,
                       icon: _selectedEmoji,
                       currentAmount: currentAmt,
                       targetAmount: targetAmt,
                       targetDate: _selectedDate.millisecondsSinceEpoch,
-                      createdAt: widget.savingGoal?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
+                      createdAt:
+                          widget.savingGoal?.createdAt ??
+                          DateTime.now().millisecondsSinceEpoch,
                       updatedAt: DateTime.now().millisecondsSinceEpoch,
                       status: isDone ? 'completed' : 'active',
                       colorValue: _selectedColor.value,
@@ -1003,7 +1196,9 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
 
                     try {
                       if (widget.savingGoal != null) {
-                        await context.read<FinanceProvider>().updateSavingGoal(goal);
+                        await context.read<FinanceProvider>().updateSavingGoal(
+                          goal,
+                        );
                       } else {
                         await context.read<FinanceProvider>().addSavingGoal(
                           title: title,
@@ -1018,20 +1213,27 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(widget.savingGoal != null
-                              ? 'Đã cập nhật mục tiêu tiết kiệm "$title"'
-                              : 'Đã thêm mục tiêu tiết kiệm "$title"'),
+                          content: Text(
+                            widget.savingGoal != null
+                                ? 'Đã cập nhật mục tiêu tiết kiệm "$title"'
+                                : 'Đã thêm mục tiêu tiết kiệm "$title"',
+                          ),
                         ),
                       );
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                        SnackBar(
+                          content: Text('Lỗi: $e'),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                     }
                   },
                   child: Text(
-                    widget.savingGoal != null ? 'Cập nhật mục tiêu' : 'Tạo mục tiêu',
+                    widget.savingGoal != null
+                        ? 'Cập nhật mục tiêu'
+                        : 'Tạo mục tiêu',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
