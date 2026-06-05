@@ -113,6 +113,15 @@ service cloud.firestore {
       }
     }
 
+    match /split_groups/{groupId} {
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid || 
+        request.auth.uid in resource.data.memberUids
+      );
+    }
+
     match /{path=**}/transactions/{transId} {
       allow read: if isAdmin();
     }

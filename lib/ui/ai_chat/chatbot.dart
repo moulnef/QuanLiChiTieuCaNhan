@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/category_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/transaction_controller.dart';
 import '../../data/local/category_data.dart';
@@ -22,7 +23,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
 
-  final String githubToken = 'ghp_' 'Y3HGjCGAOh7ws2UMD2lqM6INtSysqW4AhqMJ';
+  final String githubToken =
+      'ghp_'
+      'Y3HGjCGAOh7ws2UMD2lqM6INtSysqW4AhqMJ';
   final formatCurrency = NumberFormat('#,###', 'vi_VN');
 
   @override
@@ -30,7 +33,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     super.initState();
     _messages.add({
       "role": "ai",
-      "text": "Chào bạn! Mình là trợ lý AI. Bạn cứ gõ tự nhiên (VD: 'Sáng nay ăn phở 45k'), mình sẽ tự động tạo phiếu thu chi nhé!"
+      "text":
+          "Chào bạn! Mình là trợ lý AI. Bạn cứ gõ tự nhiên (VD: 'Sáng nay ăn phở 45k'), mình sẽ tự động tạo phiếu thu chi nhé!",
     });
   }
 
@@ -46,21 +50,23 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     });
   }
 
-  String _getValidCategory(String aiCategory, String type) {
+  CategoryModel _getValidCategory(String aiCategory, String type) {
     final list = type == 'income'
         ? CategoryData.getIncomeCategories()
         : CategoryData.getExpenseCategories();
 
     for (var cat in list) {
-      if (cat.name.toLowerCase() == aiCategory.toLowerCase()) return cat.name;
+      if (cat.name.toLowerCase() == aiCategory.toLowerCase()) return cat;
     }
     for (var cat in list) {
       if (cat.name.toLowerCase().contains(aiCategory.toLowerCase()) ||
           aiCategory.toLowerCase().contains(cat.name.toLowerCase())) {
-        return cat.name;
+        return cat;
       }
     }
-    return list.isNotEmpty ? list.first.name : 'Khác';
+    return list.isNotEmpty
+        ? list.first
+        : CategoryData.getExpenseCategories().first;
   }
 
   String _getDisplayDate(String? dateStr) {
@@ -73,7 +79,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     }
   }
 
-  Future<void> _saveTransactionToDatabase(Map<String, dynamic> aiData, int index) async {
+  Future<void> _saveTransactionToDatabase(
+    Map<String, dynamic> aiData,
+    int index,
+  ) async {
     if (_messages[index]['is_saving'] == true) return;
 
     setState(() {
@@ -81,12 +90,18 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     });
 
     try {
-      final exactCategory = _getValidCategory(aiData['category'], aiData['type']);
+      final category = _getValidCategory(aiData['category'], aiData['type']);
       DateTime txDate = DateTime.now();
       if (aiData['date'] != null) {
         try {
           DateTime parsedDate = DateTime.parse(aiData['date']);
-          txDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, txDate.hour, txDate.minute);
+          txDate = DateTime(
+            parsedDate.year,
+            parsedDate.month,
+            parsedDate.day,
+            txDate.hour,
+            txDate.minute,
+          );
         } catch (e) {
           txDate = DateTime.now();
         }
@@ -96,16 +111,22 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         amount: (aiData['amount'] as num).toDouble(),
         type: aiData['type'],
-        categoryId: exactCategory,
+        categoryId: category.id,
+        categoryName: category.name,
         transactionDate: txDate,
         note: aiData['note'] ?? '',
       );
 
-      await ref.read(transactionControllerProvider).createOrUpdateTransaction(newTx);
+      await ref
+          .read(transactionControllerProvider)
+          .createOrUpdateTransaction(newTx);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ Đã lưu giao dịch!'), backgroundColor: Colors.green)
+          const SnackBar(
+            content: Text('✅ Đã lưu giao dịch!'),
+            backgroundColor: Colors.green,
+          ),
         );
         setState(() {
           _messages[index]['transaction_saved'] = true;
@@ -115,7 +136,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi hệ thống: $e'), backgroundColor: Colors.red)
+          SnackBar(
+            content: Text('Lỗi hệ thống: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
         setState(() {
           _messages[index]['is_saving'] = false;
@@ -136,8 +160,12 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     _controller.clear();
     _scrollToBottom();
 
-    String expenseNames = CategoryData.getExpenseCategories().map((c) => c.name).join(", ");
-    String incomeNames = CategoryData.getIncomeCategories().map((c) => c.name).join(", ");
+    String expenseNames = CategoryData.getExpenseCategories()
+        .map((c) => c.name)
+        .join(", ");
+    String incomeNames = CategoryData.getIncomeCategories()
+        .map((c) => c.name)
+        .join(", ");
 
     String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
     String currentTime = DateFormat('HH:mm').format(DateTime.now());
@@ -154,7 +182,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           "messages": [
             {
               "role": "system",
-              "content": """Bạn là trợ lý tài chính thông minh. HÔM NAY LÀ: $currentDate, THỜI GIAN HIỆN TẠI: $currentTime.
+              "content":
+                  """Bạn là trợ lý tài chính thông minh. HÔM NAY LÀ: $currentDate, THỜI GIAN HIỆN TẠI: $currentTime.
 
 QUY TẮC KIỂM TRA ĐIỀU KIỆN (BẮT BUỘC PHẢI THỎA MÃN CẢ 3):
 Để tạo được giao dịch, câu nói CỦA NGƯỜI DÙNG PHẢI CÓ ĐỦ 3 YẾU TỐ SAU:
@@ -178,18 +207,24 @@ TRẢ VỀ JSON:
 
 HÀNH ĐỘNG 3: TRÒ CHUYỆN BÌNH THƯỜNG
 Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời tiết), TRẢ VỀ JSON:
-{"is_transaction": false, "message": "<Câu trả lời thân thiện>"}"""
+{"is_transaction": false, "message": "<Câu trả lời thân thiện>"}""",
             },
-            ..._messages.where((msg) => msg['role'] != 'system').map((msg) => {
-              "role": msg["role"] == "user" ? "user" : "assistant",
-              "content": msg["text"] ?? ""
-            })
+            ..._messages
+                .where((msg) => msg['role'] != 'system')
+                .map(
+                  (msg) => {
+                    "role": msg["role"] == "user" ? "user" : "assistant",
+                    "content": msg["text"] ?? "",
+                  },
+                ),
           ],
         }),
       );
 
       if (response.statusCode == 200) {
-        String aiText = jsonDecode(utf8.decode(response.bodyBytes))['choices'][0]['message']['content'];
+        String aiText = jsonDecode(
+          utf8.decode(response.bodyBytes),
+        )['choices'][0]['message']['content'];
 
         String potentialJson = aiText;
         int startIndex = aiText.indexOf('{');
@@ -197,7 +232,10 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
         if (startIndex != -1 && endIndex != -1) {
           potentialJson = aiText.substring(startIndex, endIndex + 1);
         } else {
-          potentialJson = aiText.replaceAll('```json', '').replaceAll('```', '').trim();
+          potentialJson = aiText
+              .replaceAll('```json', '')
+              .replaceAll('```', '')
+              .trim();
         }
 
         try {
@@ -213,7 +251,8 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
             setState(() {
               _messages.add({
                 "role": "ai",
-                "text": "Mình đã trích xuất thông tin giao dịch, bạn kiểm tra lại nhé:",
+                "text":
+                    "Mình đã trích xuất thông tin giao dịch, bạn kiểm tra lại nhé:",
                 "transaction": aiData,
                 "transaction_saved": false,
                 "is_saving": false,
@@ -221,19 +260,28 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
             });
           } else {
             setState(() {
-              _messages.add({"role": "ai", "text": aiData['message'] ?? aiText});
+              _messages.add({
+                "role": "ai",
+                "text": aiData['message'] ?? aiText,
+              });
             });
           }
         } catch (e) {
           setState(() {
-            String cleanText = aiText.replaceAll('```json', '').replaceAll('```', '').trim();
+            String cleanText = aiText
+                .replaceAll('```json', '')
+                .replaceAll('```', '')
+                .trim();
             _messages.add({"role": "ai", "text": cleanText});
           });
         }
       } else {
         debugPrint("Lỗi API: ${response.statusCode} - ${response.body}");
         setState(() {
-          _messages.add({"role": "ai", "text": "Hệ thống AI đang phản hồi chậm hoặc lỗi API!"});
+          _messages.add({
+            "role": "ai",
+            "text": "Hệ thống AI đang phản hồi chậm hoặc lỗi API!",
+          });
         });
       }
     } catch (e) {
@@ -256,9 +304,22 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('lib/ui/ai_chat/robot.gif', width: 35, height: 35, errorBuilder: (c,e,s) => const Icon(Icons.smart_toy, color: Colors.white)),
+            Image.asset(
+              'lib/ui/ai_chat/robot.gif',
+              width: 35,
+              height: 35,
+              errorBuilder: (c, e, s) =>
+                  const Icon(Icons.smart_toy, color: Colors.white),
+            ),
             const SizedBox(width: 8),
-            const Text("Trợ lý AI", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+            const Text(
+              "Trợ lý AI",
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
         centerTitle: true,
@@ -291,25 +352,37 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 20),
                   child: Row(
-                    mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    mainAxisAlignment: isUser
+                        ? MainAxisAlignment.end
+                        : MainAxisAlignment.start,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       if (!isUser) _buildAvatar('🤖'),
                       const SizedBox(width: 10),
                       Flexible(
                         child: Column(
-                          crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          crossAxisAlignment: isUser
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: isUser
                                     ? const LinearGradient(
-                                  colors: [Color(0xFF8B3DFF), Color(0xFFD91CFF)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                )
-                                    : const LinearGradient(colors: [Colors.white, Colors.white]),
+                                        colors: [
+                                          Color(0xFF8B3DFF),
+                                          Color(0xFFD91CFF),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      )
+                                    : const LinearGradient(
+                                        colors: [Colors.white, Colors.white],
+                                      ),
                                 borderRadius: BorderRadius.only(
                                   topLeft: const Radius.circular(20),
                                   topRight: const Radius.circular(20),
@@ -318,19 +391,25 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                      color: isUser ? const Color(0xFF8B3DFF).withOpacity(0.3) : Colors.black.withOpacity(0.05),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3)
-                                  )
+                                    color: isUser
+                                        ? const Color(
+                                            0xFF8B3DFF,
+                                          ).withOpacity(0.3)
+                                        : Colors.black.withOpacity(0.05),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
                                 ],
                               ),
                               child: Text(
                                 message["text"],
                                 style: TextStyle(
-                                    color: isUser ? Colors.white : const Color(0xFF334155),
-                                    fontSize: 15,
-                                    height: 1.4,
-                                    fontWeight: FontWeight.w500
+                                  color: isUser
+                                      ? Colors.white
+                                      : const Color(0xFF334155),
+                                  fontSize: 15,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -341,64 +420,145 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
                                 width: 260,
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFF8B3DFF).withOpacity(0.3), width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(color: const Color(0xFF8B3DFF).withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-                                    ]
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF8B3DFF,
+                                    ).withOpacity(0.3),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF8B3DFF,
+                                      ).withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [
-                                        Icon(txData['type'] == 'expense' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                                            color: txData['type'] == 'expense' ? Colors.red : Colors.green, size: 20),
+                                        Icon(
+                                          txData['type'] == 'expense'
+                                              ? Icons.arrow_downward_rounded
+                                              : Icons.arrow_upward_rounded,
+                                          color: txData['type'] == 'expense'
+                                              ? Colors.red
+                                              : Colors.green,
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 6),
-                                        Text(txData['type'] == 'expense' ? 'XÁC NHẬN CHI' : 'XÁC NHẬN THU',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
+                                        Text(
+                                          txData['type'] == 'expense'
+                                              ? 'XÁC NHẬN CHI'
+                                              : 'XÁC NHẬN THU',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey,
+                                            fontSize: 12,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     const Divider(height: 20),
-                                    _buildTxRow("Ngày", _getDisplayDate(txData['date']), Colors.black87),
-                                    _buildTxRow("Danh mục", txData['category'] ?? 'Khác', Colors.black87),
-                                    _buildTxRow("Số tiền", "${formatCurrency.format(txData['amount'] ?? 0)} đ", txData['type'] == 'expense' ? Colors.red : Colors.green, isBold: true),
-                                    _buildTxRow("Ghi chú", txData['note'] ?? '', Colors.black54),
+                                    _buildTxRow(
+                                      "Ngày",
+                                      _getDisplayDate(txData['date']),
+                                      Colors.black87,
+                                    ),
+                                    _buildTxRow(
+                                      "Danh mục",
+                                      txData['category'] ?? 'Khác',
+                                      Colors.black87,
+                                    ),
+                                    _buildTxRow(
+                                      "Số tiền",
+                                      "${formatCurrency.format(txData['amount'] ?? 0)} đ",
+                                      txData['type'] == 'expense'
+                                          ? Colors.red
+                                          : Colors.green,
+                                      isBold: true,
+                                    ),
+                                    _buildTxRow(
+                                      "Ghi chú",
+                                      txData['note'] ?? '',
+                                      Colors.black54,
+                                    ),
 
                                     const SizedBox(height: 16),
                                     Container(
                                       width: double.infinity,
                                       height: 42,
                                       decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: isSaving
-                                                ? [Colors.grey, Colors.grey]
-                                                : [const Color(0xFF1D4ED8), const Color(0xFF6D28D9)],
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                          ),
-                                          borderRadius: BorderRadius.circular(10),
-                                          boxShadow: isSaving ? [] : [
-                                            BoxShadow(color: const Color(0xFF6D28D9).withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 3))
-                                          ]
+                                        gradient: LinearGradient(
+                                          colors: isSaving
+                                              ? [Colors.grey, Colors.grey]
+                                              : [
+                                                  const Color(0xFF1D4ED8),
+                                                  const Color(0xFF6D28D9),
+                                                ],
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: isSaving
+                                            ? []
+                                            : [
+                                                BoxShadow(
+                                                  color: const Color(
+                                                    0xFF6D28D9,
+                                                  ).withOpacity(0.4),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 3),
+                                                ),
+                                              ],
                                       ),
                                       child: ElevatedButton(
-                                        onPressed: isSaving ? null : () => _saveTransactionToDatabase(txData, index),
+                                        onPressed: isSaving
+                                            ? null
+                                            : () => _saveTransactionToDatabase(
+                                                txData,
+                                                index,
+                                              ),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.transparent,
                                           shadowColor: Colors.transparent,
-                                          disabledBackgroundColor: Colors.transparent,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          disabledBackgroundColor:
+                                              Colors.transparent,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
                                         ),
                                         child: isSaving
-                                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                            : const Text("LƯU GIAO DỊCH", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Text(
+                                                "LƯU GIAO DỊCH",
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
                                       ),
-                                    )
+                                    ),
                                   ],
                                 ),
-                              )
+                              ),
                             ],
 
                             if (txData != null && isSaved) ...[
@@ -406,12 +566,23 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.check_circle, color: Color(0xFF8B3DFF), size: 14),
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: Color(0xFF8B3DFF),
+                                    size: 14,
+                                  ),
                                   const SizedBox(width: 4),
-                                  Text("Đã lưu vào hệ thống", style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontStyle: FontStyle.italic)),
+                                  Text(
+                                    "Đã lưu vào hệ thống",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                                 ],
-                              )
-                            ]
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -427,17 +598,34 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
-              child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF8B3DFF)))),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Color(0xFF8B3DFF),
+                  ),
+                ),
+              ),
             ),
 
           Container(
             padding: EdgeInsets.only(
-              left: 16, right: 16, top: 12,
+              left: 16,
+              right: 16,
+              top: 12,
               bottom: MediaQuery.of(context).padding.bottom + 16,
             ),
             decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, -5))]
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 15,
+                  offset: const Offset(0, -5),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -466,17 +654,25 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF8B3DFF), Color(0xFFD91CFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B3DFF), Color(0xFFD91CFF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF8B3DFF).withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: const Color(0xFF8B3DFF).withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 3))
-                        ]
+                      ],
                     ),
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                    child: const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
               ],
@@ -492,38 +688,59 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Colors.white, Color(0xFFF0F5FF)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFF0F5FF)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: const Color(0xFF8B3DFF).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF8B3DFF).withOpacity(0.2), width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+        ],
       ),
       alignment: Alignment.center,
       child: Text(emoji, style: const TextStyle(fontSize: 18)),
     );
   }
 
-  Widget _buildTxRow(String title, String value, Color valueColor, {bool isBold = false}) {
+  Widget _buildTxRow(
+    String title,
+    String value,
+    Color valueColor, {
+    bool isBold = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text("$title: ", style: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(
+            "$title: ",
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           Expanded(
-              child: Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                      color: valueColor,
-                      fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-                      fontSize: isBold ? 16 : 14
-                  ),
-                  overflow: TextOverflow.ellipsis
-              )
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: valueColor,
+                fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+                fontSize: isBold ? 16 : 14,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

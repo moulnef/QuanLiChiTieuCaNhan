@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
@@ -23,7 +22,6 @@ class InstallmentTabPage extends StatefulWidget {
 }
 
 class _InstallmentTabPageState extends State<InstallmentTabPage> {
-  final FirestoreService _firestoreService = FirestoreService();
   final FinanceRepository _repository = FinanceRepository();
 
   String get _currentUserId =>
@@ -82,12 +80,16 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<WalletModel>(
-                value: selectedWallet,
+                isExpanded: true,
+                initialValue: selectedWallet,
                 items: wallets
                     .map(
                       (w) => DropdownMenuItem(
                         value: w,
-                        child: Text('${w.name} (${formatCurrency(w.balance)})'),
+                        child: Text(
+                          '${w.name} (${formatCurrency(w.balance)})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(),
@@ -229,7 +231,7 @@ class _InstallmentTabPageState extends State<InstallmentTabPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<InstallmentPlan>>(
-      stream: _firestoreService.streamInstallments(),
+      stream: _repository.streamInstallments(_currentUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -629,6 +631,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _totalController = TextEditingController();
+  bool _isSaving = false;
 
   String _selectedBank = 'MB Bank';
   final List<String> _banks = [
@@ -797,7 +800,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: _selectedBank,
+                initialValue: _selectedBank,
                 items: _banks
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
@@ -818,7 +821,7 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<int>(
-                value: _selectedPeriod,
+                initialValue: _selectedPeriod,
                 items: _periods
                     .map(
                       (p) => DropdownMenuItem(
@@ -970,81 +973,99 @@ class _AddInstallmentSheetState extends State<_AddInstallmentSheet> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () async {
-                    if (!_formKey.currentState!.validate()) return;
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          if (!_formKey.currentState!.validate()) return;
 
-                    final title =
-                        '${_titleController.text.trim()} - $_selectedBank';
-                    final cleanAmt = _totalController.text.replaceAll(
-                      RegExp(r'\D'),
-                      '',
-                    );
-                    final totalAmt = int.parse(cleanAmt);
-                    final periods = _selectedPeriod;
+                          setState(() => _isSaving = true);
 
-                    final plan = InstallmentPlan(
-                      id:
-                          widget.installmentPlan?.id ??
-                          'installment_${DateTime.now().millisecondsSinceEpoch}',
-                      userId: widget.userId,
-                      title: title,
-                      icon: _selectedEmoji,
-                      totalAmount: totalAmt,
-                      paidAmount: widget.installmentPlan?.paidAmount ?? 0,
-                      monthlyPayment: _calculatedMonthly,
-                      paidPeriods: widget.installmentPlan?.paidPeriods ?? 0,
-                      totalPeriods: periods,
-                      nextDueDate: _selectedDate.millisecondsSinceEpoch,
-                      createdAt:
-                          widget.installmentPlan?.createdAt ??
-                          DateTime.now().millisecondsSinceEpoch,
-                      updatedAt: DateTime.now().millisecondsSinceEpoch,
-                      status:
-                          (widget.installmentPlan?.paidPeriods ?? 0) >= periods
-                          ? 'completed'
-                          : 'active',
-                    );
+                          final title =
+                              '${_titleController.text.trim()} - $_selectedBank';
+                          final cleanAmt = _totalController.text.replaceAll(
+                            RegExp(r'\D'),
+                            '',
+                          );
+                          final totalAmt = int.parse(cleanAmt);
+                          final periods = _selectedPeriod;
 
-                    try {
-                      if (isEdit) {
-                        await context
-                            .read<FinanceProvider>()
-                            .updateInstallmentPlan(plan);
-                      } else {
-                        await context
-                            .read<FinanceProvider>()
-                            .addInstallmentPlanDirect(plan);
-                      }
+                          final plan = InstallmentPlan(
+                            id:
+                                widget.installmentPlan?.id ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                            userId: widget.userId,
+                            title: title,
+                            icon: _selectedEmoji,
+                            totalAmount: totalAmt,
+                            paidAmount: widget.installmentPlan?.paidAmount ?? 0,
+                            monthlyPayment: _calculatedMonthly,
+                            paidPeriods:
+                                widget.installmentPlan?.paidPeriods ?? 0,
+                            totalPeriods: periods,
+                            nextDueDate: _selectedDate.millisecondsSinceEpoch,
+                            createdAt:
+                                widget.installmentPlan?.createdAt ??
+                                DateTime.now().millisecondsSinceEpoch,
+                            updatedAt: DateTime.now().millisecondsSinceEpoch,
+                            status:
+                                (widget.installmentPlan?.paidPeriods ?? 0) >=
+                                    periods
+                                ? 'completed'
+                                : 'active',
+                          );
 
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isEdit
-                                ? 'Đã cập nhật trả góp "$title"'
-                                : 'Đã thêm kế hoạch trả góp "$title"',
+                          try {
+                            if (isEdit) {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .updateInstallmentPlan(plan);
+                            } else {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .addInstallmentPlanDirect(plan);
+                            }
+
+                            if (!mounted) return;
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isEdit
+                                      ? 'Đã cập nhật trả góp "$title"'
+                                      : 'Đã thêm kế hoạch trả góp "$title"',
+                                ),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Lỗi: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isSaving = false);
+                          }
+                        },
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          isEdit ? 'Cập nhật trả góp' : 'Lưu kế hoạch',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Lỗi: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    isEdit ? 'Cập nhật trả góp' : 'Lưu kế hoạch',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
                 ),
               ),
             ],

@@ -426,14 +426,53 @@ class CategoryData {
     return null;
   }
 
+  static String removeDiacritics(String str) {
+    var withDiacritics = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
+    var withoutDiacritics = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
+    var result = str;
+    for (int i = 0; i < withDiacritics.length; i++) {
+      result = result.replaceAll(withDiacritics[i], withoutDiacritics[i]);
+    }
+    result = result.replaceAll(RegExp('[\u0300-\u036f]'), '');
+    return result;
+  }
+
+  static String _canonicalString(String str) {
+    var s = removeDiacritics(str).toLowerCase();
+    return s.replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
   static CategoryModel? findByName(String name) {
     final normalized = normalizeLabel(name).trim().toLowerCase();
     if (normalized.isEmpty) return null;
+    
+    // 1. Exact match with original/legacy normalization
     for (final category in getAllCategories()) {
       if (category.name.trim().toLowerCase() == normalized) {
         return category;
       }
     }
+    
+    // 2. Canonical match (lowercase, no diacritics, alphanumeric only)
+    final canonicalName = _canonicalString(name);
+    if (canonicalName.isEmpty) return null;
+    
+    for (final category in getAllCategories()) {
+      if (_canonicalString(category.name) == canonicalName) {
+        return category;
+      }
+    }
+    
+    // 3. Substring match on canonical name (e.g. "đi chợ" -> "đi chợ/siêu thị")
+    if (canonicalName.length >= 3) {
+      for (final category in getAllCategories()) {
+        final catCanonical = _canonicalString(category.name);
+        if (catCanonical.contains(canonicalName)) {
+          return category;
+        }
+      }
+    }
+    
     return null;
   }
 

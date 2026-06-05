@@ -73,7 +73,30 @@ class BudgetItemCard extends StatelessWidget {
                   color: const Color(0xFFFFF3F0),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(budget.icon, style: const TextStyle(fontSize: 24)),
+                child: () {
+                  final clean = budget.icon.trim();
+                  int? codePoint = int.tryParse(clean);
+                  if (codePoint == null) {
+                    var hexStr = clean;
+                    if (hexStr.toLowerCase().startsWith('0x')) {
+                      hexStr = hexStr.substring(2);
+                    }
+                    codePoint = int.tryParse(hexStr, radix: 16);
+                  }
+                  if (codePoint != null) {
+                    final category = CategoryData.findById(budget.categoryId) ??
+                        CategoryData.findByName(budget.categoryName);
+                    return Icon(
+                      IconData(codePoint, fontFamily: 'MaterialIcons'),
+                      size: 28,
+                      color: category?.color ?? const Color(0xFFE0533C),
+                    );
+                  }
+                  return Text(
+                    budget.icon,
+                    style: const TextStyle(fontSize: 24),
+                  );
+                }(),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -93,7 +116,7 @@ class BudgetItemCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${budget.progressPercent}% ' + 'đã dùng'.xtr(context),
+                      '${budget.progressPercent}% ${'đã dùng'.xtr(context)}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,

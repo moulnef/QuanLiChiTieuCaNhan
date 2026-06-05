@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -22,7 +23,11 @@ class SyncProvider extends ChangeNotifier {
     _syncService.syncEventStream.listen((event) {
       _status = event.status;
       if (event.error != null) {
-        _errorMessage = event.error!.replaceAll('Exception: ', '');
+        String cleanMsg = event.error!;
+        if (cleanMsg.contains(': ')) {
+          cleanMsg = cleanMsg.substring(cleanMsg.indexOf(': ') + 2);
+        }
+        _errorMessage = cleanMsg;
       } else {
         _errorMessage = null;
       }
@@ -88,9 +93,19 @@ class SyncProvider extends ChangeNotifier {
       await loadPendingCount();
       await loadLastSyncTime();
       return result;
+    } on TimeoutException catch (_) {
+      _status = SyncStatus.error;
+      _errorMessage =
+          'Hết thời gian chờ kết nối Firebase. Vui lòng kiểm tra lại mạng.';
+      notifyListeners();
+      rethrow;
     } catch (e) {
       _status = SyncStatus.error;
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      String cleanMsg = e.toString();
+      if (cleanMsg.contains(': ')) {
+        cleanMsg = cleanMsg.substring(cleanMsg.indexOf(': ') + 2);
+      }
+      _errorMessage = cleanMsg;
       notifyListeners();
       rethrow;
     }

@@ -5,7 +5,7 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
 
   DatabaseHelper._init();
 
@@ -38,6 +38,19 @@ class DatabaseHelper {
     await _migrateTransactionsColumns(db);
     await _migrateAllTablesForSync(db);
     await _migrateNotificationsTable(db);
+    if (oldVersion < 7) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS split_groups (
+          id TEXT PRIMARY KEY,
+          name TEXT,
+          createdAt INTEGER,
+          status TEXT,
+          ownerId TEXT,
+          members TEXT,
+          expenses TEXT
+        )
+      ''');
+    }
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -231,6 +244,18 @@ class DatabaseHelper {
         createdAt TEXT,
         isRead INTEGER,
         relatedId TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS split_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        createdAt INTEGER,
+        status TEXT,
+        ownerId TEXT,
+        members TEXT,
+        expenses TEXT
       )
     ''');
 

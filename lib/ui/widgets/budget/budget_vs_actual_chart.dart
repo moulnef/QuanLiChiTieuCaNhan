@@ -89,8 +89,34 @@ class BudgetVsActualChart extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Text(
-                          '${budget.icon} ${budget.categoryName.xtrCategory(context)}',
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              () {
+                                final clean = budget.icon.trim();
+                                int? codePoint = int.tryParse(clean);
+                                if (codePoint == null) {
+                                  var hexStr = clean;
+                                  if (hexStr.toLowerCase().startsWith('0x')) {
+                                    hexStr = hexStr.substring(2);
+                                  }
+                                  codePoint = int.tryParse(hexStr, radix: 16);
+                                }
+                                if (codePoint != null) {
+                                  return TextSpan(
+                                    text: String.fromCharCode(codePoint),
+                                    style: const TextStyle(
+                                      fontFamily: 'MaterialIcons',
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                } else {
+                                  return TextSpan(text: budget.icon);
+                                }
+                              }(),
+                              TextSpan(text: ' ${budget.categoryName.xtrCategory(context)}'),
+                            ],
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

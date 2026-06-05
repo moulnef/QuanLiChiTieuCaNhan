@@ -36,8 +36,9 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   Future<void> _loadRealFrequentCategories() async {
     try {
       final controller = ref.read(transactionControllerProvider);
-      if (controller.transactions.isEmpty)
+      if (controller.transactions.isEmpty) {
         await controller.fetchAllTransactions();
+      }
 
       final filteredTransactions = controller.transactions
           .where((tx) => tx.type == widget.transactionType)
@@ -58,14 +59,16 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         if (match != null) topCategories.add(match);
       }
 
-      if (topCategories.isEmpty)
+      if (topCategories.isEmpty) {
         topCategories = _allCategories.take(4).toList();
+      }
 
-      if (mounted)
+      if (mounted) {
         setState(() {
           _frequentCategories = topCategories;
           _isLoadingFrequent = false;
         });
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoadingFrequent = false);
     }
@@ -89,8 +92,9 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
       String groupName = CategoryData.normalizeLabel(
         cat.group ?? '\u004b\u0068\u00e1\u0063',
       );
-      if (!groupedCategories.containsKey(groupName))
+      if (!groupedCategories.containsKey(groupName)) {
         groupedCategories[groupName] = [];
+      }
       groupedCategories[groupName]!.add(cat);
     }
 
@@ -379,28 +383,37 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
     // --- CÃ¡c nhÃ³m Chi tiÃªu ---
     if (lowerGroup.contains('Äƒn')) return Icons.restaurant_menu_rounded;
     if (lowerGroup.contains('dá»‹ch vá»¥') ||
-        lowerGroup.contains('sinh hoáº¡t'))
+        lowerGroup.contains('sinh hoáº¡t')) {
       return Icons.electrical_services_rounded;
-    if (lowerGroup.contains('di chuyá»ƒn') || lowerGroup.contains('Ä‘i láº¡i'))
+    }
+    if (lowerGroup.contains('di chuyá»ƒn') || lowerGroup.contains('Ä‘i láº¡i')) {
       return Icons.directions_car_rounded;
-    if (lowerGroup.contains('trang phá»¥c') || lowerGroup.contains('mua sáº¯m'))
+    }
+    if (lowerGroup.contains('trang phá»¥c') || lowerGroup.contains('mua sáº¯m')) {
       return Icons.checkroom_rounded;
+    }
     if (lowerGroup.contains('hÆ°á»Ÿng thá»¥') ||
-        lowerGroup.contains('giáº£i trÃ­'))
+        lowerGroup.contains('giáº£i trÃ­')) {
       return Icons.celebration_rounded;
+    }
     if (lowerGroup.contains('con cÃ¡i')) return Icons.child_care_rounded;
     if (lowerGroup.contains('hiáº¿u há»‰') ||
-        lowerGroup.contains('biáº¿u táº·ng'))
+        lowerGroup.contains('biáº¿u táº·ng')) {
       return Icons.card_giftcard_rounded;
+    }
     if (lowerGroup.contains('nhÃ  cá»­a')) return Icons.home_rounded;
-    if (lowerGroup.contains('phÃ¡t triá»ƒn') || lowerGroup.contains('há»c'))
+    if (lowerGroup.contains('phÃ¡t triá»ƒn') || lowerGroup.contains('há»c')) {
       return Icons.psychology_rounded;
-    if (lowerGroup.contains('sá»©c khá»e') || lowerGroup.contains('y táº¿'))
+    }
+    if (lowerGroup.contains('sá»©c khá»e') || lowerGroup.contains('y táº¿')) {
       return Icons.medical_services_rounded;
-    if (lowerGroup.contains('ngÃ¢n hÃ ng'))
+    }
+    if (lowerGroup.contains('ngÃ¢n hÃ ng')) {
       return Icons.account_balance_rounded;
-    if (lowerGroup.contains('vay') || lowerGroup.contains('ná»£'))
+    }
+    if (lowerGroup.contains('vay') || lowerGroup.contains('ná»£')) {
       return Icons.credit_score_rounded;
+    }
 
     // --- CÃ¡c nhÃ³m Thu nháº­p ---
     if (lowerGroup.contains('thu nháº­p')) return Icons.monetization_on_rounded;

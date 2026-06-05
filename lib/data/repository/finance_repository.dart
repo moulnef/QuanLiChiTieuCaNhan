@@ -31,6 +31,11 @@ class FinanceRepository {
   final FirestoreService _firestoreService = FirestoreService();
   final Map<String, Set<String>> _tableColumnsCache = {};
 
+  int? _parseId(String id) {
+    final clean = id.replaceFirst(RegExp(r'^(saving|installment|debt)_'), '');
+    return int.tryParse(clean);
+  }
+
   static final StreamController<String> _transactionChangeController =
       StreamController<String>.broadcast();
 
@@ -1534,7 +1539,7 @@ class FinanceRepository {
     final db = await _databaseHelper.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final payload = {
-      'id': int.tryParse(debt.id) ?? now,
+      'id': _parseId(debt.id) ?? now,
       'userId': debt.userId,
       'user_id': debt.userId,
       'icon': 'Ã°Å¸â€™Â°',
@@ -1732,7 +1737,7 @@ class FinanceRepository {
     final db = await _databaseHelper.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final payload = {
-      'id': int.tryParse(plan.id) ?? now,
+      'id': _parseId(plan.id) ?? now,
       'userId': plan.userId,
       'user_id': plan.userId,
       'icon': plan.icon,
@@ -2177,7 +2182,7 @@ class FinanceRepository {
 
     try {
       final db = await _databaseHelper.database;
-      await _syncDefaultCategoriesToCloud(userId);
+      await _syncDefaultCategoriesToCloud(userId).timeout(const Duration(seconds: 10));
       await _cleanCorruptedTransactions(userId);
 
       // 1. SYNC WALLETS
@@ -2185,7 +2190,7 @@ class FinanceRepository {
       final localWallets = localWalletsRaw
           .map((row) => WalletModel.fromMap(row))
           .toList();
-      final remoteWallets = await _firestoreService.getWallets();
+      final remoteWallets = await _firestoreService.getWallets().timeout(const Duration(seconds: 10));
       final localWalletById = {for (final item in localWallets) item.id: item};
       final remoteWalletById = {
         for (final item in remoteWallets) item.id: item,
@@ -2214,7 +2219,8 @@ class FinanceRepository {
           .collection('users')
           .doc(userId)
           .collection('transactions')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final remoteTx = txSnapshot.docs
           .map((doc) => TransactionModel.fromMap(doc.data(), doc.id))
           .toList();
@@ -2253,7 +2259,8 @@ class FinanceRepository {
           .collection('users')
           .doc(userId)
           .collection('budgets')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final remoteBudgets = budgetSnapshot.docs
           .map((doc) => Budget.fromMap(doc.data(), doc.id))
           .toList();
@@ -2296,7 +2303,8 @@ class FinanceRepository {
           .collection('users')
           .doc(userId)
           .collection('savings')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final remoteSavings = savingSnapshot.docs
           .map((doc) => SavingGoal.fromMap(doc.data()))
           .toList();
@@ -2318,7 +2326,7 @@ class FinanceRepository {
         final local = localSavingById[remote.id];
         if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'savings', {
-            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'id': _parseId(remote.id) ?? remote.createdAt,
             'userId': userId,
             'user_id': userId,
             'icon': remote.icon,
@@ -2347,7 +2355,8 @@ class FinanceRepository {
           .collection('users')
           .doc(userId)
           .collection('debts')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final remoteDebts = debtSnapshot.docs
           .map((doc) => DebtRecord.fromMap(doc.data()))
           .toList();
@@ -2367,7 +2376,7 @@ class FinanceRepository {
         final local = localDebtById[remote.id];
         if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'debts', {
-            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'id': _parseId(remote.id) ?? remote.createdAt,
             'userId': userId,
             'user_id': userId,
             'title': remote.title,
@@ -2405,7 +2414,8 @@ class FinanceRepository {
           .collection('users')
           .doc(userId)
           .collection('installments')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final remoteInstallments = installmentSnapshot.docs
           .map((doc) => InstallmentPlan.fromMap(doc.data()))
           .toList();
@@ -2429,7 +2439,7 @@ class FinanceRepository {
         final local = localInstallmentById[remote.id];
         if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'installments', {
-            'id': int.tryParse(remote.id) ?? remote.createdAt,
+            'id': _parseId(remote.id) ?? remote.createdAt,
             'userId': userId,
             'user_id': userId,
             'icon': remote.icon,
@@ -2478,12 +2488,13 @@ class FinanceRepository {
           savings: savingsToPush,
           debts: debtsToPush,
           installments: installmentsToPush,
-        );
+        ).timeout(const Duration(seconds: 15));
       }
 
       _notifyTransactionChanged(userId);
     } catch (e) {
       print("syncWithFirebase error: $e");
+      rethrow;
     }
   }
 

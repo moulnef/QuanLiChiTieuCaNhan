@@ -187,20 +187,24 @@ class SyncService with WidgetsBindingObserver {
           debtList.length +
           installmentList.length;
       if (totalUnsynced == 0) {
-        await _financeRepository.syncWithFirebase(userId);
+        await _financeRepository
+            .syncWithFirebase(userId)
+            .timeout(const Duration(seconds: 25));
         await saveLastSyncTime();
         _emitEvent(SyncStatus.success);
         return SyncResult(successCount: 0, failCount: failCount, syncTime: now);
       }
 
       // Upload to firestore using FirestoreService batchWrite
-      await _firestoreService.batchWrite(
-        transactions: txList.isNotEmpty ? txList : null,
-        budgets: budgetList.isNotEmpty ? budgetList : null,
-        savings: savingList.isNotEmpty ? savingList : null,
-        debts: debtList.isNotEmpty ? debtList : null,
-        installments: installmentList.isNotEmpty ? installmentList : null,
-      );
+      await _firestoreService
+          .batchWrite(
+            transactions: txList.isNotEmpty ? txList : null,
+            budgets: budgetList.isNotEmpty ? budgetList : null,
+            savings: savingList.isNotEmpty ? savingList : null,
+            debts: debtList.isNotEmpty ? debtList : null,
+            installments: installmentList.isNotEmpty ? installmentList : null,
+          )
+          .timeout(const Duration(seconds: 15));
 
       // If we reach here, batchWrite succeeded! Mark all these as synced in SQLite
       final batch = db.batch();
@@ -252,14 +256,27 @@ class SyncService with WidgetsBindingObserver {
       }
 
       await batch.commit(noResult: true);
-      await _financeRepository.syncWithFirebase(userId);
+      await _financeRepository
+          .syncWithFirebase(userId)
+          .timeout(const Duration(seconds: 25));
       await saveLastSyncTime();
 
       _emitEvent(SyncStatus.success);
     } catch (e) {
       print('Lỗi syncNow: $e');
-      _emitEvent(SyncStatus.error, e.toString());
-      throw Exception('Đồng bộ thất bại: $e');
+      // Làm sạch thông báo lỗi: bỏ "Exception:", "FirestoreException:", v.v.
+      String errMsg = e.toString();
+      if (errMsg.contains(': ')) {
+        errMsg = errMsg.substring(errMsg.indexOf(': ') + 2);
+      }
+
+      if (e is TimeoutException) {
+        errMsg =
+            'Hết thời gian chờ kết nối Firebase. Vui lòng kiểm tra lại mạng.';
+      }
+
+      _emitEvent(SyncStatus.error, errMsg);
+      throw errMsg;
     }
 
     return SyncResult(

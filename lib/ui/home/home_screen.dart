@@ -11,9 +11,9 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.d
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/ai_chat/chatbot.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/all_overview_screen.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/home/main_screen.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/budget_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/transaction_list_page.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/notification_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/notification/notification_screen.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/create_transaction_page.dart';
@@ -830,10 +830,30 @@ class HomePageState extends State<HomePage> {
                                   size: 18,
                                   color: Color(0xFF4B5563),
                                 )
-                              : Text(
-                                  budget.icon as String,
-                                  style: const TextStyle(fontSize: 16),
-                                ),
+                              : () {
+                                  final clean = (budget.icon as String).trim();
+                                  int? codePoint = int.tryParse(clean);
+                                  if (codePoint == null) {
+                                    var hexStr = clean;
+                                    if (hexStr.toLowerCase().startsWith('0x')) {
+                                      hexStr = hexStr.substring(2);
+                                    }
+                                    codePoint = int.tryParse(hexStr, radix: 16);
+                                  }
+                                  if (codePoint != null) {
+                                    final category = CategoryData.findById(budget.categoryId) ??
+                                        CategoryData.findByName(budget.categoryName);
+                                    return Icon(
+                                      IconData(codePoint, fontFamily: 'MaterialIcons'),
+                                      size: 18,
+                                      color: category?.color ?? const Color(0xFF4B5563),
+                                    );
+                                  }
+                                  return Text(
+                                    budget.icon as String,
+                                    style: const TextStyle(fontSize: 16),
+                                  );
+                                }(),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -902,13 +922,11 @@ class HomePageState extends State<HomePage> {
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const TransactionListPage(forceShowBackButton: true),
-                    ),
-                  );
+                  // Chuyển sang tab Giao dịch thay vì push lồng nhau
+                  final mainScreen = MainScreen.of(context);
+                  if (mainScreen != null) {
+                    mainScreen.setSelectedIndex(1);
+                  }
                 },
                 child: Text('Xem t\u1ea5t c\u1ea3'.xtr(context)),
               ),

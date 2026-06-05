@@ -15,6 +15,7 @@ import '../providers/sync_provider.dart';
 import '../../services/sync_service.dart';
 import '../../services/notification_service.dart';
 import '../providers/notification_provider.dart';
+import 'backup_restore_screen.dart';
 
 import '../../modules/admin/admin_dashboard.dart';
 import '../providers/auth_provider.dart';
@@ -270,7 +271,14 @@ class _ProfilePageState extends State<ProfilePage> {
                         label: "Sao lưu dữ liệu".xtr(context),
                         subtitle: "Sao lưu / Khôi phục".xtr(context),
                         color: const Color(0xFF6D28D9),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BackupRestoreScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -968,7 +976,9 @@ class _ProfilePageState extends State<ProfilePage> {
               size: 20,
             );
             statusText =
-                syncProvider.errorMessage ?? "Lỗi đồng bộ".xtr(context);
+                "Đồng bộ thất bại: ".xtr(context) +
+                (syncProvider.errorMessage ??
+                    "Lỗi không xác định".xtr(context));
             break;
           case SyncStatus.offline:
             iconColor = const Color(0xFF94A3B8); // Grey
@@ -999,8 +1009,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               );
               statusText =
-                  "${syncProvider.pendingCount} " +
-                  "bản ghi chờ đồng bộ".xtr(context);
+                  "${syncProvider.pendingCount} ${"bản ghi chờ đồng bộ".xtr(context)}";
             } else {
               iconColor = const Color(0xFF10B981); // Green
               trailingWidget = const Icon(
@@ -1017,10 +1026,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ? DateFormat('HH:mm dd/MM/yyyy').format(syncProvider.lastSyncTime!)
             : "Chưa đồng bộ lần nào".xtr(context);
         final subtitle =
-            "Lần cuối: ".xtr(context) +
-            lastSyncTimeStr +
-            " • " +
-            "Tự động đồng bộ khi có kết nối".xtr(context);
+            "${"Lần cuối: ".xtr(context)}$lastSyncTimeStr • ${"Tự động đồng bộ khi có kết nối".xtr(context)}";
 
         final showRetryButton = syncProvider.status == SyncStatus.error;
 
@@ -1093,9 +1099,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  "Đã đồng bộ ".xtr(context) +
-                                      "${result.successCount} " +
-                                      "bản ghi thành công!".xtr(context),
+                                  "${"Đã đồng bộ ".xtr(context)}${result.successCount} ${"bản ghi thành công!".xtr(context)}",
                                 ),
                                 backgroundColor: const Color(0xFF10B981),
                               ),
@@ -1103,10 +1107,16 @@ class _ProfilePageState extends State<ProfilePage> {
                           }
                         } catch (e) {
                           if (context.mounted) {
+                            String cleanMsg = e.toString();
+                            if (cleanMsg.contains(': ')) {
+                              cleanMsg = cleanMsg.substring(
+                                cleanMsg.indexOf(': ') + 2,
+                              );
+                            }
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  "Đồng bộ thất bại: ".xtr(context) + "$e",
+                                  "Đồng bộ thất bại: ".xtr(context) + cleanMsg,
                                 ),
                                 backgroundColor: const Color(0xFFEF4444),
                               ),

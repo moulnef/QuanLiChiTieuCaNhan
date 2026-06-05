@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/widgets/common/finance_stat_card.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
@@ -57,16 +58,17 @@ class FinanceScreen extends StatelessWidget {
 }
 
 class _FinanceHeader extends StatelessWidget {
-  final FirestoreService _firestoreService = FirestoreService();
+  final FinanceRepository _repository = FinanceRepository();
+
+  String get _currentUserId =>
+      FirebaseAuth.instance.currentUser?.uid ?? 'user_001';
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 54, 16, 20),
-      decoration: const BoxDecoration(
-        color: AppColors.financeGreen,
-      ),
+      decoration: const BoxDecoration(color: AppColors.financeGreen),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -81,20 +83,23 @@ class _FinanceHeader extends StatelessWidget {
           const SizedBox(height: 6),
           const Text(
             'Quản lý tiết kiệm, góp và vay',
-            style: TextStyle(
-              fontSize: 15,
-              color: Color(0xCCFFFFFF),
-            ),
+            style: TextStyle(fontSize: 15, color: Color(0xCCFFFFFF)),
           ),
           const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
                 child: StreamBuilder<List<SavingGoal>>(
-                  stream: _firestoreService.streamSavings(),
+                  stream: _repository.streamSavings(_currentUserId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
-                    final count = list.where((item) => item.status != 'completed' && item.currentAmount < item.targetAmount).length;
+                    final count = list
+                        .where(
+                          (item) =>
+                              item.status != 'completed' &&
+                              item.currentAmount < item.targetAmount,
+                        )
+                        .length;
                     return FinanceStatCard(
                       title: 'Đang tiết kiệm',
                       value: '$count mục',
@@ -106,10 +111,16 @@ class _FinanceHeader extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: StreamBuilder<List<InstallmentPlan>>(
-                  stream: _firestoreService.streamInstallments(),
+                  stream: _repository.streamInstallments(_currentUserId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
-                    final count = list.where((item) => item.status != 'completed' && item.paidAmount < item.totalAmount).length;
+                    final count = list
+                        .where(
+                          (item) =>
+                              item.status != 'completed' &&
+                              item.paidAmount < item.totalAmount,
+                        )
+                        .length;
                     return FinanceStatCard(
                       title: 'Còn trả góp',
                       value: '$count mục',
@@ -121,10 +132,16 @@ class _FinanceHeader extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: StreamBuilder<List<DebtRecord>>(
-                  stream: _firestoreService.streamDebts(),
+                  stream: _repository.streamDebts(_currentUserId),
                   builder: (context, snapshot) {
                     final list = snapshot.data ?? [];
-                    final count = list.where((item) => item.status != 'settled' && item.paidAmount < item.totalAmount).length;
+                    final count = list
+                        .where(
+                          (item) =>
+                              item.status != 'settled' &&
+                              item.paidAmount < item.totalAmount,
+                        )
+                        .length;
                     return FinanceStatCard(
                       title: 'Còn vay',
                       value: '$count mục',

@@ -14,6 +14,7 @@ import '../../ui/settings/profile_screen.dart';
 import '../../ui/stats/stats_screen.dart';
 import '../../ui/transaction/create_transaction_page.dart';
 import '../../ui/transaction/transaction_list_page.dart';
+import '../../ui/split/split_group_list_screen.dart';
 
 class TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -98,11 +99,14 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  MainScreenState createState() => MainScreenState();
+
+  static MainScreenState? of(BuildContext context) {
+    return context.findAncestorStateOfType<MainScreenState>();
+  }
 }
 
-class _MainScreenState extends State<MainScreen>
-    with SingleTickerProviderStateMixin {
+class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   static const double _chatbotIconSize = 78;
   static const double _chatbotMinTop = 80;
   static const double _chatbotBottomReserve = 120;
@@ -322,6 +326,11 @@ class _MainScreenState extends State<MainScreen>
     });
   }
 
+  void setSelectedIndex(int index) {
+    if (index < 0 || index >= 5 || index == 2) return;
+    _onItemTapped(index);
+  }
+
   void _onItemTapped(int index) {
     if (_isTutorialActive) return;
     if (index == 2) return;
@@ -352,8 +361,16 @@ class _MainScreenState extends State<MainScreen>
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       final currentNav = _navigatorKeys[_selectedIndex].currentState;
       final bool shouldHide = currentNav?.canPop() ?? false;
+
+      // THAY ĐỔI: Khi quay lại trang gốc của tab, đảm bảo thanh điều hướng hiện lên
+      // (Bù đắp cho việc thanh bị ẩn do listener cuộn trước đó)
+      if (!shouldHide && !_isNavBarVisible) {
+        setState(() => _isNavBarVisible = true);
+      }
+
       if (_isNestedRouteActive == shouldHide) return;
       setState(() => _isNestedRouteActive = shouldHide);
     });
@@ -603,7 +620,24 @@ class _MainScreenState extends State<MainScreen>
   Widget build(BuildContext context) {
     final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final bool hideAssistiveOverlays =
-        isKeyboardVisible || _hideOverlaysForRoute || _isNestedRouteActive;
+        isKeyboardVisible || _hideOverlaysForRoute;
+
+    // Tính toán vị trí bottom cho các thành phần để có thể animate mượt mà
+    // Thay vì dùng IF - kiến trúc này giúp widget không bị remove khỏi tree đột ngột
+    final double navBarBottom =
+        (hideAssistiveOverlays || _isNestedRouteActive || !_isNavBarVisible)
+        ? -100
+        : 30;
+    final double addButtonBottom =
+        (hideAssistiveOverlays || _isNestedRouteActive || !_isNavBarVisible)
+        ? -100
+        : 50;
+    final double menuBottom =
+        (hideAssistiveOverlays || _isNestedRouteActive || !_isNavBarVisible)
+        ? -100
+        : (_isMenuOpen ? 130 : 50);
+    final double chatbotOpacity =
+        (hideAssistiveOverlays || _isNestedRouteActive) ? 0.0 : 1.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F5FF),
@@ -667,208 +701,237 @@ class _MainScreenState extends State<MainScreen>
                   ],
                 ),
               ),
-              if (!hideAssistiveOverlays && _isMenuOpen)
-                GestureDetector(
-                  onTap: _toggleMenu,
-                  child: Container(color: Colors.black.withValues(alpha: 0.4)),
-                ),
-              if (!hideAssistiveOverlays)
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutBack,
-                  bottom: _isNavBarVisible ? (_isMenuOpen ? 130 : 50) : -100,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    ignoring: !_isMenuOpen,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: _isMenuOpen && _isNavBarVisible ? 1.0 : 0.0,
-                      child: Row(
-                        key: _quickActionsKey,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          _buildIconOption(
-                            icon: Icons.document_scanner_rounded,
-                            bgColor: Colors.orange.shade50,
-                            iconColor: Colors.orange,
-                            onTap: _handleInvoiceScan,
-                          ),
-                          const SizedBox(width: 24),
-                          _buildIconOption(
-                            icon: Icons.mic_rounded,
-                            bgColor: Colors.blue.shade50,
-                            iconColor: Colors.blue,
-                            onTap: () {
-                              _toggleMenu();
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(30),
-                                  ),
-                                ),
-                                builder: (context) => const VoiceAssistant(),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 24),
-                          _buildIconOption(
-                            icon: Icons.edit_rounded,
-                            bgColor: Colors.green.shade50,
-                            iconColor: Colors.green,
-                            onTap: () {
-                              _toggleMenu();
-                              _openCreateTransactionPage();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              if (!hideAssistiveOverlays)
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  bottom: _isNavBarVisible ? 30 : -100,
-                  left: 20,
-                  right: 20,
-                  child: SafeArea(
-                    child: Container(
-                      height: 65,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(40),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            spreadRadius: 1,
-                            blurRadius: 15,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildNavItem(
-                            0,
-                            Icons.home_outlined,
-                            Icons.home_rounded,
-                            tutorialKey: _homeTabKey,
-                          ),
-                          _buildNavItem(
-                            1,
-                            Icons.receipt_long_outlined,
-                            Icons.receipt_long_rounded,
-                            tutorialKey: _transactionsTabKey,
-                          ),
-                          const SizedBox(width: 60),
-                          _buildNavItem(
-                            3,
-                            Icons.bar_chart_outlined,
-                            Icons.bar_chart_rounded,
-                            tutorialKey: _statsTabKey,
-                          ),
-                          _buildNavItem(
-                            4,
-                            Icons.person_outline_rounded,
-                            Icons.person_rounded,
-                            tutorialKey: _profileTabKey,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              if (!hideAssistiveOverlays)
-                Positioned(
-                  left: _chatbotOffset!.dx,
-                  top: _chatbotOffset!.dy,
+              // Dim background when menu open
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _isMenuOpen ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: !_isMenuOpen,
                   child: GestureDetector(
-                    onTap: _openChatbot,
-                    onPanUpdate: (details) {
-                      setState(() {
-                        _chatbotOffset = _clampChatbotOffset(
-                          _chatbotOffset! + details.delta,
-                          constraints,
-                        );
-                      });
-                    },
-                    child: SizedBox(
-                      width: _chatbotIconSize,
-                      height: _chatbotIconSize,
-                      child: Image.asset(
-                        'lib/ui/ai_chat/robot.gif',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.smart_toy_rounded,
-                              color: Color(0xFF6D28D9),
-                              size: 50,
-                            ),
+                    onTap: _toggleMenu,
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Quick action menu buttons
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutBack,
+                bottom: menuBottom,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  ignoring: !_isMenuOpen,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _isMenuOpen ? 1.0 : 0.0,
+                    child: Row(
+                      key: _quickActionsKey,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        _buildIconOption(
+                          icon: Icons.document_scanner_rounded,
+                          bgColor: Colors.orange.shade50,
+                          iconColor: Colors.orange,
+                          onTap: _handleInvoiceScan,
+                        ),
+                        const SizedBox(width: 24),
+                        _buildIconOption(
+                          icon: Icons.mic_rounded,
+                          bgColor: Colors.blue.shade50,
+                          iconColor: Colors.blue,
+                          onTap: () {
+                            _toggleMenu();
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(30),
+                                ),
+                              ),
+                              builder: (context) => const VoiceAssistant(),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 24),
+                        _buildIconOption(
+                          icon: Icons.edit_rounded,
+                          bgColor: Colors.green.shade50,
+                          iconColor: Colors.green,
+                          onTap: () {
+                            _toggleMenu();
+                            _openCreateTransactionPage();
+                          },
+                        ),
+                        const SizedBox(width: 24),
+                        _buildIconOption(
+                          icon: Icons.group,
+                          bgColor: Colors.purple.shade50,
+                          iconColor: Colors.purple,
+                          onTap: () {
+                            _toggleMenu();
+                            _pushInCurrentTab(const SplitGroupListScreen());
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Bottom Navigation Bar
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                bottom: navBarBottom,
+                left: 20,
+                right: 20,
+                child: SafeArea(
+                  child: Container(
+                    height: 65,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(40),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          spreadRadius: 1,
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildNavItem(
+                          0,
+                          Icons.home_outlined,
+                          Icons.home_rounded,
+                          tutorialKey: _homeTabKey,
+                        ),
+                        _buildNavItem(
+                          1,
+                          Icons.receipt_long_outlined,
+                          Icons.receipt_long_rounded,
+                          tutorialKey: _transactionsTabKey,
+                        ),
+                        const SizedBox(width: 60),
+                        _buildNavItem(
+                          3,
+                          Icons.bar_chart_outlined,
+                          Icons.bar_chart_rounded,
+                          tutorialKey: _statsTabKey,
+                        ),
+                        _buildNavItem(
+                          4,
+                          Icons.person_outline_rounded,
+                          Icons.person_rounded,
+                          tutorialKey: _profileTabKey,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Chatbot Robot
+              Positioned(
+                left: _chatbotOffset!.dx,
+                top: _chatbotOffset!.dy,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: chatbotOpacity,
+                  child: IgnorePointer(
+                    ignoring: chatbotOpacity < 0.5,
+                    child: GestureDetector(
+                      onTap: _openChatbot,
+                      onPanUpdate: (details) {
+                        setState(() {
+                          _chatbotOffset = _clampChatbotOffset(
+                            _chatbotOffset! + details.delta,
+                            constraints,
                           );
-                        },
+                        });
+                      },
+                      child: SizedBox(
+                        width: _chatbotIconSize,
+                        height: _chatbotIconSize,
+                        child: Image.asset(
+                          'lib/ui/ai_chat/robot.gif',
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.smart_toy_rounded,
+                                color: Color(0xFF6D28D9),
+                                size: 50,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
-              if (!hideAssistiveOverlays)
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  bottom: _isNavBarVisible ? 50 : -100,
-                  left: 0,
-                  right: 0,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: Transform.scale(
-                      scale: 1.1,
-                      child: GestureDetector(
-                        key: _addButtonKey,
-                        onTap: _toggleMenu,
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            // THAY ĐỔI: Màu Gradient Galaxy cho nút dấu (+)
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF6D28D9,
-                                ).withValues(alpha: 0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+              ),
+
+              // Main Add Button (+)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                bottom: addButtonBottom,
+                left: 0,
+                right: 0,
+                child: Align(
+                  alignment: Alignment.center,
+                  child: Transform.scale(
+                    scale: 1.1,
+                    child: GestureDetector(
+                      key: _addButtonKey,
+                      onTap: _toggleMenu,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          child: RotationTransition(
-                            turns: _rotationAnimation,
-                            child: const Icon(
-                              Icons.add_rounded,
-                              size: 32,
-                              color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF6D28D9,
+                              ).withValues(alpha: 0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
                             ),
+                          ],
+                        ),
+                        child: RotationTransition(
+                          turns: _rotationAnimation,
+                          child: const Icon(
+                            Icons.add_rounded,
+                            size: 32,
+                            color: Colors.white,
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
               if (_isTutorialActive) _buildTutorialOverlay(constraints),
             ],
           );

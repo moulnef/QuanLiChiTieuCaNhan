@@ -72,10 +72,6 @@ class FinanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Sync local/cloud database before loading summary
-      _log('Syncing databases with Firebase at ${DateTime.now()}');
-      await _repository.syncWithFirebase(userId);
-
       _log('Loading transactions from database at ${DateTime.now()}');
       final transactions = await _repository.getAllTransactionsByUserId(userId);
       _log(

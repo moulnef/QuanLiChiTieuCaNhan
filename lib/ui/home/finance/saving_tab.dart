@@ -6,7 +6,6 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/constants/app_colors.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/saving.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
@@ -24,7 +23,6 @@ class SavingTabPage extends StatefulWidget {
 }
 
 class _SavingTabPageState extends State<SavingTabPage> {
-  final FirestoreService _firestoreService = FirestoreService();
   final FinanceRepository _repository = FinanceRepository();
 
   String get _currentUserId =>
@@ -67,13 +65,15 @@ class _SavingTabPageState extends State<SavingTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  isExpanded: true,
+                  initialValue: selectedWallet,
                   items: wallets
                       .map(
                         (w) => DropdownMenuItem(
                           value: w,
                           child: Text(
                             '${w.name} (${formatCurrency(w.balance)})',
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       )
@@ -105,8 +105,9 @@ class _SavingTabPageState extends State<SavingTabPage> {
                     final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
                     final val = int.tryParse(clean);
                     if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                    if (val > selectedWallet.balance)
+                    if (val > selectedWallet.balance) {
                       return 'Không đủ số dư trong ví';
+                    }
                     return null;
                   },
                 ),
@@ -164,13 +165,15 @@ class _SavingTabPageState extends State<SavingTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  isExpanded: true,
+                  initialValue: selectedWallet,
                   items: wallets
                       .map(
                         (w) => DropdownMenuItem(
                           value: w,
                           child: Text(
                             '${w.name} (${formatCurrency(w.balance)})',
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       )
@@ -202,8 +205,9 @@ class _SavingTabPageState extends State<SavingTabPage> {
                     final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
                     final val = int.tryParse(clean);
                     if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                    if (val > item.currentAmount)
+                    if (val > item.currentAmount) {
                       return 'Vượt quá số tiền tiết kiệm hiện có';
+                    }
                     return null;
                   },
                 ),
@@ -445,7 +449,7 @@ class _SavingTabPageState extends State<SavingTabPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<SavingGoal>>(
-      stream: _firestoreService.streamSavings(),
+      stream: _repository.streamSavings(_currentUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -850,6 +854,7 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isSaving = false;
 
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 30));
   String _selectedEmoji = '🎯';
@@ -1164,82 +1169,101 @@ class _AddSavingGoalSheetState extends State<_AddSavingGoalSheet> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () async {
-                    if (!_formKey.currentState!.validate()) return;
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          if (!_formKey.currentState!.validate()) return;
 
-                    final title = _titleController.text.trim();
-                    final cleanAmt = _amountController.text.replaceAll(
-                      RegExp(r'\D'),
-                      '',
-                    );
-                    final targetAmt = int.parse(cleanAmt);
-                    final currentAmt = widget.savingGoal?.currentAmount ?? 0;
-                    final isDone = currentAmt >= targetAmt;
+                          setState(() => _isSaving = true);
 
-                    final goal = SavingGoal(
-                      id:
-                          widget.savingGoal?.id ??
-                          'saving_${DateTime.now().millisecondsSinceEpoch}',
-                      userId: widget.userId,
-                      title: title,
-                      icon: _selectedEmoji,
-                      currentAmount: currentAmt,
-                      targetAmount: targetAmt,
-                      targetDate: _selectedDate.millisecondsSinceEpoch,
-                      createdAt:
-                          widget.savingGoal?.createdAt ??
-                          DateTime.now().millisecondsSinceEpoch,
-                      updatedAt: DateTime.now().millisecondsSinceEpoch,
-                      status: isDone ? 'completed' : 'active',
-                      colorValue: _selectedColor.value,
-                    );
+                          final title = _titleController.text.trim();
+                          final cleanAmt = _amountController.text.replaceAll(
+                            RegExp(r'\D'),
+                            '',
+                          );
+                          final targetAmt = int.parse(cleanAmt);
+                          final currentAmt =
+                              widget.savingGoal?.currentAmount ?? 0;
+                          final isDone = currentAmt >= targetAmt;
 
-                    try {
-                      if (widget.savingGoal != null) {
-                        await context.read<FinanceProvider>().updateSavingGoal(
-                          goal,
-                        );
-                      } else {
-                        await context.read<FinanceProvider>().addSavingGoal(
-                          title: title,
-                          targetAmount: targetAmt,
-                          deadline: _selectedDate,
-                          icon: _selectedEmoji,
-                          color: _selectedColor,
-                        );
-                      }
+                          final goal = SavingGoal(
+                            id:
+                                widget.savingGoal?.id ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                            userId: widget.userId,
+                            title: title,
+                            icon: _selectedEmoji,
+                            currentAmount: currentAmt,
+                            targetAmount: targetAmt,
+                            targetDate: _selectedDate.millisecondsSinceEpoch,
+                            createdAt:
+                                widget.savingGoal?.createdAt ??
+                                DateTime.now().millisecondsSinceEpoch,
+                            updatedAt: DateTime.now().millisecondsSinceEpoch,
+                            status: isDone ? 'completed' : 'active',
+                            colorValue: _selectedColor.value,
+                          );
 
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            widget.savingGoal != null
-                                ? 'Đã cập nhật mục tiêu tiết kiệm "$title"'
-                                : 'Đã thêm mục tiêu tiết kiệm "$title"',
+                          try {
+                            if (widget.savingGoal != null) {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .updateSavingGoal(goal);
+                            } else {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .addSavingGoal(
+                                    title: title,
+                                    targetAmount: targetAmt,
+                                    deadline: _selectedDate,
+                                    icon: _selectedEmoji,
+                                    color: _selectedColor,
+                                  );
+                            }
+
+                            if (!mounted) return;
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  widget.savingGoal != null
+                                      ? 'Đã cập nhật mục tiêu tiết kiệm "$title"'
+                                      : 'Đã thêm mục tiêu tiết kiệm "$title"',
+                                ),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Lỗi: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isSaving = false);
+                          }
+                        },
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          widget.savingGoal != null
+                              ? 'Cập nhật mục tiêu'
+                              : 'Tạo mục tiêu',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Lỗi: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    widget.savingGoal != null
-                        ? 'Cập nhật mục tiêu'
-                        : 'Tạo mục tiêu',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
                 ),
               ),
             ],

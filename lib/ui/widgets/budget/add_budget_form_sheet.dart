@@ -253,7 +253,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                   }
 
                   return DropdownButtonFormField<String>(
-                    value: _selectedCategoryId,
+                    initialValue: _selectedCategoryId,
                     items: expenseCategories.map((item) {
                       return DropdownMenuItem<String>(
                         value: item.id,
@@ -369,12 +369,12 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                         ),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<int>(
-                          value: _selectedMonth,
+                          initialValue: _selectedMonth,
                           items: List.generate(12, (index) => index + 1)
                               .map(
                                 (month) => DropdownMenuItem(
                                   value: month,
-                                  child: Text('Tháng '.xtr(context) + '$month'),
+                                  child: Text('${'Tháng '.xtr(context)}$month'),
                                 ),
                               )
                               .toList(),
@@ -418,7 +418,7 @@ class _AddBudgetFormSheetState extends State<AddBudgetFormSheet> {
                         ),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<int>(
-                          value: _selectedYear,
+                          initialValue: _selectedYear,
                           items: [2025, 2026, 2027, 2028]
                               .map(
                                 (year) => DropdownMenuItem(

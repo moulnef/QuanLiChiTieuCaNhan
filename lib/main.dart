@@ -17,6 +17,7 @@ import 'ui/providers/budget_provider.dart';
 import 'ui/providers/finance_provider.dart';
 import 'ui/providers/sync_provider.dart';
 import 'ui/providers/notification_provider.dart';
+import 'ui/providers/split_provider.dart';
 
 void main() async {
   // 1. Khởi tạo binding cho Flutter
@@ -72,6 +73,12 @@ void main() async {
           ),
           provider.ChangeNotifierProvider<NotificationProvider>(
             create: (_) => NotificationProvider(),
+          ),
+          provider.ChangeNotifierProvider<SplitProvider>(
+            create: (context) => SplitProvider(
+              context.read<FinanceRepository>(),
+              context.read<AuthProvider>(),
+            ),
           ),
         ],
         child: EasyLocalization(

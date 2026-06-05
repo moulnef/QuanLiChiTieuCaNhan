@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/services/ocr_service.dart';
@@ -26,7 +25,6 @@ class DebtTabPage extends StatefulWidget {
 }
 
 class _DebtTabPageState extends State<DebtTabPage> {
-  final FirestoreService _firestoreService = FirestoreService();
   final FinanceRepository _repository = FinanceRepository();
   final OCRService _ocrService = OCRService();
   String _filter = 'active'; // 'all', 'active' (chưa xong), 'settled' (đã xong)
@@ -111,13 +109,15 @@ class _DebtTabPageState extends State<DebtTabPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<WalletModel>(
-                  value: selectedWallet,
+                  isExpanded: true,
+                  initialValue: selectedWallet,
                   items: wallets
                       .map(
                         (w) => DropdownMenuItem(
                           value: w,
                           child: Text(
                             '${w.name} (${formatCurrency(w.balance)})',
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       )
@@ -149,8 +149,9 @@ class _DebtTabPageState extends State<DebtTabPage> {
                     final clean = value?.replaceAll(RegExp(r'\D'), '') ?? '';
                     final val = int.tryParse(clean);
                     if (val == null || val <= 0) return 'Số tiền không hợp lệ';
-                    if (val > maxAmount)
+                    if (val > maxAmount) {
                       return 'Vượt quá số nợ còn lại (${formatCurrency(maxAmount)})';
+                    }
 
                     // Validate minimum payment limit
                     if (requiredMin > 0 &&
@@ -328,7 +329,7 @@ class _DebtTabPageState extends State<DebtTabPage> {
         ),
         Expanded(
           child: StreamBuilder<List<DebtRecord>>(
-            stream: _firestoreService.streamDebts(),
+            stream: _repository.streamDebts(_currentUserId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
@@ -684,22 +685,26 @@ class _DebtCard extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              Text(
-                isSettled
-                    ? formatDate(
-                        DateTime.fromMillisecondsSinceEpoch(item.updatedAt),
-                      )
-                    : (isOverdue
-                          ? 'Quá hạn ${daysLeft.abs()} ngày (Hạn: ${formatDate(dueDateTime)})'
-                          : 'Còn $daysLeft ngày (Hạn: ${formatDate(dueDateTime)})'),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isSettled
-                      ? Colors.green
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isSettled
+                      ? formatDate(
+                          DateTime.fromMillisecondsSinceEpoch(item.updatedAt),
+                        )
                       : (isOverdue
-                            ? Colors.redAccent
-                            : const Color(0xFF475569)),
+                            ? 'Quá hạn ${daysLeft.abs()} ngày (Hạn: ${formatDate(dueDateTime)})'
+                            : 'Còn $daysLeft ngày (Hạn: ${formatDate(dueDateTime)})'),
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isSettled
+                        ? Colors.green
+                        : (isOverdue
+                              ? Colors.redAccent
+                              : const Color(0xFF475569)),
+                  ),
                 ),
               ),
             ],
@@ -822,6 +827,7 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
   final _noteController = TextEditingController();
   final _monthsController = TextEditingController();
   final FinanceRepository _repository = FinanceRepository();
+  bool _isSaving = false;
 
   String _selectedType = 'cho_vay'; // 'cho_vay' or 'di_vay'
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 30));
@@ -1032,7 +1038,7 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
               if (_selectedType == 'di_vay') ...[
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
-                  value: _selectedBank,
+                  initialValue: _selectedBank,
                   items: _banks
                       .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                       .toList(),
@@ -1086,13 +1092,15 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
                   ),
                   if (_receiveToWallet) ...[
                     DropdownButtonFormField<WalletModel>(
-                      value: _selectedWallet,
+                      isExpanded: true,
+                      initialValue: _selectedWallet,
                       items: _wallets
                           .map(
                             (w) => DropdownMenuItem(
                               value: w,
                               child: Text(
                                 '${w.name} (${formatCurrency(w.balance)})',
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           )
@@ -1221,115 +1229,132 @@ class _AddDebtSheetState extends State<_AddDebtSheet> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () async {
-                    if (!_formKey.currentState!.validate()) return;
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          if (!_formKey.currentState!.validate()) return;
 
-                    final name = _nameController.text.trim();
-                    final note = _noteController.text.trim();
+                          setState(() => _isSaving = true);
 
-                    final clean = _amountController.text.replaceAll(
-                      RegExp(r'\D'),
-                      '',
-                    );
-                    final totalAmt = int.parse(clean);
+                          final name = _nameController.text.trim();
+                          final note = _noteController.text.trim();
 
-                    final bankSuffix = _selectedType == 'di_vay'
-                        ? ' - $_selectedBank'
-                        : '';
-                    final compositeLenderName =
-                        '${_selectedType}|${name}${bankSuffix}';
+                          final clean = _amountController.text.replaceAll(
+                            RegExp(r'\D'),
+                            '',
+                          );
+                          final totalAmt = int.parse(clean);
 
-                    final monthlyVal = _selectedType == 'di_vay'
-                        ? _calculatedMonthlyPayment
-                        : 0;
-                    final rate = _selectedType == 'di_vay'
-                        ? (_bankRates[_selectedBank] ?? 0.0)
-                        : 0.0;
+                          final bankSuffix = _selectedType == 'di_vay'
+                              ? ' - $_selectedBank'
+                              : '';
+                          final compositeLenderName =
+                              '$_selectedType|$name$bankSuffix';
 
-                    final debt = DebtRecord(
-                      id:
-                          widget.debtRecord?.id ??
-                          'debt_${DateTime.now().millisecondsSinceEpoch}',
-                      userId: widget.userId,
-                      title: note,
-                      lenderName: compositeLenderName,
-                      totalAmount: totalAmt,
-                      paidAmount: widget.debtRecord?.paidAmount ?? 0,
-                      monthlyPayment: monthlyVal,
-                      interestRate: rate,
-                      nextDueDate: _selectedDate.millisecondsSinceEpoch,
-                      createdAt:
-                          widget.debtRecord?.createdAt ??
-                          DateTime.now().millisecondsSinceEpoch,
-                      updatedAt: DateTime.now().millisecondsSinceEpoch,
-                      status: (widget.debtRecord?.paidAmount ?? 0) >= totalAmt
-                          ? 'settled'
-                          : 'active',
-                    );
+                          final monthlyVal = _selectedType == 'di_vay'
+                              ? _calculatedMonthlyPayment
+                              : 0;
+                          final rate = _selectedType == 'di_vay'
+                              ? (_bankRates[_selectedBank] ?? 0.0)
+                              : 0.0;
 
-                    try {
-                      // Xử lý nạp tiền vào ví nếu chọn "Nhận tiền vào tài khoản"
-                      if (_selectedType == 'di_vay' &&
-                          _receiveToWallet &&
-                          _selectedWallet != null &&
-                          !isEdit) {
-                        final tx = TransactionModel(
-                          id: 'tx_debt_inc_${DateTime.now().millisecondsSinceEpoch}',
-                          userId: widget.userId,
-                          walletId: _selectedWallet!.id,
-                          categoryId: 'debt_loan',
-                          categoryName: 'Đi vay',
-                          type: 'income',
-                          amount: totalAmt.toDouble(),
-                          note: 'Nhận tiền khoản vay: $name',
-                          transactionDate: DateTime.now(),
-                        );
-                        await _repository.upsertTransaction(tx);
-                      }
+                          final debt = DebtRecord(
+                            id:
+                                widget.debtRecord?.id ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                            userId: widget.userId,
+                            title: note,
+                            lenderName: compositeLenderName,
+                            totalAmount: totalAmt,
+                            paidAmount: widget.debtRecord?.paidAmount ?? 0,
+                            monthlyPayment: monthlyVal,
+                            interestRate: rate,
+                            nextDueDate: _selectedDate.millisecondsSinceEpoch,
+                            createdAt:
+                                widget.debtRecord?.createdAt ??
+                                DateTime.now().millisecondsSinceEpoch,
+                            updatedAt: DateTime.now().millisecondsSinceEpoch,
+                            status:
+                                (widget.debtRecord?.paidAmount ?? 0) >= totalAmt
+                                ? 'settled'
+                                : 'active',
+                          );
 
-                      if (isEdit) {
-                        await context.read<FinanceProvider>().updateDebtRecord(
-                          debt,
-                        );
-                      } else {
-                        await context
-                            .read<FinanceProvider>()
-                            .addDebtRecordDirect(debt);
-                      }
+                          try {
+                            // Xử lý nạp tiền vào ví nếu chọn "Nhận tiền vào tài khoản"
+                            if (_selectedType == 'di_vay' &&
+                                _receiveToWallet &&
+                                _selectedWallet != null &&
+                                !isEdit) {
+                              final tx = TransactionModel(
+                                id: 'tx_debt_inc_${DateTime.now().millisecondsSinceEpoch}',
+                                userId: widget.userId,
+                                walletId: _selectedWallet!.id,
+                                categoryId: 'debt_loan',
+                                categoryName: 'Đi vay',
+                                type: 'income',
+                                amount: totalAmt.toDouble(),
+                                note: 'Nhận tiền khoản vay: $name',
+                                transactionDate: DateTime.now(),
+                              );
+                              await _repository.upsertTransaction(tx);
+                            }
 
-                      await context
-                          .read<FinanceProvider>()
-                          .refreshFinancialSummary(widget.userId);
+                            if (isEdit) {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .updateDebtRecord(debt);
+                            } else {
+                              await context
+                                  .read<FinanceProvider>()
+                                  .addDebtRecordDirect(debt);
+                            }
 
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isEdit
-                                ? 'Đã cập nhật khoản vay nợ'
-                                : 'Đã lưu khoản vay nợ',
+                            await context
+                                .read<FinanceProvider>()
+                                .refreshFinancialSummary(widget.userId);
+
+                            if (!mounted) return;
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isEdit
+                                      ? 'Đã cập nhật khoản vay nợ'
+                                      : 'Đã lưu khoản vay nợ',
+                                ),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Lỗi: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isSaving = false);
+                          }
+                        },
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          isEdit ? 'Cập nhật khoản vay nợ' : 'Lưu khoản vay nợ',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Lỗi: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    isEdit ? 'Cập nhật khoản vay nợ' : 'Lưu khoản vay nợ',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
                 ),
               ),
             ],
