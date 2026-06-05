@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +13,6 @@ import 'app_feedback_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../utils/app_localizer.dart';
-import '../../utils/currency_formatter.dart';
 import '../providers/sync_provider.dart';
 import '../../services/sync_service.dart';
 import '../../services/notification_service.dart';
@@ -33,8 +34,10 @@ class _ProfilePageState extends State<ProfilePage> {
   static const double _profileBottomReserve = 144;
   fb_auth.User? user = fb_auth.FirebaseAuth.instance.currentUser;
   final FinanceRepository _repository = FinanceRepository();
+  StreamSubscription? _transactionSub;
 
   bool _isNotifyEnabled = true;
+  bool _isProfileLoading = true;
 
   String _displayName = 'Người dùng';
   String _email = 'Chưa cập nhật';
@@ -47,9 +50,21 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _loadProfileData();
+    _transactionSub = _repository.watchTransactions(_currentUserId).listen((_) {
+      _loadProfileData(isSilent: true);
+    });
   }
 
-  Future<void> _loadProfileData() async {
+  @override
+  void dispose() {
+    _transactionSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadProfileData({bool isSilent = false}) async {
+    if (!isSilent) {
+      setState(() => _isProfileLoading = true);
+    }
     try {
       await _repository.ensureDefaultWalletsForUser(_currentUserId);
       await Future.delayed(const Duration(milliseconds: 100));
@@ -95,6 +110,10 @@ class _ProfilePageState extends State<ProfilePage> {
         _email = user?.email ?? 'Chưa cập nhật';
         _isNotifyEnabled = localNotify;
       });
+    } finally {
+      if (mounted && !isSilent) {
+        setState(() => _isProfileLoading = false);
+      }
     }
   }
 
@@ -599,13 +618,13 @@ class _ProfilePageState extends State<ProfilePage> {
     return Row(
       children: [
         _statCard(
-          "$_transactionCount",
+          _isProfileLoading ? "..." : "$_transactionCount",
           "Giao dịch".xtr(context),
           Icons.swap_horiz_rounded,
         ),
         const SizedBox(width: 12),
         _statCard(
-          _formatMoney(_walletBalance),
+          _isProfileLoading ? "..." : _formatMoney(_walletBalance),
           "Tổng ví".xtr(context),
           Icons.account_balance_wallet_outlined,
         ),
@@ -620,7 +639,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _formatMoney(double amount) {
-    return formatVND(amount);
+    return MoneyFormatter.formatVnd(amount);
   }
 
   Widget _statCard(String value, String label, IconData icon) {

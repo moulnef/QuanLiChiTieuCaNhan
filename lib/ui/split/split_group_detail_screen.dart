@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../domain/model/split_group.dart';
-import '../../domain/model/split_expense.dart';
 import '../../domain/model/split_payment.dart';
 import '../../domain/model/split_debt.dart';
 import '../../domain/model/split_member_info.dart';
 import '../providers/split_provider.dart';
 import '../providers/auth_provider.dart';
 import 'add_expense_sheet.dart';
+import '../../utils/app_localizer.dart';
 
 class SplitGroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -64,14 +65,14 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kết thúc nhóm chia tiền?'),
-        content: const Text(
-          'Sau khi kết thúc, tất cả các thành viên sẽ không thể thêm khoản chi mới hoặc thay đổi trạng thái quyết toán nữa.',
+        title: Text('Kết thúc nhóm chia tiền?'.xtr(context)),
+        content: Text(
+          'Sau khi kết thúc, tất cả các thành viên sẽ không thể thêm khoản chi mới hoặc thay đổi trạng thái quyết toán nữa.'.xtr(context),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy', style: TextStyle(color: Color(0xFF64748B))),
+            child: Text('Hủy'.xtr(context), style: const TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -79,7 +80,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
               backgroundColor: const Color(0xFF10B981),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Kết thúc'),
+            child: Text('Kết thúc'.xtr(context)),
           ),
         ],
       ),
@@ -89,8 +90,8 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
       await provider.settleGroup();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã đóng nhóm chia tiền thành công!'),
+          SnackBar(
+            content: Text('Đã đóng nhóm chia tiền thành công!'.xtr(context)),
             backgroundColor: Colors.green,
           ),
         );
@@ -99,21 +100,24 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
   }
 
   Future<void> _markDebtAsPaid(SplitProvider provider, SplitDebt debt) async {
-    final fromName = provider.membersCache[debt.fromUid]?.displayName ?? 'Thành viên';
-    final toName = provider.membersCache[debt.toUid]?.displayName ?? 'Thành viên';
+    final fromName = provider.membersCache[debt.fromUid]?.displayName ?? 'Thành viên'.xtr(context);
+    final toName = provider.membersCache[debt.toUid]?.displayName ?? 'Thành viên'.xtr(context);
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Xác nhận thanh toán?'),
+        title: Text('Xác nhận thanh toán?'.xtr(context)),
         content: Text(
-          'Đánh dấu đã trả cho khoản nợ: $fromName trả cho $toName số tiền ${_currencyFormat.format(debt.amount)}?\n'
-          '(Trạng thái sẽ chuyển thành "Chờ xác nhận" cho đến khi bên nhận bấm đồng ý)',
+          context.locale.languageCode == 'en'
+              ? 'Mark debt as paid: $fromName paid $toName amount ${_currencyFormat.format(debt.amount)}?\n'
+                '(Status will change to "Pending confirmation" until recipient agrees)'
+              : 'Đánh dấu đã trả cho khoản nợ: $fromName trả cho $toName số tiền ${_currencyFormat.format(debt.amount)}?\n'
+                '(Trạng thái sẽ chuyển thành "Chờ xác nhận" cho đến khi bên nhận bấm đồng ý)',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy', style: TextStyle(color: Color(0xFF64748B))),
+            child: Text('Hủy'.xtr(context), style: const TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -121,7 +125,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
               backgroundColor: const Color(0xFF6D28D9),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Tôi đã trả'),
+            child: Text('Tôi đã trả'.xtr(context)),
           ),
         ],
       ),
@@ -132,7 +136,11 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã gửi yêu cầu xác nhận trả ${_currencyFormat.format(debt.amount)}!'),
+            content: Text(
+              context.locale.languageCode == 'en'
+                  ? 'Sent confirmation request for paying ${_currencyFormat.format(debt.amount)}!'
+                  : 'Đã gửi yêu cầu xác nhận trả ${_currencyFormat.format(debt.amount)}!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -141,19 +149,21 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
   }
 
   Future<void> _confirmPayment(SplitProvider provider, SplitPayment payment) async {
-    final fromName = provider.membersCache[payment.fromUid]?.displayName ?? 'Thành viên';
+    final fromName = provider.membersCache[payment.fromUid]?.displayName ?? 'Thành viên'.xtr(context);
     
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Xác nhận nhận tiền?'),
+        title: Text('Xác nhận nhận tiền?'.xtr(context)),
         content: Text(
-          'Bạn xác nhận đã nhận đủ số tiền ${_currencyFormat.format(payment.amount)} từ $fromName?',
+          context.locale.languageCode == 'en'
+              ? 'Do you confirm you have received ${_currencyFormat.format(payment.amount)} from $fromName?'
+              : 'Bạn xác nhận đã nhận đủ số tiền ${_currencyFormat.format(payment.amount)} từ $fromName?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy', style: TextStyle(color: Color(0xFF64748B))),
+            child: Text('Hủy'.xtr(context), style: const TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -161,7 +171,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
               backgroundColor: const Color(0xFF10B981),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Xác nhận'),
+            child: Text('Xác nhận'.xtr(context)),
           ),
         ],
       ),
@@ -171,8 +181,8 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
       await provider.confirmPayment(payment.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã xác nhận thanh toán!'),
+          SnackBar(
+            content: Text('Đã xác nhận thanh toán!'.xtr(context)),
             backgroundColor: Colors.green,
           ),
         );
@@ -188,12 +198,12 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
     if (mounted) {
       if (error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error), backgroundColor: Colors.red),
+          SnackBar(content: Text(error.xtr(context)), backgroundColor: Colors.red),
         );
       } else {
         _emailController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thêm thành viên thành công!'), backgroundColor: Colors.green),
+          SnackBar(content: Text('Thêm thành viên thành công!'.xtr(context)), backgroundColor: Colors.green),
         );
       }
     }
@@ -305,7 +315,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                isSettled ? 'ĐÃ KHÓA NHÓM' : 'ĐANG HOẠT ĐỘNG',
+                                (isSettled ? 'ĐÃ KHÓA NHÓM' : 'ĐANG HOẠT ĐỘNG').xtr(context),
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
@@ -326,7 +336,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                   IconButton(
                     onPressed: () => _settleGroup(splitProvider),
                     icon: const Icon(LucideIcons.checkCircle),
-                    tooltip: 'Kết thúc nhóm',
+                    tooltip: 'Kết thúc nhóm'.xtr(context),
                   ),
               ],
               bottom: PreferredSize(
@@ -340,10 +350,10 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                     unselectedLabelColor: const Color(0xFF94A3B8),
                     indicatorWeight: 3,
                     labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                    tabs: const [
-                      Tab(text: 'CHI TIÊU'),
-                      Tab(text: 'QUYẾT TOÁN'),
-                      Tab(text: 'THÀNH VIÊN'),
+                    tabs: [
+                      Tab(text: 'CHI TIÊU'.xtr(context)),
+                      Tab(text: 'QUYẾT TOÁN'.xtr(context)),
+                      Tab(text: 'THÀNH VIÊN'.xtr(context)),
                     ],
                   ),
                 ),
@@ -384,16 +394,16 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
             children: [
               Icon(LucideIcons.receipt, size: 48, color: Colors.grey.shade400),
               const SizedBox(height: 16),
-              const Text(
-                'Chưa có khoản chi nào',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+              Text(
+                'Chưa có khoản chi nào'.xtr(context),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
               ),
               const SizedBox(height: 8),
               if (group.status == SplitGroupStatus.active)
-                const Text(
-                  'Nhấn nút "+" bên dưới để bắt đầu ghi nhận các khoản chi tiêu chung.',
+                Text(
+                  'Nhấn nút "+" bên dưới để bắt đầu ghi nhận các khoản chi tiêu chung.'.xtr(context),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                 ),
             ],
           ),
@@ -408,7 +418,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
         final expense = expenses[index];
         final formattedDate = DateFormat('dd/MM/yyyy HH:mm').format(expense.createdAt);
         final payerInfo = provider.membersCache[expense.paidByUid];
-        final payerName = payerInfo?.displayName ?? 'Thành viên';
+        final payerName = payerInfo?.displayName ?? 'Thành viên'.xtr(context);
         
         // Chỉ cho phép người tạo chi tiêu hoặc chủ nhóm xóa chi tiêu
         final canDelete = (expense.createdByUid == currentUserId || group.createdByUid == currentUserId) && !isSettled(group);
@@ -437,7 +447,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
               children: [
                 const SizedBox(height: 4),
                 Text(
-                  'Trả bởi: $payerName',
+                  'Trả bởi: '.xtr(context) + payerName,
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 2),
@@ -527,7 +537,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Tổng chi tiêu nhóm:', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                      Text('Tổng chi tiêu nhóm:'.xtr(context), style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                       Text(_currencyFormat.format(totalSpent), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF4F46E5))),
                     ],
                   ),
@@ -535,7 +545,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Trung bình mỗi người:', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                      Text('Trung bình mỗi người:'.xtr(context), style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                       Text(_currencyFormat.format(averageSpent), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF4F46E5))),
                     ],
                   ),
@@ -560,14 +570,14 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                   children: [
                     const Icon(LucideIcons.smile, size: 48, color: Color(0xFF10B981)),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Tất cả đã quyết toán xong! 🎉',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
+                    Text(
+                      'Tất cả đã quyết toán xong! 🎉'.xtr(context),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Nhóm này không còn nợ nần gì nữa.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF15803D)),
+                    Text(
+                      'Nhóm này không còn nợ nần gì nữa.'.xtr(context),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF15803D)),
                     ),
                     if (group.createdByUid == currentUserId && !isGroupClosed) ...[
                       const SizedBox(height: 16),
@@ -578,7 +588,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Kết thúc & Khóa nhóm'),
+                        child: Text('Kết thúc & Khóa nhóm'.xtr(context)),
                       ),
                     ]
                   ],
@@ -588,16 +598,16 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
 
           // Danh sách công nợ chưa trả
           if (debts.isNotEmpty) ...[
-            const Text(
-              'Danh sách nợ cần trả',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+            Text(
+              'Danh sách nợ cần trả'.xtr(context),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
             ),
             const SizedBox(height: 12),
             ...debts.map((debt) {
               final fromInfo = provider.membersCache[debt.fromUid];
               final toInfo = provider.membersCache[debt.toUid];
-              final fromName = fromInfo?.displayName ?? 'Thành viên';
-              final toName = toInfo?.displayName ?? 'Thành viên';
+              final fromName = fromInfo?.displayName ?? 'Thành viên'.xtr(context);
+              final toName = toInfo?.displayName ?? 'Thành viên'.xtr(context);
 
               // Tìm xem đã có giao dịch chuyển khoản nào đang chờ duyệt hay chưa
               final pendingPayment = payments.firstWhere(
@@ -672,7 +682,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                           ElevatedButton.icon(
                             onPressed: () => _confirmPayment(provider, pendingPayment),
                             icon: const Icon(LucideIcons.checkSquare, size: 16),
-                            label: const Text('Xác nhận đã nhận tiền'),
+                            label: Text('Xác nhận đã nhận tiền'.xtr(context)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
                               foregroundColor: Colors.white,
@@ -685,12 +695,12 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                             padding: const EdgeInsets.all(8),
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: const Color(0xFFFFFBEB),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: const Color(0xFFFDE68A)),
                             ),
                             child: Text(
-                              'Đang chờ xác nhận từ $toName',
+                              'Đang chờ xác nhận từ '.xtr(context) + toName,
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w700),
                             ),
@@ -699,7 +709,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                         OutlinedButton.icon(
                           onPressed: isGroupClosed ? null : () => _markDebtAsPaid(provider, debt),
                           icon: const Icon(LucideIcons.send, size: 16),
-                          label: const Text('Tôi đã trả'),
+                          label: Text('Tôi đã trả'.xtr(context)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF6D28D9),
                             side: const BorderSide(color: Color(0xFF6D28D9)),
@@ -718,14 +728,14 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
 
           // Lịch sử chuyển tiền/thanh toán
           if (payments.isNotEmpty) ...[
-            const Text(
-              'Lịch sử thanh toán',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+            Text(
+              'Lịch sử thanh toán'.xtr(context),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
             ),
             const SizedBox(height: 12),
             ...payments.map((payment) {
-              final fromName = provider.membersCache[payment.fromUid]?.displayName ?? 'Thành viên';
-              final toName = provider.membersCache[payment.toUid]?.displayName ?? 'Thành viên';
+              final fromName = provider.membersCache[payment.fromUid]?.displayName ?? 'Thành viên'.xtr(context);
+              final toName = provider.membersCache[payment.toUid]?.displayName ?? 'Thành viên'.xtr(context);
               final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(payment.paidAt);
               final isConfirmed = payment.confirmedByToUid != null;
 
@@ -740,11 +750,15 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                 child: ListTile(
                   dense: true,
                   title: Text(
-                    '$fromName trả cho $toName',
+                    context.locale.languageCode == 'en'
+                        ? '$fromName paid $toName'
+                        : '$fromName trả cho $toName',
                     style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
                   ),
                   subtitle: Text(
-                    '$dateStr${isConfirmed ? " • Đã xác nhận" : " • Chờ xác nhận"}',
+                    context.locale.languageCode == 'en'
+                        ? '$dateStr${isConfirmed ? " • Confirmed" : " • Pending"}'
+                        : '$dateStr${isConfirmed ? " • Đã xác nhận" : " • Chờ xác nhận"}',
                     style: TextStyle(color: isConfirmed ? const Color(0xFF64748B) : const Color(0xFFD97706), fontWeight: FontWeight.w600),
                   ),
                   trailing: Text(
@@ -773,9 +787,9 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
         children: [
           // Thêm thành viên trực tiếp
           if (!isSettled(group)) ...[
-            const Text(
-              'Thêm thành viên bằng Email',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+            Text(
+              'Thêm thành viên bằng Email'.xtr(context),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
             ),
             const SizedBox(height: 10),
             Row(
@@ -786,7 +800,7 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                     keyboardType: TextInputType.emailAddress,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      hintText: 'Nhập email...',
+                      hintText: 'Nhập email...'.xtr(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -811,23 +825,23 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                   ),
-                  child: const Text('Thêm'),
+                  child: Text('Thêm'.xtr(context)),
                 ),
               ],
             ),
             const SizedBox(height: 24),
           ],
 
-          const Text(
-            'Thành viên nhóm',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+          Text(
+            'Thành viên nhóm'.xtr(context),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
           ),
           const SizedBox(height: 12),
 
           // Danh sách thành viên
           ...group.memberUids.map((uid) {
             final memberInfo = provider.membersCache[uid];
-            final name = memberInfo?.displayName ?? 'Thành viên';
+            final name = memberInfo?.displayName ?? 'Thành viên'.xtr(context);
             final email = memberInfo?.email ?? '';
             final isCreator = uid == group.createdByUid;
 
@@ -882,9 +896,9 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                           color: const Color(0xFFEDF2FF),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
-                          'Trưởng nhóm',
-                          style: TextStyle(
+                        child: Text(
+                          'Trưởng nhóm'.xtr(context),
+                          style: const TextStyle(
                             color: Color(0xFF4F46E5),
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
@@ -904,21 +918,23 @@ class _SplitGroupDetailScreenState extends State<SplitGroupDetailScreen> with Si
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: const Text('Xóa thành viên?'),
+                              title: Text('Xóa thành viên?'.xtr(context)),
                               content: Text(
-                                'Bạn có chắc chắn muốn xóa $name khỏi nhóm?',
+                                context.locale.languageCode == 'en'
+                                    ? 'Are you sure you want to remove $name from the group?'
+                                    : 'Bạn có chắc chắn muốn xóa $name khỏi nhóm?',
                               ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Hủy'),
+                                  child: Text('Hủy'.xtr(context)),
                                 ),
                                 ElevatedButton(
                                   onPressed: () => Navigator.pop(context, true),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFFEF4444),
                                   ),
-                                  child: const Text('Xóa'),
+                                  child: Text('Xóa'.xtr(context)),
                                 ),
                               ],
                             ),

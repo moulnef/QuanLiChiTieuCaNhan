@@ -69,15 +69,52 @@ class BackupService {
 
       // Insert new data
       final data = Map<String, dynamic>.from(dataJson['data'] as Map);
+      
+      // Lấy oldUserId từ metadata nếu có
+      String? oldUserId;
+      if (dataJson.containsKey('metadata') && dataJson['metadata'] is Map) {
+        oldUserId = dataJson['metadata']['userId']?.toString();
+      }
+
       for (var table in tables) {
         if (data.containsKey(table)) {
           final rows = data[table] as List;
           for (var row in rows) {
             final Map<String, dynamic> newRow = Map<String, dynamic>.from(row);
+            
             // Set isSynced = 0 for tables that have it
-            // According to database_helper.dart, wallets doesn't have isSynced
             if (table != 'wallets') {
               newRow['isSynced'] = 0;
+            }
+
+            // Đồng bộ hoá UserId và WalletId của dữ liệu nhập vào với User hiện tại
+            if (oldUserId != null && oldUserId.isNotEmpty) {
+              if (newRow['userId'] == oldUserId) newRow['userId'] = userId;
+              if (newRow['user_id'] == oldUserId) newRow['user_id'] = userId;
+              
+              if (newRow['id'] == 'wallet_cash_$oldUserId') {
+                newRow['id'] = 'wallet_cash_$userId';
+              }
+              if (newRow['walletId'] == 'wallet_cash_$oldUserId') {
+                newRow['walletId'] = 'wallet_cash_$userId';
+              }
+              if (newRow['wallet_id'] == 'wallet_cash_$oldUserId') {
+                newRow['wallet_id'] = 'wallet_cash_$userId';
+              }
+            } else {
+              // Dự phòng: Nếu không tìm thấy oldUserId trong metadata
+              if (newRow.containsKey('userId')) newRow['userId'] = userId;
+              if (newRow.containsKey('user_id')) newRow['user_id'] = userId;
+              
+              if (newRow['id'] != null && newRow['id'].toString().startsWith('wallet_cash_')) {
+                newRow['id'] = 'wallet_cash_$userId';
+              }
+              if (newRow['walletId'] != null && newRow['walletId'].toString().startsWith('wallet_cash_')) {
+                newRow['walletId'] = 'wallet_cash_$userId';
+              }
+              if (newRow['wallet_id'] != null && newRow['wallet_id'].toString().startsWith('wallet_cash_')) {
+                newRow['wallet_id'] = 'wallet_cash_$userId';
+              }
             }
 
             await txn.insert(
@@ -113,11 +150,18 @@ class BackupService {
 
     if (result != null && result.files.single.path != null) {
       final file = File(result.files.single.path!);
-      final content = await file.readAsString();
+      final content = (await file.readAsString()).trim();
 
       try {
-        final decodedContent = utf8.decode(base64Decode(content.trim()));
-        final data = jsonDecode(decodedContent) as Map<String, dynamic>;
+        Map<String, dynamic> data;
+        
+        // Nhận diện định dạng: xem là JSON thô hay Base64
+        if (content.startsWith('{') && content.endsWith('}')) {
+          data = jsonDecode(content) as Map<String, dynamic>;
+        } else {
+          final decodedContent = utf8.decode(base64Decode(content));
+          data = jsonDecode(decodedContent) as Map<String, dynamic>;
+        }
 
         // Basic validation
         if (data.containsKey('metadata') && data.containsKey('data')) {

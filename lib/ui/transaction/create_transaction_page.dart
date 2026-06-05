@@ -775,7 +775,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           builder: (sheetContext, setSheetState) {
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -787,7 +787,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -811,28 +811,40 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 1.6,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            childAspectRatio: 1.85,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                          ),
                       itemCount: 12,
                       itemBuilder: (context, index) {
                         final keys = [
-                          '1', '2', '3',
-                          '4', '5', '6',
-                          '7', '8', '9',
-                          ',', '0', 'backspace'
+                          '1',
+                          '2',
+                          '3',
+                          '4',
+                          '5',
+                          '6',
+                          '7',
+                          '8',
+                          '9',
+                          ',',
+                          '0',
+                          'backspace',
                         ];
                         final key = keys[index];
                         if (key == 'backspace') {
                           return _buildNumpadKeyButton(
-                            child: const Icon(Icons.backspace_rounded, color: Color(0xFF334155)),
+                            child: const Icon(
+                                Icons.backspace_rounded,
+                                color: Color(0xFF334155),
+                              ),
                             onTap: () {
                               _updateAmountFromKey('backspace');
                               setSheetState(() {});
@@ -855,7 +867,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -888,7 +900,10 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     );
   }
 
-  Widget _buildNumpadKeyButton({required Widget child, required VoidCallback onTap}) {
+  Widget _buildNumpadKeyButton({
+    required Widget child,
+    required VoidCallback onTap,
+  }) {
     return _ScaleOnTap(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -945,7 +960,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         ? [AppColors.danger, AppColors.darkRed]
         : [AppColors.safe, AppColors.darkGreen];
 
-    final amount = _amountController.text.isNotEmpty ? _amountController.text : "0";
+    final amount = _amountController.text.isNotEmpty
+        ? _amountController.text
+        : "0";
     final categoryLabel = _selectedCategory != null
         ? _displayCategoryName(_selectedCategory!.name)
         : "Chọn danh mục".xtr(context);
@@ -964,7 +981,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: (isExpense ? AppColors.danger : AppColors.safe).withOpacity(0.25),
+            color: (isExpense ? AppColors.danger : AppColors.safe).withOpacity(
+              0.25,
+            ),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -977,13 +996,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.25),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isExpense ? "↑ Chi tiêu".xtr(context) : "↓ Thu nhập".xtr(context),
+                  isExpense
+                      ? "↑ Chi tiêu".xtr(context)
+                      : "↓ Thu nhập".xtr(context),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -1033,16 +1057,17 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.15),
-              ),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
             ),
             child: TextField(
               controller: _noteInput,
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
                 hintText: "Thêm ghi chú...".xtr(context),
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
+                hintStyle: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 14,
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -1084,7 +1109,10 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 onTap: () => _applyQuickDatePreset(preset.date),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: selected ? AppColors.darkBlue : Colors.white,
                     borderRadius: BorderRadius.circular(999),
@@ -1100,13 +1128,17 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                       Icon(
                         Icons.schedule_rounded,
                         size: 15,
-                        color: selected ? Colors.white : const Color(0xFF94A3B8),
+                        color: selected
+                            ? Colors.white
+                            : const Color(0xFF94A3B8),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         preset.label,
                         style: TextStyle(
-                          color: selected ? Colors.white : const Color(0xFF94A3B8),
+                          color: selected
+                              ? Colors.white
+                              : const Color(0xFF94A3B8),
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -1119,7 +1151,10 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           }),
           _ScaleOnTap(
             onTap: () async {
-              final picked = await _showCustomDateTimePicker(context, _selectedDate);
+              final picked = await _showCustomDateTimePicker(
+                context,
+                _selectedDate,
+              );
               if (picked != null) {
                 setState(() => _selectedDate = picked);
               }
@@ -1231,7 +1266,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     final themeColor = _currentType == 'expense'
         ? AppColors.danger
         : AppColors.safe;
-        
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1264,7 +1299,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  _amountController.text.isNotEmpty ? _amountController.text : "0",
+                  _amountController.text.isNotEmpty
+                      ? _amountController.text
+                      : "0",
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -1299,7 +1336,10 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                       _applyQuickAmount(amount);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(999),
@@ -1343,7 +1383,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                   clipBehavior: Clip.antiAlias,
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
                   child: CategoryListScreen(
                     transactionType: _currentType,
@@ -1600,16 +1642,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                         child: GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            childAspectRatio: 0.85,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                childAspectRatio: 0.85,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                              ),
                           itemCount: _frequentCategories.length,
                           itemBuilder: (context, index) {
                             final cat = _frequentCategories[index];
-                            bool isCatSelected = _selectedCategory?.id == cat.id;
+                            bool isCatSelected =
+                                _selectedCategory?.id == cat.id;
                             return _ScaleOnTap(
                               onTap: () {
                                 setState(() {
@@ -1621,7 +1665,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: isCatSelected
-                                      ? AppColors.primaryPurple.withOpacity(0.08)
+                                      ? AppColors.primaryPurple.withOpacity(
+                                          0.08,
+                                        )
                                       : const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
@@ -1642,12 +1688,18 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                                         shape: BoxShape.circle,
                                       ),
                                       child: Center(
-                                        child: Icon(cat.iconData, color: cat.color, size: 20),
+                                        child: Icon(
+                                          cat.iconData,
+                                          color: cat.color,
+                                          size: 20,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 6),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
                                       child: Text(
                                         _displayCategoryName(cat.name),
                                         style: TextStyle(
@@ -1684,7 +1736,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     final cleanText = _amountController.text.replaceAll('.', '');
     final amount = double.tryParse(cleanText) ?? 0;
     final isEnabled = amount > 0 && _categoryId.isNotEmpty;
-    
+
     final themeColor = _currentType == 'expense'
         ? AppColors.danger
         : AppColors.safe;
@@ -1706,17 +1758,27 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.5,
           child: _ScaleOnTap(
-            onTap: (isEnabled && !_isSaving) ? () {
-              HapticFeedback.mediumImpact();
-              _handleSaveData();
-            } : null,
+            onTap: (isEnabled && !_isSaving)
+                ? () {
+                    HapticFeedback.mediumImpact();
+                    _handleSaveData();
+                  }
+                : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               height: 58,
               decoration: BoxDecoration(
                 gradient: isEnabled
                     ? LinearGradient(
-                        colors: [themeColor, Color.lerp(themeColor, const Color(0xFF111827), 0.15) ?? themeColor],
+                        colors: [
+                          themeColor,
+                          Color.lerp(
+                                themeColor,
+                                const Color(0xFF111827),
+                                0.15,
+                              ) ??
+                              themeColor,
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       )
@@ -1775,7 +1837,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     final cleanText = _amountController.text.replaceAll('.', '');
     final amount = double.tryParse(cleanText) ?? 0;
     final isEnabled = amount > 0 && _categoryId.isNotEmpty;
-    
+
     final themeColor = _currentType == 'expense'
         ? AppColors.danger
         : AppColors.safe;
@@ -1803,10 +1865,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: AppColors.danger,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: AppColors.danger, width: 1.5),
                 ),
                 child: Center(
                   child: Text(
@@ -1828,16 +1887,26 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             child: Opacity(
               opacity: isEnabled ? 1.0 : 0.5,
               child: _ScaleOnTap(
-                onTap: (isEnabled && !_isSaving) ? () {
-                  HapticFeedback.mediumImpact();
-                  _handleSaveData();
-                } : null,
+                onTap: (isEnabled && !_isSaving)
+                    ? () {
+                        HapticFeedback.mediumImpact();
+                        _handleSaveData();
+                      }
+                    : null,
                 child: Container(
                   height: 56,
                   decoration: BoxDecoration(
                     gradient: isEnabled
                         ? LinearGradient(
-                            colors: [themeColor, Color.lerp(themeColor, const Color(0xFF111827), 0.15) ?? themeColor],
+                            colors: [
+                              themeColor,
+                              Color.lerp(
+                                    themeColor,
+                                    const Color(0xFF111827),
+                                    0.15,
+                                  ) ??
+                                  themeColor,
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -1893,11 +1962,16 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF1E293B),
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          isEdit ? "Chỉnh sửa giao dịch".xtr(context) : "Thêm giao dịch".xtr(context),
+          isEdit
+              ? "Chỉnh sửa giao dịch".xtr(context)
+              : "Thêm giao dịch".xtr(context),
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 18,

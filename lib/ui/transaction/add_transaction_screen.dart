@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../data/remote/firestore_service.dart';
@@ -480,7 +479,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           builder: (sheetContext, setSheetState) {
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -492,7 +491,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -516,13 +515,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 3,
-                        childAspectRatio: 1.6,
+                        childAspectRatio: 1.85,
                         mainAxisSpacing: 12,
                         crossAxisSpacing: 12,
                       ),
@@ -563,7 +562,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       height: 52,

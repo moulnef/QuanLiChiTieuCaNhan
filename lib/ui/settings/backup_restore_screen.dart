@@ -304,7 +304,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: _backupService.streamCloudBackupPoints(_userId),
+            stream: _userId.isNotEmpty
+                ? _backupService.streamCloudBackupPoints(_userId)
+                : const Stream.empty(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());

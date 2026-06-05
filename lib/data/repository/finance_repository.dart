@@ -980,6 +980,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
       );
     }
+    _notifyTransactionChanged(userId);
   }
 
   Future<List<FinanceInstallmentItem>> getInstallmentsByUserId(
@@ -1135,6 +1136,7 @@ class FinanceRepository {
     } catch (e) {
       print("LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e");
     }
+    _notifyTransactionChanged(userId);
   }
 
   Future<List<FinanceDebtItem>> getDebtsByUserId(String userId) async {
@@ -1285,6 +1287,7 @@ class FinanceRepository {
     } catch (e) {
       print("LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ vay nÃ¡Â»Â£ Firestore: $e");
     }
+    _notifyTransactionChanged(userId);
   }
 
   // ========== HOME PAGE FUNCTIONS ==========
@@ -1451,6 +1454,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
       );
     }
+    _notifyTransactionChanged(goal.userId);
   }
 
   Future<void> deleteSavingGoal(String userId, String goalId) async {
@@ -1474,6 +1478,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
       );
     }
+    _notifyTransactionChanged(userId);
   }
 
   // ========== DEBT RECORD FUNCTIONS ==========
@@ -1587,6 +1592,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm vay nÃ¡Â»Â£ Firestore: $e",
       );
     }
+    _notifyTransactionChanged(debt.userId);
   }
 
   Future<void> updateDebtRecord(DebtRecord debt) async {
@@ -1641,6 +1647,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t vay nÃ¡Â»Â£ Firestore: $e",
       );
     }
+    _notifyTransactionChanged(debt.userId);
   }
 
   Future<void> deleteDebtRecord(String userId, String debtId) async {
@@ -1669,6 +1676,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a vay nÃ¡Â»Â£ Firestore: $e",
       );
     }
+    _notifyTransactionChanged(userId);
   }
 
   // ========== INSTALLMENT PLAN FUNCTIONS ==========
@@ -1786,6 +1794,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
       );
     }
+    _notifyTransactionChanged(plan.userId);
   }
 
   Future<void> updateInstallmentPlan(InstallmentPlan plan) async {
@@ -1842,6 +1851,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
       );
     }
+    _notifyTransactionChanged(plan.userId);
   }
 
   Future<void> deleteInstallmentPlan(String userId, String planId) async {
@@ -1870,6 +1880,7 @@ class FinanceRepository {
         "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
       );
     }
+    _notifyTransactionChanged(userId);
   }
 
   // ========== WALLET FUNCTIONS ==========
@@ -1883,10 +1894,33 @@ class FinanceRepository {
           .toList();
     }
     final db = await _databaseHelper.database;
-    return await db.rawQuery(
+    final wallets = await db.rawQuery(
       'SELECT * FROM wallets WHERE COALESCE(userId, user_id) = ? ORDER BY name ASC',
       [userId],
     );
+
+    final userExpression = await _transactionUserExpression(db);
+    final walletExpression = await _transactionWalletExpression(db);
+
+    final List<Map<String, dynamic>> updatedWallets = [];
+    for (final wallet in wallets) {
+      final walletId = wallet['id']?.toString() ?? '';
+      final balanceResult = await db.rawQuery(
+        '''
+        SELECT 
+          SUM(CASE WHEN type IN ('income', 'borrow') THEN amount ELSE -amount END) AS balance
+        FROM transactions
+        WHERE $userExpression = ? AND $walletExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+        ''',
+        [userId, walletId],
+      );
+      final computedBalance = (balanceResult.first['balance'] as num?)?.toDouble() ?? 0.0;
+      
+      final mutableWallet = Map<String, dynamic>.from(wallet);
+      mutableWallet['balance'] = computedBalance;
+      updatedWallets.add(mutableWallet);
+    }
+    return updatedWallets;
   }
 
   Future<double> getTotalWalletBalance(String userId) async {
@@ -1897,8 +1931,14 @@ class FinanceRepository {
           .fold<double>(0.0, (sum, w) => sum + w.balance);
     }
     final db = await _databaseHelper.database;
+    final userExpression = await _transactionUserExpression(db);
     final result = await db.rawQuery(
-      'SELECT SUM(balance) AS total FROM wallets WHERE COALESCE(userId, user_id) = ?',
+      '''
+      SELECT 
+        SUM(CASE WHEN type IN ('income', 'borrow') THEN amount ELSE -amount END) AS total 
+      FROM transactions 
+      WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      ''',
       [userId],
     );
     return (result.first['total'] as num?)?.toDouble() ?? 0.0;
@@ -2873,6 +2913,23 @@ class FinanceRepository {
       return 'user_id';
     }
     return 'userId';
+  }
+
+  Future<String> _transactionWalletExpression(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    final hasWalletId = columns.contains('walletId');
+    final hasLegacyWalletId = columns.contains('wallet_id');
+
+    if (hasWalletId && hasLegacyWalletId) {
+      return 'COALESCE(walletId, wallet_id)';
+    }
+    if (hasWalletId) {
+      return 'walletId';
+    }
+    if (hasLegacyWalletId) {
+      return 'wallet_id';
+    }
+    return 'walletId';
   }
 
   Future<String> _transactionCategoryColumn(Database db) async {

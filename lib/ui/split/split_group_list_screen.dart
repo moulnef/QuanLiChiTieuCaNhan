@@ -7,6 +7,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/split_group.dart';
 import '../providers/split_provider.dart';
 import 'split_group_detail_screen.dart';
 import 'add_split_group_sheet.dart';
+import '../../utils/app_localizer.dart';
 
 class SplitGroupListScreen extends StatefulWidget {
   const SplitGroupListScreen({super.key});
@@ -40,9 +41,9 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
-        title: const Text(
-          'Chia tiền nhóm',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          'Chia tiền nhóm'.xtr(context),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
         elevation: 0,
@@ -78,9 +79,9 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
         backgroundColor: const Color(0xFF6D28D9),
         foregroundColor: Colors.white,
         icon: const Icon(LucideIcons.plus),
-        label: const Text(
-          'Tạo nhóm mới',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        label: Text(
+          'Tạo nhóm mới'.xtr(context),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -109,19 +110,19 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Chưa có nhóm chia tiền',
-              style: TextStyle(
+            Text(
+              'Chưa có nhóm chia tiền'.xtr(context),
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF1E293B),
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Tạo nhóm để ghi chép các khoản chi tiêu ăn uống, đi chơi, du lịch cùng bạn bè và tự động chia tiền sòng phẳng.',
+            Text(
+              'Tạo nhóm để ghi chép các khoản chi tiêu ăn uống, đi chơi, du lịch cùng bạn bè và tự động chia tiền sòng phẳng.'.xtr(context),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF64748B),
                 height: 1.5,
@@ -202,9 +203,8 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
                               size: 14,
                               color: isSettled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isSettled ? 'Đã quyết toán' : 'Đang mở',
+                                   Text(
+                              (isSettled ? 'Đã quyết toán' : 'Đang mở').xtr(context),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -222,7 +222,7 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
                       const Icon(LucideIcons.users, size: 16, color: Color(0xFF94A3B8)),
                       const SizedBox(width: 6),
                       Text(
-                        '${group.memberUids.length} thành viên',
+                        '${group.memberUids.length} ' + 'thành viên'.xtr(context),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -248,9 +248,9 @@ class _SplitGroupListScreenState extends State<SplitGroupListScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Tổng chi tiêu nhóm:',
-                        style: TextStyle(
+                      Text(
+                        'Tổng chi tiêu nhóm:'.xtr(context),
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF94A3B8),

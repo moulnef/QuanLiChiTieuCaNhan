@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -13,6 +14,7 @@ class AccountPage extends StatefulWidget {
 class _AccountPageState extends State<AccountPage> {
   static const String _demoUserId = 'user_001';
   final FinanceRepository _repository = FinanceRepository();
+  StreamSubscription? _transactionSub;
 
   bool _isLoading = true;
   String _name = 'Người dùng';
@@ -27,10 +29,21 @@ class _AccountPageState extends State<AccountPage> {
   void initState() {
     super.initState();
     _loadData();
+    _transactionSub = _repository.watchTransactions(_currentUserId).listen((_) {
+      _loadData(isSilent: true);
+    });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _transactionSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadData({bool isSilent = false}) async {
+    if (!isSilent) {
+      setState(() => _isLoading = true);
+    }
     try {
       // Ensure user has default wallets before loading
       await _repository.ensureDefaultWalletsForUser(_currentUserId);
@@ -56,15 +69,14 @@ class _AccountPageState extends State<AccountPage> {
         _totalBalance = totalBalance;
       });
     } finally {
-      if (mounted) {
+      if (mounted && !isSilent) {
         setState(() => _isLoading = false);
       }
     }
   }
 
   String _formatMoney(double amount) {
-    final formatter = NumberFormat('#,###', 'vi_VN');
-    return '${formatter.format(amount.round())} đ';
+    return MoneyFormatter.formatVnd(amount);
   }
 
   @override

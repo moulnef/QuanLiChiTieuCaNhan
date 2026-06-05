@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -9,6 +10,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/split_expense.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/core/utils/money_formatter.dart';
 import '../providers/split_provider.dart';
 import '../providers/auth_provider.dart';
+import '../../utils/app_localizer.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   final SplitGroup group;
@@ -97,8 +99,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     if (totalAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Số tiền chi tiêu phải lớn hơn 0đ'),
+        SnackBar(
+          content: Text('Số tiền chi tiêu phải lớn hơn 0đ'.xtr(context)),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -126,14 +128,16 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Số tiền chia không khớp'),
+            title: Text('Số tiền chia không khớp'.xtr(context)),
             content: Text(
-              'Tổng số tiền chia cho các thành viên (${_currencyFormat.format(customSum)}) phải bằng tổng số tiền chi tiêu (${_currencyFormat.format(totalAmount)}).',
+              context.locale.languageCode == 'en'
+                  ? 'Total split amount for members (${_currencyFormat.format(customSum)}) must be equal to total expense amount (${_currencyFormat.format(totalAmount)}).'
+                  : 'Tổng số tiền chia cho các thành viên (${_currencyFormat.format(customSum)}) phải bằng tổng số tiền chi tiêu (${_currencyFormat.format(totalAmount)}).',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Đồng ý', style: TextStyle(color: Color(0xFF6D28D9))),
+                child: Text('Đồng ý'.xtr(context), style: const TextStyle(color: Color(0xFF6D28D9))),
               ),
             ],
           ),
@@ -160,8 +164,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Thêm khoản chi thành công!'),
+          SnackBar(
+            content: Text('Thêm khoản chi thành công!'.xtr(context)),
             backgroundColor: Colors.green,
           ),
         );
@@ -170,7 +174,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Không thể thêm khoản chi: $e'),
+            content: Text('Không thể thêm khoản chi: '.xtr(context) + '$e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -213,9 +217,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Thêm khoản chi tiêu mới',
-                style: TextStyle(
+              Text(
+                'Thêm khoản chi tiêu mới'.xtr(context),
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
@@ -227,7 +231,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 controller: _descriptionController,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
-                  labelText: 'Mô tả (ví dụ: Ăn lẩu, Thuê xe máy)',
+                  labelText: 'Mô tả (ví dụ: Ăn lẩu, Thuê xe máy)'.xtr(context),
                   labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   floatingLabelStyle: const TextStyle(color: Color(0xFF6D28D9)),
                   border: OutlineInputBorder(
@@ -244,7 +248,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập mô tả khoản chi';
+                    return 'Vui lòng nhập mô tả khoản chi'.xtr(context);
                   }
                   return null;
                 },
@@ -257,7 +261,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 inputFormatters: [ThousandsSeparatorInputFormatter()],
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF6D28D9)),
                 decoration: InputDecoration(
-                  labelText: 'Số tiền chi tiêu',
+                  labelText: 'Số tiền chi tiêu'.xtr(context),
                   labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   floatingLabelStyle: const TextStyle(color: Color(0xFF6D28D9)),
                   border: OutlineInputBorder(
@@ -276,7 +280,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập số tiền';
+                    return 'Vui lòng nhập số tiền'.xtr(context);
                   }
                   return null;
                 },
@@ -284,10 +288,10 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               const SizedBox(height: 16),
               // Payer Dropdown
               DropdownButtonFormField<String>(
-                value: _selectedPayerId,
+                initialValue: _selectedPayerId,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
                 decoration: InputDecoration(
-                  labelText: 'Người trả tiền',
+                  labelText: 'Người trả tiền'.xtr(context),
                   labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -298,7 +302,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   fillColor: const Color(0xFFF8F9FE),
                 ),
                 items: widget.group.memberUids.map((uid) {
-                  final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên';
+                  final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên'.xtr(context);
                   return DropdownMenuItem<String>(
                     value: uid,
                     child: Text(name),
@@ -312,9 +316,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               ),
               const SizedBox(height: 20),
               // Split Type Toggle
-              const Text(
-                'Hình thức chia tiền',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
+              Text(
+                'Hình thức chia tiền'.xtr(context),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
               ),
               const SizedBox(height: 8),
               Container(
@@ -325,8 +329,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 padding: const EdgeInsets.all(4),
                 child: Row(
                   children: [
-                    Expanded(child: _splitTypeButton('Chia đều', SplitType.equal)),
-                    Expanded(child: _splitTypeButton('Tùy chỉnh', SplitType.custom)),
+                    Expanded(child: _splitTypeButton('Chia đều'.xtr(context), SplitType.equal)),
+                    Expanded(child: _splitTypeButton('Tùy chỉnh'.xtr(context), SplitType.custom)),
                   ],
                 ),
               ),
@@ -346,7 +350,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Chia đều cho ${widget.group.memberUids.length} người. Mỗi người chịu ${_currencyFormat.format(equalSharePreview)}.',
+                          'Chia đều cho '.xtr(context) + '${widget.group.memberUids.length}' + ' người. Mỗi người chịu '.xtr(context) + '${_currencyFormat.format(equalSharePreview)}.',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -361,13 +365,13 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Nhập phần tiền từng người chịu:',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                    Text(
+                      'Nhập phần tiền từng người chịu:'.xtr(context),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
                     ),
                     const SizedBox(height: 10),
                     ...widget.group.memberUids.map((uid) {
-                      final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên';
+                      final name = splitProvider.membersCache[uid]?.displayName ?? 'Thành viên'.xtr(context);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Row(
@@ -419,9 +423,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Thêm khoản chi',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                child: Text(
+                  'Thêm khoản chi'.xtr(context),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                 ),
               ),
             ],

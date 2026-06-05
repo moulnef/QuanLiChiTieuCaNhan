@@ -10,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/config/firebase_options.dart';
 import 'data/repository/finance_repository.dart';
 import 'services/translation_service.dart';
+import 'ui/auth/splash_screen.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/home/main_screen.dart';
 import 'ui/providers/auth_provider.dart';
@@ -114,23 +115,60 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
           ),
 
-          home: provider.Consumer<AuthProvider>(
-            builder: (context, authProvider, _) {
-              if (authProvider.isLoading) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-
-              if (!authProvider.isAuthenticated) {
-                return const LoginPage();
-              }
-
-              return const MainScreen();
-            },
-          ),
+          home: const AuthWrapper(),
         );
       },
+    );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Bắt đầu đếm ngược 3 giây để đảm bảo hiển thị đủ nội dung intro.gif
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = provider.Provider.of<AuthProvider>(context);
+
+    Widget activeWidget;
+    if (_showSplash || authProvider.isLoading) {
+      activeWidget = const SplashScreen(key: ValueKey('splash'));
+    } else if (authProvider.isAuthenticated) {
+      activeWidget = const MainScreen(key: ValueKey('main'));
+    } else {
+      activeWidget = const LoginPage(key: ValueKey('login'));
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 600),
+      switchInCurve: Curves.easeIn,
+      switchOutCurve: Curves.easeOut,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+      child: activeWidget,
     );
   }
 }

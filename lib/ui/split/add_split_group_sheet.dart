@@ -6,6 +6,7 @@ import '../../domain/model/split_member_info.dart';
 import '../../services/split_service.dart';
 import '../providers/auth_provider.dart';
 import '../providers/split_provider.dart';
+import '../../utils/app_localizer.dart';
 
 class AddSplitGroupSheet extends StatefulWidget {
   const AddSplitGroupSheet({super.key});
@@ -56,13 +57,13 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
         if (user != null) {
           _foundMember = user;
         } else {
-          _searchError = 'Không tìm thấy tài khoản với email này.';
+          _searchError = 'Không tìm thấy tài khoản với email này.'.xtr(context);
         }
       });
     } catch (e) {
       setState(() {
         _isSearching = false;
-        _searchError = 'Lỗi tìm kiếm: $e';
+        _searchError = 'Lỗi tìm kiếm: '.xtr(context) + '$e';
       });
     }
   }
@@ -73,8 +74,8 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
     
     if (member.uid == currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bạn đã là trưởng nhóm rồi!'),
+        SnackBar(
+          content: Text('Bạn đã là trưởng nhóm rồi!'.xtr(context)),
           backgroundColor: Colors.orange,
         ),
       );
@@ -83,8 +84,8 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
 
     if (_addedMembers.any((m) => m.uid == member.uid)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Thành viên này đã được thêm.'),
+        SnackBar(
+          content: Text('Thành viên này đã được thêm.'.xtr(context)),
           backgroundColor: Colors.orange,
         ),
       );
@@ -131,8 +132,8 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tạo nhóm và mời thành viên thành công!'),
+          SnackBar(
+            content: Text('Tạo nhóm và mời thành viên thành công!'.xtr(context)),
             backgroundColor: Colors.green,
           ),
         );
@@ -141,7 +142,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Không thể tạo nhóm: $e'),
+            content: Text('Không thể tạo nhóm: '.xtr(context) + '$e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -184,9 +185,9 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Tạo nhóm chia tiền mới',
-                style: TextStyle(
+              Text(
+                'Tạo nhóm chia tiền mới'.xtr(context),
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
@@ -198,7 +199,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 controller: _nameController,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
-                  labelText: 'Tên nhóm (ví dụ: Đi Đà Lạt, Ăn uống cuối tuần)',
+                  labelText: 'Tên nhóm (ví dụ: Đi Đà Lạt, Ăn uống cuối tuần)'.xtr(context),
                   labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   floatingLabelStyle: const TextStyle(color: Color(0xFF6D28D9)),
                   border: OutlineInputBorder(
@@ -215,7 +216,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập tên nhóm';
+                    return 'Vui lòng nhập tên nhóm'.xtr(context);
                   }
                   return null;
                 },
@@ -226,7 +227,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 controller: _descriptionController,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
-                  labelText: 'Mô tả nhóm (không bắt buộc)',
+                  labelText: 'Mô tả nhóm (không bắt buộc)'.xtr(context),
                   labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   floatingLabelStyle: const TextStyle(color: Color(0xFF6D28D9)),
                   border: OutlineInputBorder(
@@ -243,9 +244,9 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Mời thành viên (bằng email đăng ký app)',
-                style: TextStyle(
+              Text(
+                'Mời thành viên (bằng email đăng ký app)'.xtr(context),
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF334155),
@@ -261,7 +262,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                       keyboardType: TextInputType.emailAddress,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
-                        hintText: 'Nhập email thành viên...',
+                        hintText: 'Nhập email thành viên...'.xtr(context),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -355,7 +356,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                       ElevatedButton.icon(
                         onPressed: () => _addMember(_foundMember!),
                         icon: const Icon(LucideIcons.plus, size: 14),
-                        label: const Text('Thêm'),
+                        label: Text('Thêm'.xtr(context)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF166534),
                           foregroundColor: Colors.white,
@@ -369,9 +370,9 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                 ),
               const SizedBox(height: 16),
               // Default Creator display (cannot edit)
-              const Text(
-                'Danh sách thành viên hiện tại:',
-                style: TextStyle(
+              Text(
+                'Danh sách thành viên hiện tại:'.xtr(context),
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF64748B),
@@ -392,7 +393,7 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        '$currentUserName (Trưởng nhóm - Bạn)',
+                        '$currentUserName (' + 'Trưởng nhóm - Bạn'.xtr(context) + ')',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -462,9 +463,9 @@ class _AddSplitGroupSheetState extends State<AddSplitGroupSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Tạo nhóm',
-                  style: TextStyle(
+                child: Text(
+                  'Tạo nhóm'.xtr(context),
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),

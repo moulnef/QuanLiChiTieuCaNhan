@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:intl/intl.dart';
 
 import '../../data/local/category_data.dart';
-import '../../domain/model/category_model.dart';
 import '../../domain/model/transaction_model.dart';
 import '../transaction/transaction_controller.dart';
 
@@ -25,8 +27,11 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
   bool _isInitializingSpeech = false;
   bool _isSpeechReady = false;
   bool _relistenAfterSpeech = false;
-  String _text = 'Bam vao mic de noi...';
-  _PendingDraft? _pendingDraft;
+  String _text = 'Bấm vào mic để nói...';
+
+  // Quản lý lịch sử hội thoại của Voice tương tự như Chatbot
+  final List<Map<String, dynamic>> _voiceMessages = [];
+  final String githubToken = '#';
 
   @override
   void initState() {
@@ -34,26 +39,33 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
     _speech = stt.SpeechToText();
     _tts = FlutterTts();
     _initTts();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _prepareSpeech();
+
+    // Khởi tạo lời chào ban đầu giống Chatbot bằng giọng nói
+    _voiceMessages.add({
+      "role": "ai",
+      "text": "Chào bạn! Mình là trợ lý giọng nói. Bạn đã chi tiêu gì chưa?",
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _prepareSpeech();
+      // Bạn có thể mở comment dòng dưới nếu muốn mở lên là AI tự chào luôn
+      // await _speak(_voiceMessages.first["text"]);
     });
   }
 
   Future<void> _initTts() async {
     try {
       await _tts.setLanguage('vi-VN');
-      await _tts.setSpeechRate(0.48);
+      await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
       await _tts.setPitch(1.0);
       await _tts.awaitSpeakCompletion(true);
       _tts.setCompletionHandler(() {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         final shouldRelisten = _relistenAfterSpeech;
         _relistenAfterSpeech = false;
         if (shouldRelisten) {
-          _listen();
+          _listen(); // Tự động bật mic để nhận phản hồi tiếp theo
         }
       });
     } catch (e) {
@@ -80,25 +92,20 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
   }
 
   Future<void> _prepareSpeech() async {
-    if (_isInitializingSpeech || _isSpeechReady) {
-      return;
-    }
+    if (_isInitializingSpeech || _isSpeechReady) return;
 
     setState(() {
       _isInitializingSpeech = true;
-      _text = 'Dang chuan bi micro...';
+      _text = 'Đang chuẩn bị micro...';
     });
 
     final hasPermission = await _ensureMicrophonePermission();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (!hasPermission) {
       setState(() {
         _isInitializingSpeech = false;
-        _text =
-            'Ban chua cap quyen micro. Hay cho phep micro de su dung tro ly giong noi.';
+        _text = 'Chưa cấp quyền micro.';
       });
       return;
     }
@@ -106,74 +113,37 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
     try {
       final available = await _speech.initialize(
         onStatus: (status) {
-          if (!mounted) {
-            return;
-          }
+          if (!mounted) return;
           if ((status == 'done' || status == 'notListening') &&
               !_isProcessing) {
             setState(() => _isListening = false);
           }
         },
-        onError: (error) {
-          debugPrint('Speech error: $error');
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _isListening = false;
-            _isProcessing = false;
-            _isSpeechReady = false;
-            _text = 'Khong the su dung micro. Hay kiem tra quyen truy cap.';
-          });
-        },
+        onError: (error) => debugPrint('Speech error: $error'),
       );
-
-      if (!mounted) {
-        return;
-      }
 
       setState(() {
         _isInitializingSpeech = false;
         _isSpeechReady = available;
-        _text = available
-            ? 'Bam vao mic de noi...'
-            : 'Khong tim thay dich vu nhan dien giong noi tren thiet bi.';
+        _text = available ? 'Bấm vào mic để nói...' : 'Lỗi khởi tạo Speech.';
       });
     } catch (e) {
-      debugPrint('Speech init error: $e');
-      if (!mounted) {
-        return;
-      }
       setState(() {
         _isInitializingSpeech = false;
         _isSpeechReady = false;
-        _text = 'Khoi tao micro that bai. Hay thu lai.';
       });
     }
   }
 
   Future<bool> _ensureMicrophonePermission() async {
     final status = await Permission.microphone.status;
-    if (status.isGranted) {
-      return true;
-    }
-
+    if (status.isGranted) return true;
     final requested = await Permission.microphone.request();
-    if (requested.isGranted) {
-      return true;
-    }
-
-    if (requested.isPermanentlyDenied) {
-      await openAppSettings();
-    }
-
-    return false;
+    return requested.isGranted;
   }
 
   Future<void> _listen() async {
-    if (_isProcessing) {
-      return;
-    }
+    if (_isProcessing) return;
 
     if (_isListening) {
       setState(() => _isListening = false);
@@ -181,453 +151,191 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
       return;
     }
 
-    try {
-      final hasPermission = await _ensureMicrophonePermission();
-      if (!mounted) {
-        return;
-      }
+    if (!_isSpeechReady) {
+      await _prepareSpeech();
+      if (!_isSpeechReady) return;
+    }
 
-      if (!hasPermission) {
-        setState(() {
-          _text =
-              'Ban chua cap quyen micro. Hay cho phep micro trong cai dat ung dung.';
-        });
-        return;
-      }
+    await _tts.stop();
+    setState(() {
+      _isListening = true;
+      _text = 'Đang nghe...';
+    });
 
-      if (!_isSpeechReady) {
-        await _prepareSpeech();
-        if (!mounted || !_isSpeechReady) {
-          return;
+    await _speech.listen(
+      localeId: 'vi-VN',
+      listenFor: const Duration(seconds: 15),
+      pauseFor: const Duration(seconds: 3),
+      onResult: (result) async {
+        if (!mounted) return;
+        if (result.recognizedWords.isNotEmpty) {
+          setState(() => _text = result.recognizedWords);
         }
-      }
 
-      var localeId = 'vi-VN';
-      try {
-        final locales = await _speech.locales();
-        final vietnamese = locales.where(
-          (item) => item.localeId.contains('vi'),
-        );
-        if (vietnamese.isNotEmpty) {
-          localeId = vietnamese.first.localeId;
-        } else if (locales.isNotEmpty) {
-          localeId = locales.first.localeId;
-        }
-      } catch (e) {
-        debugPrint('Locale lookup error: $e');
-      }
-
-      await _tts.stop();
-      setState(() {
-        _isListening = true;
-        _text = 'Dang nghe...';
-      });
-
-      await _speech.listen(
-        localeId: localeId,
-        listenFor: const Duration(seconds: 20),
-        pauseFor: const Duration(seconds: 4),
-        onResult: (result) async {
-          if (!mounted) {
-            return;
-          }
-
-          if (result.recognizedWords.isNotEmpty) {
-            setState(() {
-              _text = result.recognizedWords;
-            });
-          }
-
-          if (!result.finalResult) {
-            return;
-          }
-
+        if (result.finalResult) {
           setState(() {
             _isListening = false;
             _isProcessing = true;
           });
-
-          await _handleRecognizedText(result.recognizedWords);
-        },
-      );
-    } catch (e) {
-      debugPrint('Listen error: $e');
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isListening = false;
-        _isProcessing = false;
-        _text = 'Micro gap loi. Hay thu lai.';
-      });
-    }
-  }
-
-  Future<void> _handleRecognizedText(String speechText) async {
-    final parsed = _parseVoiceCommand(speechText);
-
-    if (!parsed.canSave) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isProcessing = false;
-        _text = parsed.message;
-      });
-      await _speak(parsed.message, relisten: parsed.relisten);
-      return;
-    }
-
-    final controller = ref.read(transactionControllerProvider);
-    final category =
-        CategoryData.findByName(parsed.categoryName) ??
-        CategoryData.getAllCategories()
-            .where((item) => item.type == parsed.type)
-            .firstOrNull;
-
-    try {
-      final transaction = TransactionModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        amount: parsed.amount!,
-        type: parsed.type,
-        categoryId: category?.id ?? parsed.categoryName,
-        categoryName: category?.name ?? parsed.categoryName,
-        transactionDate: DateTime.now(),
-        note: parsed.note,
-      );
-
-      await controller.createOrUpdateTransaction(transaction);
-      _pendingDraft = null;
-
-      if (!mounted) {
-        return;
-      }
-
-      final amountText = parsed.amount!.toStringAsFixed(0);
-      final success =
-          'Da luu ${parsed.note} - $amountText dong vao muc ${parsed.categoryName}.';
-      setState(() {
-        _isProcessing = false;
-        _text = success;
-      });
-      await _speak(success);
-
-      Future.delayed(const Duration(milliseconds: 1200), () {
-        if (mounted) {
-          Navigator.of(context).pop(true);
+          // Gửi text nhận diện được lên AI xử lý hội thoại
+          await _processWithAI(result.recognizedWords);
         }
-      });
-    } catch (e) {
-      debugPrint('Save voice transaction error: $e');
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isProcessing = false;
-        _text = 'Khong the luu giao dich. Hay thu lai.';
-      });
-      await _speak('Khong the luu giao dich. Hay thu lai.');
-    }
-  }
-
-  _ParsedVoiceCommand _parseVoiceCommand(String rawText) {
-    final original = rawText.trim();
-    final normalized = _normalize(original);
-
-    if (normalized.isEmpty) {
-      return const _ParsedVoiceCommand.message(
-        'Minh chua nghe ro. Hay noi lai giao dich cua ban.',
-        relisten: true,
-      );
-    }
-
-    if (_containsAny(normalized, const ['huy', 'thoat', 'dung lai'])) {
-      _pendingDraft = null;
-      return const _ParsedVoiceCommand.message('Da huy lenh hien tai.');
-    }
-
-    if (_pendingDraft != null) {
-      final amount = _extractAmount(normalized);
-      if (amount == null || amount <= 0) {
-        return const _ParsedVoiceCommand.message(
-          'Minh van chua nghe ro so tien. Ban hay noi vi du 50 nghin hoac 2 trieu.',
-          relisten: true,
-        );
-      }
-
-      final draft = _pendingDraft!;
-      return _ParsedVoiceCommand.save(
-        amount: amount,
-        type: draft.type,
-        categoryName: draft.categoryName,
-        note: draft.note,
-        message: 'Dang luu giao dich...',
-      );
-    }
-
-    if (_containsAny(normalized, const [
-      'xin chao',
-      'hello',
-      'hi',
-      'ban la ai',
-    ])) {
-      return const _ParsedVoiceCommand.message(
-        'Minh co the ghi giao dich cho ban. Hay noi vi du an sang 50 nghin.',
-        relisten: true,
-      );
-    }
-
-    final type = _detectTransactionType(normalized);
-    final amount = _extractAmount(normalized);
-    final category = _detectCategory(normalized, type);
-    final note = _buildNote(original, category?.name);
-
-    if (amount == null || amount <= 0) {
-      if (category == null) {
-        return const _ParsedVoiceCommand.message(
-          'Hay noi day du hon, vi du an trua 50 nghin, do xang 100 nghin, hoac nhan luong 10 trieu.',
-          relisten: true,
-        );
-      }
-
-      _pendingDraft = _PendingDraft(
-        type: type,
-        categoryName: category.name,
-        note: note,
-      );
-      return _ParsedVoiceCommand.message(
-        'Minh da hieu giao dich ${category.name}. Ban cho minh biet so tien nhe.',
-        relisten: true,
-      );
-    }
-
-    final resolvedCategory =
-        category?.name ?? (type == 'income' ? 'Tien vao' : 'Tien ra');
-
-    return _ParsedVoiceCommand.save(
-      amount: amount,
-      type: type,
-      categoryName: resolvedCategory,
-      note: note,
-      message: 'Dang luu giao dich...',
+      },
     );
   }
 
-  String _detectTransactionType(String normalized) {
-    const incomeKeywords = [
-      'nhan luong',
-      'luong',
-      'thuong',
-      'thu nhap',
-      'ban duoc',
-      'ban hang',
-      'duoc tang',
-      'duoc cho',
-      'lai ngan hang',
-      'lai tiet kiem',
-      'tien vao',
-      'thu duoc',
-    ];
+  // --- TRÁI TIM XỬ LÝ HỘI THOẠI AI ---
+  Future<void> _processWithAI(String userText) async {
+    if (userText.trim().isEmpty) {
+      setState(() => _isProcessing = false);
+      return;
+    }
 
-    return _containsAny(normalized, incomeKeywords) ? 'income' : 'expense';
+    // Thêm câu nói của user vào hội thoại
+    _voiceMessages.add({"role": "user", "text": userText});
+
+    String expenseNames = CategoryData.getExpenseCategories()
+        .map((c) => c.name)
+        .join(", ");
+    String incomeNames = CategoryData.getIncomeCategories()
+        .map((c) => c.name)
+        .join(", ");
+    String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    String currentTime = DateFormat('HH:mm').format(DateTime.now());
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://models.inference.ai.azure.com/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Bearer $githubToken',
+        },
+        body: jsonEncode({
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content":
+                  """Bạn là trợ lý tài chính thông minh qua GIỌNG NÓI. HÔM NAY LÀ: $currentDate, THỜI GIAN: $currentTime.
+
+QUY TẮC KIỂM TRA ĐIỀU KIỆN:
+Để tạo được giao dịch, câu nói CỦA NGƯỜI DÙNG PHẢI CÓ ĐỦ 3 YẾU TỐ:
+1. MỤC ĐÍCH CỤ THỂ: Mua cái gì? (Ví dụ: "ăn phở", "đổ xăng", "mua quần áo"). Không chấp nhận từ chung chung.
+2. SỐ TIỀN: Con số cụ thể (30k, 50 nghìn).
+3. THỜI GIAN: Phải nói rõ buổi hoặc giờ giấc hoặc ngữ cảnh ngày (hôm nay, sáng nay, tối qua).
+
+HÀNH ĐỘNG 1: THIẾU THÔNG TIN -> PHẢI HỎI LẠI TRỰC TIẾP, NGẮN GỌN (Dùng cho môi trường Giọng nói)
+Trả về JSON hỏi lại:
+{"is_transaction": false, "message": "<Câu hỏi ngắn gọn để người dùng trả lời bằng giọng nói>"}
+Ví dụ: Thiếu tiền -> "Món đó bạn chi hết bao nhiêu tiền thế?"
+
+HÀNH ĐỘNG 2: ĐỦ THÔNG TIN -> TẠO GIAO DỊCH
+Trả về JSON:
+{"is_transaction": true, "type": "expense", "amount": 30000, "category": "Ăn sáng", "note": "Ăn phở", "date": "$currentDate", "message": "Đã lưu ăn phở ba mươi nghìn đồng."}
+- 'category': Chọn từ Chi: [$expenseNames] hoặc Thu: [$incomeNames].
+
+HÀNH ĐỘNG 3: TRÒ CHUYỆN BÌNH THƯỜNG
+Trả về JSON:
+{"is_transaction": false, "message": "<Câu trả lời ngắn gọn, thân thiện>"}""",
+            },
+            ..._voiceMessages.map(
+              (msg) => {
+                "role": msg["role"] == "user" ? "user" : "assistant",
+                "content": msg["text"] ?? "",
+              },
+            ),
+          ],
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        String aiText = jsonDecode(
+          utf8.decode(response.bodyBytes),
+        )['choices'][0]['message']['content'];
+
+        // Trích xuất JSON tương tự ChatbotScreen
+        int startIndex = aiText.indexOf('{');
+        int endIndex = aiText.lastIndexOf('}');
+        String potentialJson = (startIndex != -1 && endIndex != -1)
+            ? aiText.substring(startIndex, endIndex + 1)
+            : aiText.replaceAll('```json', '').replaceAll('```', '').trim();
+
+        final aiData = jsonDecode(potentialJson);
+
+        if (aiData['is_transaction'] == true) {
+          // TRƯỜNG HỢP 1: Đủ thông tin và lưu DB luôn
+          final exactCategory = _getValidCategory(
+            aiData['category'],
+            aiData['type'],
+          );
+          final amount = double.tryParse(aiData['amount'].toString()) ?? 0.0;
+
+          final transaction = TransactionModel(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            amount: amount,
+            type: aiData['type'],
+            categoryId: exactCategory,
+            categoryName: exactCategory,
+            transactionDate: DateTime.now(),
+            note: aiData['note'] ?? '',
+          );
+
+          await ref
+              .read(transactionControllerProvider)
+              .createOrUpdateTransaction(transaction);
+
+          String speechReply =
+              aiData['message'] ?? 'Đã lưu giao dịch hoàn tất.';
+          _voiceMessages.add({"role": "ai", "text": speechReply});
+
+          setState(() {
+            _isProcessing = false;
+            _text = speechReply;
+          });
+
+          // Nói thông báo thành công và tắt giao diện sau đó
+          await _speak(speechReply, relisten: false);
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) Navigator.of(context).pop(true);
+          });
+        } else {
+          // TRƯỜNG HỢP 2 & 3: Thiếu thông tin cần hỏi lại hoặc nói chuyện thông thường
+          String speechReply = aiData['message'] ?? 'Mình chưa hiểu ý bạn lắm.';
+          _voiceMessages.add({"role": "ai", "text": speechReply});
+
+          setState(() {
+            _isProcessing = false;
+            _text = speechReply;
+          });
+
+          // THẦN CHÚ: relisten: true -> Sau khi TTS đọc xong câu hỏi, Mic sẽ tự bật lại!
+          await _speak(speechReply, relisten: true);
+        }
+      } else {
+        throw Exception("API Error");
+      }
+    } catch (e) {
+      setState(() {
+        _isProcessing = false;
+        _text = 'Kết nối AI gián đoạn. Thử lại nhé!';
+      });
+      await _speak('Kết nối AI gián đoạn. Thử lại nhé!', relisten: false);
+    }
   }
 
-  CategoryModel? _detectCategory(String normalized, String type) {
-    final categories = type == 'income'
+  String _getValidCategory(String aiCategory, String type) {
+    final list = type == 'income'
         ? CategoryData.getIncomeCategories()
         : CategoryData.getExpenseCategories();
-
-    String? targetName;
-    final mealCategory = _detectMealCategory(normalized);
-    if (mealCategory != null) {
-      targetName = mealCategory;
-    } else if (_containsAny(normalized, const ['ca phe', 'cafe', 'tra sua'])) {
-      targetName = 'Cafe';
-    } else if (_containsAny(normalized, const [
-      'cho',
-      'sieu thi',
-      'rau',
-      'thuc pham',
-    ])) {
-      targetName = 'Đi chợ/Siêu thị';
-    } else if (_containsAny(normalized, const ['xang', 'do xang'])) {
-      targetName = 'Xăng xe';
-    } else if (_containsAny(normalized, const [
-      'grab',
-      'taxi',
-      'xe om',
-      'thue xe',
-    ])) {
-      targetName = 'Taxi/Thuê xe';
-    } else if (_containsAny(normalized, const ['gui xe'])) {
-      targetName = 'Gửi xe';
-    } else if (_containsAny(normalized, const ['dien nuoc', 'tien dien'])) {
-      targetName = 'Điện';
-    } else if (_containsAny(normalized, const [
-      'nuoc sinh hoat',
-      'tien nuoc',
-    ])) {
-      targetName = 'Nước';
-    } else if (_containsAny(normalized, const ['internet', 'wifi'])) {
-      targetName = 'Internet';
-    } else if (_containsAny(normalized, const ['dien thoai', 'nap the'])) {
-      targetName = 'Điện thoại';
-    } else if (_containsAny(normalized, const ['quan ao', 'ao quan'])) {
-      targetName = 'Quần áo';
-    } else if (_containsAny(normalized, const ['giay', 'dep'])) {
-      targetName = 'Giày dép';
-    } else if (_containsAny(normalized, const ['xem phim', 'phim'])) {
-      targetName = 'Phim ảnh';
-    } else if (_containsAny(normalized, const [
-      'giai tri',
-      'vui choi',
-      'karaoke',
-    ])) {
-      targetName = 'Vui chơi giải trí';
-    } else if (_containsAny(normalized, const ['thue nha'])) {
-      targetName = 'Thuê nhà';
-    } else if (_containsAny(normalized, const ['hoc phi'])) {
-      targetName = 'Học phí';
-    } else if (_containsAny(normalized, const ['sach vo', 'mua sach'])) {
-      targetName = 'Sách vở';
-    } else if (_containsAny(normalized, const ['kham benh', 'bac si'])) {
-      targetName = 'Khám chữa bệnh';
-    } else if (_containsAny(normalized, const ['thuoc', 'mua thuoc'])) {
-      targetName = 'Thuốc men';
-    } else if (_containsAny(normalized, const ['the thao', 'gym'])) {
-      targetName = 'Thể thao';
-    } else if (type == 'income' && _containsAny(normalized, const ['luong'])) {
-      targetName = 'Lương';
-    } else if (type == 'income' && _containsAny(normalized, const ['thuong'])) {
-      targetName = 'Thưởng';
-    } else if (type == 'income' &&
-        _containsAny(normalized, const ['lai tiet kiem', 'lai ngan hang'])) {
-      targetName = 'Lãi tiết kiệm';
-    } else if (type == 'income' && _containsAny(normalized, const ['lai'])) {
-      targetName = 'Tiền lãi';
-    } else if (type == 'income' &&
-        _containsAny(normalized, const ['duoc tang', 'duoc cho'])) {
-      targetName = 'Được cho/tặng';
+    for (var cat in list) {
+      if (cat.name.toLowerCase() == aiCategory.toLowerCase()) return cat.name;
     }
-
-    if (targetName != null) {
-      return categories.where((item) => item.name == targetName).firstOrNull;
-    }
-
-    return null;
-  }
-
-  String? _detectMealCategory(String normalized) {
-    if (!_containsAny(normalized, const [
-      'an',
-      'pho',
-      'com',
-      'bun',
-      'mi tom',
-      'banh mi',
-      'do an',
-      'an sang',
-      'an trua',
-      'an toi',
-      'uong',
-    ])) {
-      return null;
-    }
-
-    if (_containsAny(normalized, const ['ca phe', 'cafe', 'tra sua'])) {
-      return null;
-    }
-
-    if (_containsAny(normalized, const ['sang', 'an sang', 'buoi sang'])) {
-      return 'Ăn sáng';
-    }
-    if (_containsAny(normalized, const ['trua', 'an trua', 'buoi trua'])) {
-      return 'Ăn trưa';
-    }
-    if (_containsAny(normalized, const [
-      'toi',
-      'dem',
-      'chieu',
-      'an toi',
-      'buoi toi',
-    ])) {
-      return 'Ăn tối';
-    }
-
-    final hour = DateTime.now().hour;
-    if (hour < 10) {
-      return 'Ăn sáng';
-    }
-    if (hour < 15) {
-      return 'Ăn trưa';
-    }
-    return 'Ăn tối';
-  }
-
-  double? _extractAmount(String normalized) {
-    final matches = RegExp(
-      r'(\d+(?:[.,]\d+)?)\s*(ty|trieu|tr|cu|k|nghin|ngan|dong|vnd)?',
-    ).allMatches(normalized).toList();
-
-    if (matches.isEmpty) {
-      return null;
-    }
-
-    RegExpMatch? selected;
-    for (final match in matches) {
-      final unit = match.group(2) ?? '';
-      if (unit.isNotEmpty) {
-        selected = match;
-      }
-    }
-    selected ??= matches.last;
-
-    final rawNumber = selected.group(1);
-    if (rawNumber == null) {
-      return null;
-    }
-
-    final baseValue = double.tryParse(rawNumber.replaceAll(',', '.'));
-    if (baseValue == null || baseValue <= 0) {
-      return null;
-    }
-
-    final unit = selected.group(2) ?? '';
-    var multiplier = 1.0;
-    if (unit == 'k' || unit == 'nghin' || unit == 'ngan') {
-      multiplier = 1000;
-    } else if (unit == 'tr' || unit == 'trieu' || unit == 'cu') {
-      multiplier = 1000000;
-    } else if (unit == 'ty') {
-      multiplier = 1000000000;
-    }
-
-    return (baseValue * multiplier).roundToDouble();
-  }
-
-  String _buildNote(String original, String? categoryName) {
-    final cleaned = original.trim();
-    if (cleaned.isEmpty) {
-      return categoryName ?? 'Giao dich bang giong noi';
-    }
-    return cleaned[0].toUpperCase() + cleaned.substring(1);
-  }
-
-  String _normalize(String input) {
-    return CategoryData.removeDiacritics(input).toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
-  }
-
-  bool _containsAny(String input, List<String> keywords) {
-    for (final keyword in keywords) {
-      if (input.contains(keyword)) {
-        return true;
-      }
-    }
-    return false;
+    return list.isNotEmpty ? list.first.name : 'Khác';
   }
 
   @override
   Widget build(BuildContext context) {
+    // Giữ nguyên giao diện UI đẹp đẽ của bạn
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: const BoxDecoration(
@@ -639,107 +347,64 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
         children: [
           Text(
             _isProcessing
-                ? 'Dang xu ly...'
-                : (_isInitializingSpeech
-                      ? 'Dang khoi tao micro...'
-                      : (_isListening ? 'Dang nghe...' : 'Tro ly giong noi')),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: _isProcessing
-                ? Colors.grey.withValues(alpha: 0.2)
+                ? 'AI đang suy nghĩ...'
                 : (_isListening
-                      ? Colors.red.withValues(alpha: 0.2)
-                      : Colors.blue.withValues(alpha: 0.1)),
+                      ? 'Đang nghe bạn nói...'
+                      : 'Trợ lý giọng nói AI'),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1D4ED8),
+            ),
+          ),
+          const SizedBox(height: 25),
+          CircleAvatar(
+            radius: 42,
+            backgroundColor: _isProcessing
+                ? Colors.grey.withOpacity(0.1)
+                : (_isListening
+                      ? Colors.red.withOpacity(0.15)
+                      : const Color(0xFF8B3DFF).withOpacity(0.1)),
             child: IconButton(
-              iconSize: 40,
-              icon: (_isProcessing || _isInitializingSpeech)
+              iconSize: 44,
+              icon: _isProcessing
                   ? const SizedBox(
                       width: 28,
                       height: 28,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Color(0xFF8B3DFF),
+                      ),
                     )
                   : Icon(
                       _isListening ? Icons.mic : Icons.mic_none,
-                      color: _isListening ? Colors.red : Colors.blue,
+                      color: _isListening
+                          ? Colors.red
+                          : const Color(0xFF8B3DFF),
                     ),
-              onPressed: (_isProcessing || _isInitializingSpeech)
-                  ? null
-                  : _listen,
+              onPressed: _isProcessing ? null : _listen,
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            _text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          if (_pendingDraft != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Dang cho so tien cho muc ${_pendingDraft!.categoryName}',
+          const SizedBox(height: 25),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F5FF),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              _text,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: Color(0xFF334155),
+                fontWeight: FontWeight.w500,
+                height: 1.4,
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
   }
-}
-
-class _PendingDraft {
-  const _PendingDraft({
-    required this.type,
-    required this.categoryName,
-    required this.note,
-  });
-
-  final String type;
-  final String categoryName;
-  final String note;
-}
-
-class _ParsedVoiceCommand {
-  const _ParsedVoiceCommand._({
-    required this.canSave,
-    required this.message,
-    this.amount,
-    this.type = 'expense',
-    this.categoryName = '',
-    this.note = '',
-    this.relisten = false,
-  });
-
-  const _ParsedVoiceCommand.message(String message, {bool relisten = false})
-    : this._(canSave: false, message: message, relisten: relisten);
-
-  const _ParsedVoiceCommand.save({
-    required double amount,
-    required String type,
-    required String categoryName,
-    required String note,
-    required String message,
-  }) : this._(
-         canSave: true,
-         amount: amount,
-         type: type,
-         categoryName: categoryName,
-         note: note,
-         message: message,
-       );
-
-  final bool canSave;
-  final double? amount;
-  final String type;
-  final String categoryName;
-  final String note;
-  final String message;
-  final bool relisten;
 }

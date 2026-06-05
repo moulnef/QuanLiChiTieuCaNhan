@@ -131,6 +131,7 @@ class FinanceProvider extends ChangeNotifier {
         effectiveUserId,
       );
       var debts = await _repository.getDebtsByUserId(effectiveUserId);
+      final transactions = await _repository.getAllTransactionsByUserId(effectiveUserId);
 
       _savings
         ..clear()
@@ -142,6 +143,7 @@ class FinanceProvider extends ChangeNotifier {
         ..clear()
         ..addAll(debts);
 
+      _applyFinancialSummary(transactions);
       _updateFinancialBalance();
 
       // Trigger notifications check
@@ -165,6 +167,7 @@ class FinanceProvider extends ChangeNotifier {
       var savings = await _repository.getSavingsByUserId(userId);
       var installments = await _repository.getInstallmentsByUserId(userId);
       var debts = await _repository.getDebtsByUserId(userId);
+      final transactions = await _repository.getAllTransactionsByUserId(userId);
 
       _savings
         ..clear()
@@ -176,6 +179,7 @@ class FinanceProvider extends ChangeNotifier {
         ..clear()
         ..addAll(debts);
 
+      _applyFinancialSummary(transactions);
       _updateFinancialBalance();
       notifyListeners();
 
@@ -506,6 +510,7 @@ class FinanceProvider extends ChangeNotifier {
   Future<void> deleteSavingGoal(String id) async {
     try {
       await _repository.deleteSavingGoal(_activeUserId, id);
+      _savings.removeWhere((e) => e.id.toString() == id || e.id == int.tryParse(id));
       await loadFinanceData(_activeUserId);
       SyncService().triggerImmediateSync();
     } catch (e) {
@@ -550,6 +555,7 @@ class FinanceProvider extends ChangeNotifier {
   Future<void> deleteInstallment(String id) async {
     try {
       await _repository.deleteInstallmentPlan(_activeUserId, id);
+      _installments.removeWhere((e) => e.id.toString() == id || e.id == int.tryParse(id));
       await loadFinanceData(_activeUserId);
       SyncService().triggerImmediateSync();
     } catch (e) {
@@ -572,6 +578,7 @@ class FinanceProvider extends ChangeNotifier {
   Future<void> deleteDebt(String id) async {
     try {
       await _repository.deleteDebtRecord(_activeUserId, id);
+      _debts.removeWhere((e) => e.id.toString() == id || e.id == int.tryParse(id));
       await loadFinanceData(_activeUserId);
       SyncService().triggerImmediateSync();
     } catch (e) {
