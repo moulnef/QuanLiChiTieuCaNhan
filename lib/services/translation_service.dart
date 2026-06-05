@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:translator/translator.dart';
 
-class TranslationService {
+class TranslationService extends ChangeNotifier {
   TranslationService._();
 
   static final TranslationService instance = TranslationService._();
@@ -17,6 +18,7 @@ class TranslationService {
 
   final GoogleTranslator _translator = GoogleTranslator();
   final Map<String, _CacheEntry> _cache = {};
+  final Set<String> _pendingKeys = {};
 
   Future<void>? _cacheLoadFuture;
   Future<void> _persistQueue = Future.value();
@@ -93,6 +95,7 @@ class TranslationService {
 
   Future<void> clearCache() async {
     _cache.clear();
+    _pendingKeys.clear();
     _persistQueue = _persistQueue.then((_) async {
       final file = await _cacheFile();
       if (await file.exists()) {
@@ -100,11 +103,69 @@ class TranslationService {
       }
     });
     await _persistQueue;
+    notifyListeners();
+  }
+
+  String translateCachedOrQueue({
+    required String sourceText,
+    required String targetLanguageCode,
+  }) {
+    final normalizedSource = sourceText.trim();
+    if (_shouldSkipTranslation(normalizedSource, targetLanguageCode)) {
+      return sourceText;
+    }
+
+    final cacheKey = _buildCacheKey(targetLanguageCode, normalizedSource);
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired(_cacheTtl)) {
+      return cached.text;
+    }
+
+    _queueTranslation(
+      cacheKey: cacheKey,
+      sourceText: normalizedSource,
+      targetLanguageCode: targetLanguageCode,
+    );
+    return sourceText;
   }
 
   Future<void> _ensureCacheLoaded() async {
     _cacheLoadFuture ??= _loadCacheFromDisk();
     await _cacheLoadFuture;
+  }
+
+  void _queueTranslation({
+    required String cacheKey,
+    required String sourceText,
+    required String targetLanguageCode,
+  }) {
+    if (_pendingKeys.contains(cacheKey)) {
+      return;
+    }
+
+    _pendingKeys.add(cacheKey);
+    unawaited(
+      (() async {
+        try {
+          await _ensureCacheLoaded();
+          final cached = _cache[cacheKey];
+          if (cached != null && !cached.isExpired(_cacheTtl)) {
+            return;
+          }
+
+          final translated = await translate(
+            sourceText: sourceText,
+            targetLanguageCode: targetLanguageCode,
+          );
+
+          if (translated.trim().isNotEmpty && translated.trim() != sourceText) {
+            notifyListeners();
+          }
+        } finally {
+          _pendingKeys.remove(cacheKey);
+        }
+      })(),
+    );
   }
 
   Future<void> _loadCacheFromDisk() async {

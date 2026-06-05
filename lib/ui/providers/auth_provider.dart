@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/login_tutorial_service.dart';
 import '../../services/sync_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -77,7 +78,33 @@ class AuthProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<void> signOut() => _authService.signOut();
+  Future<String?> sendPasswordResetEmail(String email) async {
+    try {
+      await _authService.sendPasswordResetEmail(email);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        return 'Không tìm thấy tài khoản này.';
+      }
+      if (e.code == 'invalid-email') {
+        return 'Email không hợp lệ.';
+      }
+      if (e.code == 'too-many-requests') {
+        return 'Bạn thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.';
+      }
+      return e.message ?? 'Không thể gửi email đặt lại mật khẩu.';
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<void> signOut() async {
+    final userId = _currentUser?.uid;
+    if (userId != null) {
+      await LoginTutorialService.resetForUser(userId);
+    }
+    await _authService.signOut();
+  }
 
   @override
   void dispose() {

@@ -8,6 +8,7 @@ import '../../domain/model/category_model.dart';
 import '../../domain/model/saving.dart';
 import '../../domain/model/debt_record.dart';
 import '../../domain/model/installment_plan.dart';
+import '../../domain/model/app_feedback.dart';
 
 class FirestoreException implements Exception {
   final String message;
@@ -43,6 +44,7 @@ class FirestoreService {
   CollectionReference _debtsRef() => _userDocRef().collection('debts');
   CollectionReference _installmentsRef() =>
       _userDocRef().collection('installments');
+  CollectionReference _feedbacksRef() => _userDocRef().collection('feedbacks');
 
   // ==================== 1. WALLET CRUD ====================
 
@@ -724,7 +726,27 @@ class FirestoreService {
     }
   }
 
-  // ==================== 9. BATCH SYNC ENGINE WRITE ====================
+  // ==================== 9. APP FEEDBACK ====================
+
+  Future<void> addFeedback(AppFeedback feedback) async {
+    try {
+      final docId = feedback.id.isNotEmpty
+          ? feedback.id
+          : _feedbacksRef().doc().id;
+      final docRef = _feedbacksRef().doc(docId);
+      final normalized = feedback.copyWith(
+        id: docId,
+        userId: userId,
+        updatedAt: DateTime.now(),
+      );
+      await docRef.set(normalized.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      print("Lỗi addFeedback: $e");
+      throw FirestoreException("Không thể gửi đánh giá ứng dụng: $e", e);
+    }
+  }
+
+  // ==================== 10. BATCH SYNC ENGINE WRITE ====================
 
   Future<void> batchWrite({
     List<TransactionModel>? transactions,

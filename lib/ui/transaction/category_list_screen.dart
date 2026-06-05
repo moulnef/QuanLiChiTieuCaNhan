@@ -36,27 +36,36 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   Future<void> _loadRealFrequentCategories() async {
     try {
       final controller = ref.read(transactionControllerProvider);
-      if (controller.transactions.isEmpty) await controller.fetchAllTransactions();
+      if (controller.transactions.isEmpty)
+        await controller.fetchAllTransactions();
 
-      final filteredTransactions = controller.transactions.where((tx) => tx.type == widget.transactionType).toList();
+      final filteredTransactions = controller.transactions
+          .where((tx) => tx.type == widget.transactionType)
+          .toList();
 
       Map<String, int> counts = {};
       for (var tx in filteredTransactions) {
         counts[tx.categoryId] = (counts[tx.categoryId] ?? 0) + 1;
       }
 
-      var sortedEntries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      var sortedEntries = counts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
       var topIds = sortedEntries.take(4).map((e) => e.key).toList();
 
       List<CategoryModel> topCategories = [];
       for (var id in topIds) {
-        var match = _allCategories.where((cat) => cat.name == id).firstOrNull;
+        final match = CategoryData.findByIdOrName(id);
         if (match != null) topCategories.add(match);
       }
 
-      if (topCategories.isEmpty) topCategories = _allCategories.take(4).toList();
+      if (topCategories.isEmpty)
+        topCategories = _allCategories.take(4).toList();
 
-      if (mounted) setState(() { _frequentCategories = topCategories; _isLoadingFrequent = false; });
+      if (mounted)
+        setState(() {
+          _frequentCategories = topCategories;
+          _isLoadingFrequent = false;
+        });
     } catch (e) {
       if (mounted) setState(() => _isLoadingFrequent = false);
     }
@@ -69,24 +78,38 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredList = _allCategories.where((cat) => cat.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final filteredList = _allCategories
+        .where(
+          (cat) => cat.name.toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
+        .toList();
 
     Map<String, List<CategoryModel>> groupedCategories = {};
     for (var cat in filteredList) {
-      String groupName = cat.group ?? "Khác";
-      if (!groupedCategories.containsKey(groupName)) groupedCategories[groupName] = [];
+      String groupName = CategoryData.normalizeLabel(
+        cat.group ?? '\u004b\u0068\u00e1\u0063',
+      );
+      if (!groupedCategories.containsKey(groupName))
+        groupedCategories[groupName] = [];
       groupedCategories[groupName]!.add(cat);
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F5FF), // Nền Galaxy nhạt
+      backgroundColor: const Color(0xFFF0F5FF),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         title: Text(
-            widget.transactionType == 'expense' ? "Chọn hạng mục chi" : "Chọn hạng mục thu",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, letterSpacing: 0.5)
+          widget.transactionType == 'expense'
+              ? '\u0043\u0068\u1ecd\u006e \u0068\u1ea1\u006e\u0067 \u006d\u1ee5\u0063 \u0063\u0068\u0069'
+              : '\u0043\u0068\u1ecd\u006e \u0068\u1ea1\u006e\u0067 \u006d\u1ee5\u0063 \u0074\u0068\u0075',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         flexibleSpace: Container(
@@ -96,7 +119,10 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
+            ),
           ),
         ),
       ),
@@ -112,7 +138,10 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
                   children: [
                     const SizedBox(height: 16),
                     if (_searchQuery.isEmpty) _buildFrequentSection(),
-                    ...groupedCategories.keys.map((group) => _buildGroupSection(group, groupedCategories[group]!)),
+                    ...groupedCategories.keys.map(
+                      (group) =>
+                          _buildGroupSection(group, groupedCategories[group]!),
+                    ),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -132,13 +161,23 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: TextField(
           onChanged: (v) => setState(() => _searchQuery = v),
-          style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500),
+          style: const TextStyle(
+            color: Color(0xFF1E293B),
+            fontWeight: FontWeight.w500,
+          ),
           decoration: const InputDecoration(
-            hintText: "Tìm kiếm theo tên hạng mục",
+            hintText:
+                '\u0054\u00ec\u006d \u006b\u0069\u1ebf\u006d \u0074\u0068\u0065\u006f \u0074\u00ea\u006e \u0068\u1ea1\u006e\u0067 \u006d\u1ee5\u0063',
             hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
             prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF6D28D9)),
             border: InputBorder.none,
@@ -157,7 +196,13 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,18 +211,32 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
             children: [
               Icon(Icons.favorite_rounded, color: Color(0xFFEF4444), size: 22),
               SizedBox(width: 8),
-              Text("Hay dùng", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              Text(
+                '\u0048\u0061\u0079 \u0064\u00f9\u006e\u0067',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           _isLoadingFrequent
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6D28D9)))
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF6D28D9),
+                  ),
+                )
               : Wrap(
-            alignment: WrapAlignment.start,
-            spacing: 0,
-            runSpacing: 16,
-            children: _frequentCategories.map((cat) => _buildGridItem(cat)).toList(),
-          ),
+                  alignment: WrapAlignment.start,
+                  spacing: 0,
+                  runSpacing: 16,
+                  children: _frequentCategories
+                      .map((cat) => _buildGridItem(cat))
+                      .toList(),
+                ),
         ],
       ),
     );
@@ -191,7 +250,13 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,13 +265,24 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
-                child: Icon(_getGroupIcon(name), color: const Color(0xFF64748B), size: 18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _getGroupIcon(name),
+                  color: const Color(0xFF64748B),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               Text(
                 _capitalizeFirstLetter(name),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ],
           ),
@@ -223,15 +299,22 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   }
 
   Widget _buildGridItem(CategoryModel cat) {
-    bool isSelected = cat.name == widget.selectedCategoryName;
+    final selectedValue = widget.selectedCategoryName ?? '';
+    bool isSelected = cat.id == selectedValue || cat.name == selectedValue;
 
     return Theme(
-      data: Theme.of(context).copyWith(hoverColor: Colors.transparent, highlightColor: const Color(0xFFF0F5FF), splashColor: Colors.transparent),
+      data: Theme.of(context).copyWith(
+        hoverColor: Colors.transparent,
+        highlightColor: const Color(0xFFF0F5FF),
+        splashColor: Colors.transparent,
+      ),
       child: InkWell(
         onTap: () => Navigator.pop(context, cat),
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
-          width: (MediaQuery.of(context).size.width - 72) / 4, // Chia 4 cột đều nhau, trừ padding
+          width:
+              (MediaQuery.of(context).size.width - 72) /
+              4, // Chia 4 cá»™t Ä‘á»u nhau, trá»« padding
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -239,7 +322,8 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
                 alignment: Alignment.bottomRight,
                 children: [
                   Container(
-                    width: 48, height: 48,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: cat.color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(16),
@@ -249,12 +333,18 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
                   if (isSelected)
                     Container(
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)]),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                        ),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       padding: const EdgeInsets.all(2),
-                      child: const Icon(Icons.check, color: Colors.white, size: 12),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.white,
+                        size: 12,
+                      ),
                     ),
                 ],
               ),
@@ -262,13 +352,17 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: Text(
-                    cat.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF334155),
-                    ),
-                    textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis
+                  cat.name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected
+                        ? const Color(0xFF6D28D9)
+                        : const Color(0xFF334155),
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -278,29 +372,41 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
     );
   }
 
-  // ĐÃ CẬP NHẬT: Bổ sung icon cho tất cả các nhóm hạng mục
+  // ÄÃƒ Cáº¬P NHáº¬T: Bá»• sung icon cho táº¥t cáº£ cÃ¡c nhÃ³m háº¡ng má»¥c
   IconData _getGroupIcon(String groupName) {
     String lowerGroup = groupName.toLowerCase();
 
-    // --- Các nhóm Chi tiêu ---
-    if (lowerGroup.contains('ăn')) return Icons.restaurant_menu_rounded;
-    if (lowerGroup.contains('dịch vụ') || lowerGroup.contains('sinh hoạt')) return Icons.electrical_services_rounded;
-    if (lowerGroup.contains('di chuyển') || lowerGroup.contains('đi lại')) return Icons.directions_car_rounded;
-    if (lowerGroup.contains('trang phục') || lowerGroup.contains('mua sắm')) return Icons.checkroom_rounded;
-    if (lowerGroup.contains('hưởng thụ') || lowerGroup.contains('giải trí')) return Icons.celebration_rounded;
-    if (lowerGroup.contains('con cái')) return Icons.child_care_rounded;
-    if (lowerGroup.contains('hiếu hỉ') || lowerGroup.contains('biếu tặng')) return Icons.card_giftcard_rounded;
-    if (lowerGroup.contains('nhà cửa')) return Icons.home_rounded;
-    if (lowerGroup.contains('phát triển') || lowerGroup.contains('học')) return Icons.psychology_rounded;
-    if (lowerGroup.contains('sức khỏe') || lowerGroup.contains('y tế')) return Icons.medical_services_rounded;
-    if (lowerGroup.contains('ngân hàng')) return Icons.account_balance_rounded;
-    if (lowerGroup.contains('vay') || lowerGroup.contains('nợ')) return Icons.credit_score_rounded;
+    // --- CÃ¡c nhÃ³m Chi tiÃªu ---
+    if (lowerGroup.contains('Äƒn')) return Icons.restaurant_menu_rounded;
+    if (lowerGroup.contains('dá»‹ch vá»¥') ||
+        lowerGroup.contains('sinh hoáº¡t'))
+      return Icons.electrical_services_rounded;
+    if (lowerGroup.contains('di chuyá»ƒn') || lowerGroup.contains('Ä‘i láº¡i'))
+      return Icons.directions_car_rounded;
+    if (lowerGroup.contains('trang phá»¥c') || lowerGroup.contains('mua sáº¯m'))
+      return Icons.checkroom_rounded;
+    if (lowerGroup.contains('hÆ°á»Ÿng thá»¥') ||
+        lowerGroup.contains('giáº£i trÃ­'))
+      return Icons.celebration_rounded;
+    if (lowerGroup.contains('con cÃ¡i')) return Icons.child_care_rounded;
+    if (lowerGroup.contains('hiáº¿u há»‰') ||
+        lowerGroup.contains('biáº¿u táº·ng'))
+      return Icons.card_giftcard_rounded;
+    if (lowerGroup.contains('nhÃ  cá»­a')) return Icons.home_rounded;
+    if (lowerGroup.contains('phÃ¡t triá»ƒn') || lowerGroup.contains('há»c'))
+      return Icons.psychology_rounded;
+    if (lowerGroup.contains('sá»©c khá»e') || lowerGroup.contains('y táº¿'))
+      return Icons.medical_services_rounded;
+    if (lowerGroup.contains('ngÃ¢n hÃ ng'))
+      return Icons.account_balance_rounded;
+    if (lowerGroup.contains('vay') || lowerGroup.contains('ná»£'))
+      return Icons.credit_score_rounded;
 
-    // --- Các nhóm Thu nhập ---
-    if (lowerGroup.contains('thu nhập')) return Icons.monetization_on_rounded;
-    if (lowerGroup.contains('đầu tư')) return Icons.trending_up_rounded;
+    // --- CÃ¡c nhÃ³m Thu nháº­p ---
+    if (lowerGroup.contains('thu nháº­p')) return Icons.monetization_on_rounded;
+    if (lowerGroup.contains('Ä‘áº§u tÆ°')) return Icons.trending_up_rounded;
 
-    // Mặc định cho nhóm "Khác"
+    // Máº·c Ä‘á»‹nh cho nhÃ³m "KhÃ¡c"
     return Icons.category_rounded;
   }
 }

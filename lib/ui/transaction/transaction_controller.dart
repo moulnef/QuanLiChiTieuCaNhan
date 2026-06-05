@@ -1,84 +1,101 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // 💡 ĐÃ SỬA: Chỉ cần import gói chính này
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/transaction_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/services/notification_service.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/services/sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-// Đảm bảo đường dẫn import đúng với cấu trúc dự án của bạn
-import '../../domain/model/transaction_model.dart';
-import '../../data/repository/transaction_repository.dart';
-import '../../services/sync_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TransactionController extends ChangeNotifier {
-  static const String _demoUserId = 'user_001';
-
   final TransactionRepository _repository = TransactionRepository();
   List<TransactionModel> transactions = [];
 
-  String _resolveUserId() {
+  String? _resolveUserId() {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid != null && currentUid.isNotEmpty) {
-      return currentUid;
+    if (currentUid == null || currentUid.isEmpty) {
+      return null;
     }
-    return _demoUserId;
+    return currentUid;
   }
 
-  // 1. LẤY DANH SÁCH GIAO DỊCH
   Future<void> fetchAllTransactions([String? userId]) async {
     try {
       final effectiveUserId = userId ?? _resolveUserId();
+      if (effectiveUserId == null) {
+        transactions = [];
+        notifyListeners();
+        return;
+      }
+
       transactions = await _repository.getTransactions(effectiveUserId);
-      notifyListeners(); // Thông báo cho UI cập nhật lại danh sách
+      notifyListeners();
     } catch (e) {
-      debugPrint("Lỗi khi lấy danh sách: $e");
+      debugPrint('Lỗi khi lấy danh sách giao dịch: $e');
     }
   }
 
-  // 2. KIỂM TRA TÍNH HỢP LỆ (Validation)
   String? checkValidation(
     double amount,
     String categoryId,
     String type,
     String? person,
   ) {
-    if (amount <= 0) return "Số tiền không được để trống hoặc bằng 0.";
-    if (categoryId.isEmpty) return "Hạng mục không được để trống.";
+    if (amount <= 0) {
+      return 'Số tiền không được để trống hoặc bằng 0.';
+    }
+    if (categoryId.isEmpty) {
+      return 'Hạng mục không được để trống.';
+    }
     if ((type == 'borrow' || type == 'lend') &&
         (person == null || person.isEmpty)) {
-      return "Người tham gia giao dịch không được để trống.";
+      return 'Người tham gia giao dịch không được để trống.';
     }
     return null;
   }
 
-  // 3. THÊM HOẶC CẬP NHẬT GIAO DỊCH
   Future<void> createOrUpdateTransaction(TransactionModel tx) async {
     try {
       final effectiveUserId = _resolveUserId();
-      final normalizedTx = tx.copyWith(userId: effectiveUserId);
+      if (effectiveUserId == null) {
+        throw StateError('Người dùng chưa đăng nhập.');
+      }
+
+      final now = DateTime.now();
+      final normalizedTx = tx.copyWith(
+        id: tx.id.isNotEmpty ? tx.id : now.millisecondsSinceEpoch.toString(),
+        userId: effectiveUserId,
+        updatedAt: now,
+      );
       await _repository.addTransaction(normalizedTx, effectiveUserId);
-      SyncService().triggerImmediateSync();
-      await fetchAllTransactions(
+      await NotificationService.instance.notifyTransactionRecorded(
         effectiveUserId,
-      ); // Cập nhật lại dữ liệu mới nhất
+        normalizedTx,
+      );
+      SyncService().triggerImmediateSync();
+      await fetchAllTransactions(effectiveUserId);
     } catch (e) {
-      debugPrint("Lỗi khi lưu giao dịch: $e");
+      debugPrint('Lỗi khi lưu giao dịch: $e');
       rethrow;
     }
   }
 
-  // 4. XÓA GIAO DỊCH
   Future<void> deleteTransaction(String transactionId) async {
     try {
       final effectiveUserId = _resolveUserId();
+      if (effectiveUserId == null) {
+        throw StateError('Người dùng chưa đăng nhập.');
+      }
+
       await _repository.deleteTransaction(transactionId, effectiveUserId);
       SyncService().triggerImmediateSync();
       await fetchAllTransactions(effectiveUserId);
     } catch (e) {
-      debugPrint("Lỗi khi xóa giao dịch: $e");
+      debugPrint('Lỗi khi xóa giao dịch: $e');
       rethrow;
     }
   }
 }
 
-// 💡 ĐÃ VÁ: Khai báo Provider sử dụng gói flutter_riverpod chuẩn
 final transactionControllerProvider =
     ChangeNotifierProvider<TransactionController>((ref) {
       return TransactionController();

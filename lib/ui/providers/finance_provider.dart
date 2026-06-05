@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -64,6 +65,8 @@ class FinanceProvider extends ChangeNotifier {
 
   Future<void> refreshFinancialSummary(String userId) async {
     _log('refreshFinancialSummary start userId=$userId at ${DateTime.now()}');
+    _activeUserId = userId;
+    _listenToTransactionChanges(userId);
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -125,6 +128,7 @@ class FinanceProvider extends ChangeNotifier {
         effectiveUserId = _demoUserId;
       }
       _activeUserId = effectiveUserId;
+      _listenToTransactionChanges(effectiveUserId);
 
       var savings = await _repository.getSavingsByUserId(effectiveUserId);
       var installments = await _repository.getInstallmentsByUserId(
@@ -593,9 +597,26 @@ class FinanceProvider extends ChangeNotifier {
 
   void _updateFinancialBalance() {
     _totalBalance =
+        cashBalance +
         totalSavingAmount.toDouble() -
         totalInstallmentRemaining.toDouble() -
         totalDebtRemaining.toDouble();
+  }
+
+  StreamSubscription? _transactionSubscription;
+
+  void _listenToTransactionChanges(String userId) {
+    _transactionSubscription?.cancel();
+    _transactionSubscription = _repository.watchTransactions(userId).listen((_) {
+      _log('Transaction changed stream fired. Refreshing summary silently...');
+      refreshFinancialSummary(userId);
+    });
+  }
+
+  @override
+  void dispose() {
+    _transactionSubscription?.cancel();
+    super.dispose();
   }
 }
 

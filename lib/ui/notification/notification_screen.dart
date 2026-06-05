@@ -39,12 +39,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   IconData _getIconData(NotificationType type) {
     switch (type) {
+      case NotificationType.transactionIncome:
+        return Icons.south_west_rounded;
+      case NotificationType.transactionExpense:
+        return Icons.north_east_rounded;
       case NotificationType.savingLow:
         return Icons.savings_rounded;
       case NotificationType.budgetNearLimit:
         return Icons.warning_amber_rounded;
       case NotificationType.budgetExceeded:
         return Icons.error_outline_rounded;
+      case NotificationType.budgetNegative:
+        return Icons.money_off_csred_rounded;
       case NotificationType.monthlyOverspend:
         return Icons.trending_up_rounded;
       case NotificationType.debtDueSoon:
@@ -56,12 +62,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Color _getIconColor(NotificationType type) {
     switch (type) {
+      case NotificationType.transactionIncome:
+        return const Color(0xFF16A34A); // green
+      case NotificationType.transactionExpense:
+        return const Color(0xFF2563EB); // blue
       case NotificationType.savingLow:
         return const Color(0xFF10B981); // green
       case NotificationType.budgetNearLimit:
         return const Color(0xFFF59E0B); // orange
       case NotificationType.budgetExceeded:
         return const Color(0xFFEF4444); // red
+      case NotificationType.budgetNegative:
+        return const Color(0xFFDC2626); // red
       case NotificationType.monthlyOverspend:
         return const Color(0xFFEF4444); // red
       case NotificationType.debtDueSoon:
@@ -72,7 +84,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Color _getIconBgColor(NotificationType type) {
-    return _getIconColor(type).withOpacity(0.1);
+    return _getIconColor(type).withValues(alpha: 0.1);
   }
 
   @override
@@ -101,7 +113,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
               if (provider.unreadCount == 0) return const SizedBox.shrink();
               return TextButton.icon(
                 onPressed: () => provider.markAllAsRead(),
-                icon: const Icon(Icons.done_all_rounded, size: 18, color: primary),
+                icon: const Icon(
+                  Icons.done_all_rounded,
+                  size: 18,
+                  color: primary,
+                ),
                 label: const Text(
                   'Đọc tất cả',
                   style: TextStyle(
@@ -165,8 +181,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       }
                     },
                     child: Container(
-                      color: item.isRead ? Colors.white : const Color(0xFFEFF6FF), // blue-ish highlight
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      color: item.isRead
+                          ? Colors.white
+                          : const Color(0xFFEFF6FF), // blue-ish highlight
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -190,7 +211,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
@@ -270,10 +292,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 color: Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(
-                    color: Color(0xFFE2E8F0),
-                    blurRadius: 20,
-                  ),
+                  BoxShadow(color: Color(0xFFE2E8F0), blurRadius: 20),
                 ],
               ),
               child: const Icon(

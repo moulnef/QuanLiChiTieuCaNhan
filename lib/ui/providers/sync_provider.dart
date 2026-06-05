@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../services/sync_service.dart';
 
 class SyncProvider extends ChangeNotifier {
@@ -54,7 +55,8 @@ class SyncProvider extends ChangeNotifier {
       _pendingCount = 0;
       return;
     }
-    _pendingCount = await _syncService.getPendingCount();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    _pendingCount = await _syncService.getPendingCount(currentUid);
     notifyListeners();
   }
 

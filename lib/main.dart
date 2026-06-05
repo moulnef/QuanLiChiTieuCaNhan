@@ -9,6 +9,7 @@ import 'package:provider/provider.dart' as provider;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/config/firebase_options.dart';
 import 'data/repository/finance_repository.dart';
+import 'services/translation_service.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/home/main_screen.dart';
 import 'ui/providers/auth_provider.dart';
@@ -90,35 +91,39 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Quản Lý Chi Tiêu AI',
-      debugShowCheckedModeBanner: false,
+    return AnimatedBuilder(
+      animation: TranslationService.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Quản Lý Chi Tiêu AI',
+          debugShowCheckedModeBanner: false,
 
-      // --- CẤU HÌNH ĐA NGÔN NGỮ (BẮT BUỘC) ---
-      localizationsDelegates: context.localizationDelegates,
-      supportedLocales: context.supportedLocales,
-      locale: context.locale,
+          localizationsDelegates: context.localizationDelegates,
+          supportedLocales: context.supportedLocales,
+          locale: context.locale,
 
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
-        useMaterial3: true,
-      ),
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
+            useMaterial3: true,
+          ),
 
-      home: provider.Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          if (authProvider.isLoading) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+          home: provider.Consumer<AuthProvider>(
+            builder: (context, authProvider, _) {
+              if (authProvider.isLoading) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
 
-          if (!authProvider.isAuthenticated) {
-            return const LoginPage();
-          }
+              if (!authProvider.isAuthenticated) {
+                return const LoginPage();
+              }
 
-          return const MainScreen();
-        },
-      ),
+              return const MainScreen();
+            },
+          ),
+        );
+      },
     );
   }
 }

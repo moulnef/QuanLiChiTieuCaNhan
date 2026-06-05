@@ -1,1 +1,1 @@
-export 'screens/admin_dashboard.dart';
+export 'screens/admin_console_page.dart';

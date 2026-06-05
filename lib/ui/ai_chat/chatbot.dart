@@ -22,8 +22,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
 
-  // ĐIỀN TOKEN MỚI VÀO ĐÂY VÀ GIỮ NGUYÊN CÁCH CỘNG CHUỖI NÀY
-  final String githubToken = 'ghp_' '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
+  final String githubToken = 'ghp_' 'Y3HGjCGAOh7ws2UMD2lqM6INtSysqW4AhqMJ';
   final formatCurrency = NumberFormat('#,###', 'vi_VN');
 
   @override

@@ -17,6 +17,7 @@ import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/debt_record.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/installment_plan.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/wallet_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/app_feedback.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/remote/firestore_service.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/providers/finance_provider.dart';
 
@@ -29,7 +30,7 @@ class FinanceRepository {
   final DatabaseHelper _databaseHelper;
   final FirestoreService _firestoreService = FirestoreService();
   final Map<String, Set<String>> _tableColumnsCache = {};
-  
+
   static final StreamController<String> _transactionChangeController =
       StreamController<String>.broadcast();
 
@@ -49,8 +50,9 @@ class FinanceRepository {
   Future<bool> _isOnline() async {
     if (kIsWeb) return true;
     try {
-      final result = await InternetAddress.lookup('example.com')
-          .timeout(const Duration(seconds: 2));
+      final result = await InternetAddress.lookup(
+        'example.com',
+      ).timeout(const Duration(seconds: 2));
       return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
     } catch (_) {
       return false;
@@ -231,13 +233,22 @@ class FinanceRepository {
   ) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      return list.where((t) => t.transactionDate.isAfter(start.subtract(const Duration(seconds: 1))) && t.transactionDate.isBefore(end.add(const Duration(seconds: 1)))).toList();
+      return list
+          .where(
+            (t) =>
+                (t.userId.isEmpty || t.userId == userId) &&
+                t.transactionDate.isAfter(
+                  start.subtract(const Duration(seconds: 1)),
+                ) &&
+                t.transactionDate.isBefore(end.add(const Duration(seconds: 1))),
+          )
+          .toList();
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
     final rows = await db.rawQuery(
-      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
+      'SELECT * FROM transactions WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
       'AND datetime($dateColumn) >= datetime(?) AND datetime($dateColumn) <= datetime(?) '
       'ORDER BY datetime($dateColumn) DESC',
       [userId, start.toIso8601String(), end.toIso8601String()],
@@ -252,7 +263,14 @@ class FinanceRepository {
   ) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      final monthly = list.where((t) => t.transactionDate.month == month && t.transactionDate.year == year).toList();
+      final monthly = list
+          .where(
+            (t) =>
+                (t.userId.isEmpty || t.userId == userId) &&
+                t.transactionDate.month == month &&
+                t.transactionDate.year == year,
+          )
+          .toList();
       double income = 0;
       double expense = 0;
       for (final t in monthly) {
@@ -269,9 +287,9 @@ class FinanceRepository {
       };
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
-    
+
     final monthStr = month.toString().padLeft(2, '0');
     final yearStr = year.toString();
 
@@ -281,15 +299,17 @@ class FinanceRepository {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
       FROM transactions
-      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)
       AND strftime('%m', $dateColumn) = ?
       AND strftime('%Y', $dateColumn) = ?
       ''',
       [userId, monthStr, yearStr],
     );
 
-    final totalIncome = (result.first['totalIncome'] as num?)?.toDouble() ?? 0.0;
-    final totalExpense = (result.first['totalExpense'] as num?)?.toDouble() ?? 0.0;
+    final totalIncome =
+        (result.first['totalIncome'] as num?)?.toDouble() ?? 0.0;
+    final totalExpense =
+        (result.first['totalExpense'] as num?)?.toDouble() ?? 0.0;
 
     return {
       'income': totalIncome,
@@ -305,17 +325,22 @@ class FinanceRepository {
   ) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      final filtered = list.where((t) => 
-        !t.isDeleted && 
-        t.transactionDate.month == month && 
-        t.transactionDate.year == year
-      ).toList();
+      final filtered = list
+          .where(
+            (t) =>
+                !t.isDeleted &&
+                (t.userId.isEmpty || t.userId == userId) &&
+                t.transactionDate.month == month &&
+                t.transactionDate.year == year,
+          )
+          .toList();
 
       final groups = <String, Map<String, dynamic>>{};
       for (final t in filtered) {
         final key = '${t.categoryId}_${t.type}';
         if (groups.containsKey(key)) {
-          groups[key]!['totalAmount'] = (groups[key]!['totalAmount'] as double) + t.amount;
+          groups[key]!['totalAmount'] =
+              (groups[key]!['totalAmount'] as double) + t.amount;
         } else {
           groups[key] = {
             'categoryId': t.categoryId,
@@ -326,13 +351,16 @@ class FinanceRepository {
         }
       }
       final resultList = groups.values.toList();
-      resultList.sort((a, b) => (b['totalAmount'] as double).compareTo(a['totalAmount'] as double));
+      resultList.sort(
+        (a, b) =>
+            (b['totalAmount'] as double).compareTo(a['totalAmount'] as double),
+      );
       return resultList;
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
-    
+
     final monthStr = month.toString().padLeft(2, '0');
     final yearStr = year.toString();
 
@@ -344,7 +372,7 @@ class FinanceRepository {
         SUM(amount) as totalAmount,
         type
       FROM transactions
-      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)
       AND strftime('%m', $dateColumn) = ?
       AND strftime('%Y', $dateColumn) = ?
       GROUP BY categoryId, categoryName, type
@@ -353,28 +381,34 @@ class FinanceRepository {
       [userId, monthStr, yearStr],
     );
 
-    return result.map((row) => {
-      'categoryId': row['categoryId']?.toString() ?? '',
-      'categoryName': row['categoryName']?.toString() ?? '',
-      'totalAmount': (row['totalAmount'] as num?)?.toDouble() ?? 0.0,
-      'type': row['type']?.toString() ?? 'expense',
-    }).toList();
+    return result
+        .map(
+          (row) => {
+            'categoryId': row['categoryId']?.toString() ?? '',
+            'categoryName': row['categoryName']?.toString() ?? '',
+            'totalAmount': (row['totalAmount'] as num?)?.toDouble() ?? 0.0,
+            'type': row['type']?.toString() ?? 'expense',
+          },
+        )
+        .toList();
   }
 
+  // ==================== BASIC CRUD MIRRORED ====================
   // ==================== BASIC CRUD MIRRORED ====================
 
   Future<List<TransactionModel>> getAllTransactionsByUserId(
     String userId,
   ) async {
     if (kIsWeb) {
-      return _firestoreService.getTransactions();
+      final list = await _firestoreService.getTransactions();
+      return list.where((t) => t.userId.isEmpty || t.userId == userId).toList();
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
     final updatedColumn = await _transactionUpdatedColumn(db);
     final rows = await db.rawQuery(
-      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
+      'SELECT * FROM transactions WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
       'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC',
       [userId],
     );
@@ -385,14 +419,16 @@ class FinanceRepository {
   Future<TransactionModel?> getTransactionById(String userId, String id) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      final matched = list.where((t) => t.id == id).toList();
+      final matched = list
+          .where((t) => t.id == id && (t.userId.isEmpty || t.userId == userId))
+          .toList();
       return matched.isNotEmpty ? matched.first : null;
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final rows = await db.query(
       'transactions',
-      where: 'id = ? AND $userColumn = ?',
+      where: 'id = ? AND $userExpression = ?',
       whereArgs: [id, userId],
       limit: 1,
     );
@@ -404,15 +440,26 @@ class FinanceRepository {
   Future<void> upsertTransaction(TransactionModel transaction) async {
     if (transaction.userId.isEmpty) return;
 
+    final oldTransaction = transaction.id.isEmpty
+        ? null
+        : await getTransactionById(transaction.userId, transaction.id);
+    final now = DateTime.now();
+    final resolvedWalletId = await _resolveTransactionWalletId(
+      transaction.userId,
+      transaction.walletId,
+    );
+    final normalized = transaction.copyWith(
+      id: transaction.id.isEmpty
+          ? now.millisecondsSinceEpoch.toString()
+          : transaction.id,
+      walletId: resolvedWalletId,
+      updatedAt: now,
+      createdAt:
+          oldTransaction?.createdAt ??
+          (transaction.createdAt.year < 2000 ? now : transaction.createdAt),
+    );
+
     if (kIsWeb) {
-      final now = DateTime.now();
-      final normalized = transaction.copyWith(
-        id: transaction.id.isEmpty
-            ? now.millisecondsSinceEpoch.toString()
-            : transaction.id,
-        updatedAt: now,
-        createdAt: transaction.createdAt.year < 2000 ? now : transaction.createdAt,
-      );
       if (transaction.id.isEmpty) {
         await _firestoreService.addTransaction(normalized);
       } else {
@@ -422,23 +469,19 @@ class FinanceRepository {
           await _firestoreService.addTransaction(normalized);
         }
       }
+      if (oldTransaction != null) {
+        await _applyWalletImpact(oldTransaction, reverse: true);
+      }
+      await _applyWalletImpact(normalized);
+      await _syncBudgetSpentForTransaction(normalized);
+      if (oldTransaction != null) {
+        await _syncBudgetSpentForTransaction(oldTransaction);
+      }
       _notifyTransactionChanged(transaction.userId);
       return;
     }
 
     final db = await _databaseHelper.database;
-    final oldTransaction = await getTransactionById(
-      transaction.userId,
-      transaction.id,
-    );
-    final now = DateTime.now();
-    final normalized = transaction.copyWith(
-      id: transaction.id.isEmpty
-          ? now.millisecondsSinceEpoch.toString()
-          : transaction.id,
-      updatedAt: now,
-      createdAt: oldTransaction?.createdAt ?? transaction.createdAt,
-    );
 
     await db.insert(
       'transactions',
@@ -446,6 +489,10 @@ class FinanceRepository {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
+    if (oldTransaction != null) {
+      await _applyWalletImpact(oldTransaction, reverse: true);
+    }
+    await _applyWalletImpact(normalized);
     await _syncBudgetSpentForTransaction(normalized);
     if (oldTransaction != null) {
       await _syncBudgetSpentForTransaction(oldTransaction);
@@ -459,30 +506,42 @@ class FinanceRepository {
         await _firestoreService.addTransaction(normalized);
       }
     } catch (e) {
-      print("Lỗi đồng bộ thêm giao dịch Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm giao dÃ¡Â»â€¹ch Firestore: $e",
+      );
     }
   }
 
   Future<void> deleteTransaction(String userId, String id) async {
+    final oldTransaction = await getTransactionById(userId, id);
+
     if (kIsWeb) {
       await _firestoreService.deleteTransaction(id);
+      if (oldTransaction != null) {
+        await _applyWalletImpact(oldTransaction, reverse: true);
+        await _syncBudgetSpentForTransaction(oldTransaction);
+      }
       _notifyTransactionChanged(userId);
       return;
     }
 
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
-    final oldTransaction = await getTransactionById(userId, id);
-    
+    final userExpression = await _transactionUserExpression(db);
+
     // Soft delete locally
     await db.update(
       'transactions',
-      {'isDeleted': 1, 'updatedAt': DateTime.now().toIso8601String(), 'isSynced': 0},
-      where: 'id = ? AND $userColumn = ?',
+      {
+        'isDeleted': 1,
+        'updatedAt': DateTime.now().toIso8601String(),
+        'isSynced': 0,
+      },
+      where: 'id = ? AND $userExpression = ?',
       whereArgs: [id, userId],
     );
 
     if (oldTransaction != null) {
+      await _applyWalletImpact(oldTransaction, reverse: true);
       await _syncBudgetSpentForTransaction(oldTransaction);
     }
     _notifyTransactionChanged(userId);
@@ -493,14 +552,20 @@ class FinanceRepository {
         await _firestoreService.deleteTransaction(id);
       }
     } catch (e) {
-      print("Lỗi đồng bộ xóa giao dịch Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a giao dÃ¡Â»â€¹ch Firestore: $e",
+      );
     }
   }
 
   Future<List<Budget>> getBudgets(String userId, int month, int year) async {
     if (kIsWeb) {
       final list = await _firestoreService.getBudgets();
-      return list.where((b) => b.userId == userId && b.month == month && b.year == year).toList();
+      return list
+          .where(
+            (b) => b.userId == userId && b.month == month && b.year == year,
+          )
+          .toList();
     }
     final db = await _databaseHelper.database;
     final rows = await db.query(
@@ -571,7 +636,9 @@ class FinanceRepository {
         await _firestoreService.addBudget(normalized);
       }
     } catch (e) {
-      print("Lỗi đồng bộ thêm ngân sách Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm ngÃƒÂ¢n sÃƒÂ¡ch Firestore: $e",
+      );
     }
     _notifyTransactionChanged(budget.userId);
   }
@@ -591,7 +658,9 @@ class FinanceRepository {
         await _firestoreService.deleteBudget(budgetId);
       }
     } catch (e) {
-      print("Lỗi đồng bộ xóa ngân sách Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a ngÃƒÂ¢n sÃƒÂ¡ch Firestore: $e",
+      );
     }
     _notifyTransactionChanged(userId);
   }
@@ -603,7 +672,11 @@ class FinanceRepository {
   ) async {
     if (kIsWeb) {
       final list = await _firestoreService.getBudgets();
-      final filtered = list.where((b) => b.userId == userId && b.month == month && b.year == year).toList();
+      final filtered = list
+          .where(
+            (b) => b.userId == userId && b.month == month && b.year == year,
+          )
+          .toList();
       for (final budget in filtered) {
         final spent = await getSumExpenseByCategory(
           userId,
@@ -614,7 +687,10 @@ class FinanceRepository {
         final updated = budget.copyWith(
           spentAmount: spent,
           updatedAt: DateTime.now(),
-          status: _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
+          status: _resolveBudgetStatus(
+            spent.round(),
+            budget.limitAmount.round(),
+          ),
         );
         await _firestoreService.updateBudget(updated);
       }
@@ -641,7 +717,10 @@ class FinanceRepository {
         {
           'spentAmount': spent.round(),
           'updatedAt': DateTime.now().millisecondsSinceEpoch,
-          'status': _resolveBudgetStatus(spent.round(), budget.limitAmount.round()),
+          'status': _resolveBudgetStatus(
+            spent.round(),
+            budget.limitAmount.round(),
+          ),
           'isSynced': 0,
         },
         where: 'id = ?',
@@ -658,12 +737,13 @@ class FinanceRepository {
   ) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      final filtered = list.where((t) => 
-        t.categoryId == catId && 
-        t.type == 'expense' && 
-        !t.isDeleted && 
-        t.transactionDate.month == month && 
-        t.transactionDate.year == year
+      final filtered = list.where(
+        (t) =>
+            t.categoryId == catId &&
+            t.type == 'expense' &&
+            !t.isDeleted &&
+            t.transactionDate.month == month &&
+            t.transactionDate.year == year,
       );
       double total = 0.0;
       for (final t in filtered) {
@@ -791,11 +871,15 @@ class FinanceRepository {
         final data = doc.data();
         return FinanceSavingItem(
           id: _asInt(data['id']) ?? 0,
-          icon: data['icon']?.toString() ?? '🎯',
-          title: data['title']?.toString() ?? 'Mục tiêu',
-          currentAmount: _asInt(data['currentAmount'] ?? data['current_amount']) ?? 0,
-          targetAmount: _asInt(data['targetAmount'] ?? data['target_amount']) ?? 0,
-          deadline: _parseDate(data['deadline'] ?? data['targetDate'] ?? data['target_date']),
+          icon: data['icon']?.toString() ?? 'Ã°Å¸Å½Â¯',
+          title: data['title']?.toString() ?? 'MÃ¡Â»Â¥c tiÃƒÂªu',
+          currentAmount:
+              _asInt(data['currentAmount'] ?? data['current_amount']) ?? 0,
+          targetAmount:
+              _asInt(data['targetAmount'] ?? data['target_amount']) ?? 0,
+          deadline: _parseDate(
+            data['deadline'] ?? data['targetDate'] ?? data['target_date'],
+          ),
           color: _parseColor(data['colorValue'] ?? data['color_value']),
         );
       }).toList();
@@ -810,8 +894,8 @@ class FinanceRepository {
         .map(
           (row) => FinanceSavingItem(
             id: _asInt(row['id']) ?? 0,
-            icon: row['icon']?.toString() ?? '🎯',
-            title: row['title']?.toString() ?? 'Mục tiêu',
+            icon: row['icon']?.toString() ?? 'Ã°Å¸Å½Â¯',
+            title: row['title']?.toString() ?? 'MÃ¡Â»Â¥c tiÃƒÂªu',
             currentAmount:
                 _asInt(row['currentAmount'] ?? row['current_amount']) ?? 0,
             targetAmount:
@@ -874,7 +958,12 @@ class FinanceRepository {
       'updated_at': now,
       'status': 'active',
     };
-    await _insertWithCompatibleColumns(db, 'savings', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _insertWithCompatibleColumns(
+      db,
+      'savings',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     try {
       if (userId != demoUserId && await _isOnline()) {
@@ -882,7 +971,9 @@ class FinanceRepository {
         await _firestoreService.addSaving(goal);
       }
     } catch (e) {
-      print("Lỗi đồng bộ thêm tiết kiệm Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
+      );
     }
   }
 
@@ -899,15 +990,25 @@ class FinanceRepository {
         final data = doc.data();
         return FinanceInstallmentItem(
           id: _asInt(data['id']) ?? 0,
-          icon: data['icon']?.toString() ?? '🧾',
-          title: data['title']?.toString() ?? 'Kế hoạch',
+          icon: data['icon']?.toString() ?? 'Ã°Å¸Â§Â¾',
+          title: data['title']?.toString() ?? 'KÃ¡ÂºÂ¿ hoÃ¡ÂºÂ¡ch',
           totalAmount: _asInt(data['totalAmount'] ?? data['total_amount']) ?? 0,
           paidAmount: _asInt(data['paidAmount'] ?? data['paid_amount']) ?? 0,
           currentPeriod:
-              _asInt(data['currentPeriod'] ?? data['current_period'] ?? data['paidPeriods'] ?? data['paid_periods']) ?? 0,
+              _asInt(
+                data['currentPeriod'] ??
+                    data['current_period'] ??
+                    data['paidPeriods'] ??
+                    data['paid_periods'],
+              ) ??
+              0,
           totalPeriods:
               _asInt(data['totalPeriods'] ?? data['total_periods']) ?? 0,
-          nextDueDate: _parseDate(data['nextDueDate'] ?? data['nextDueDateEpoch'] ?? data['next_due_date_epoch']),
+          nextDueDate: _parseDate(
+            data['nextDueDate'] ??
+                data['nextDueDateEpoch'] ??
+                data['next_due_date_epoch'],
+          ),
           color: _parseColor(data['colorValue'] ?? data['color_value']),
         );
       }).toList();
@@ -922,8 +1023,8 @@ class FinanceRepository {
         .map(
           (row) => FinanceInstallmentItem(
             id: _asInt(row['id']) ?? 0,
-            icon: row['icon']?.toString() ?? '🧾',
-            title: row['title']?.toString() ?? 'Kế hoạch',
+            icon: row['icon']?.toString() ?? 'Ã°Å¸Â§Â¾',
+            title: row['title']?.toString() ?? 'KÃ¡ÂºÂ¿ hoÃ¡ÂºÂ¡ch',
             totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
             paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
             currentPeriod:
@@ -955,7 +1056,9 @@ class FinanceRepository {
         title: title,
         totalAmount: totalAmount,
         paidAmount: 0,
-        monthlyPayment: totalPeriods > 0 ? (totalAmount / totalPeriods).round() : 0,
+        monthlyPayment: totalPeriods > 0
+            ? (totalAmount / totalPeriods).round()
+            : 0,
         paidPeriods: 0,
         totalPeriods: totalPeriods,
         nextDueDate: nextDueDate.millisecondsSinceEpoch,
@@ -1012,7 +1115,12 @@ class FinanceRepository {
       'updated_at': now,
       'status': 'active',
     };
-    await _insertWithCompatibleColumns(db, 'installments', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _insertWithCompatibleColumns(
+      db,
+      'installments',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     try {
       if (userId != demoUserId && await _isOnline()) {
@@ -1020,7 +1128,7 @@ class FinanceRepository {
         await _firestoreService.addInstallment(plan);
       }
     } catch (e) {
-      print("Lỗi đồng bộ trả góp Firestore: $e");
+      print("LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e");
     }
   }
 
@@ -1035,14 +1143,25 @@ class FinanceRepository {
         final data = doc.data();
         return FinanceDebtItem(
           id: _asInt(data['id']) ?? 0,
-          icon: data['icon']?.toString() ?? '💰',
-          title: data['title']?.toString() ?? 'Khoản vay',
-          lender: data['lender']?.toString() ?? data['lenderName']?.toString() ?? data['lender_name']?.toString() ?? 'Không rõ',
+          icon: data['icon']?.toString() ?? 'Ã°Å¸â€™Â°',
+          title: data['title']?.toString() ?? 'KhoÃ¡ÂºÂ£n vay',
+          lender:
+              data['lender']?.toString() ??
+              data['lenderName']?.toString() ??
+              data['lender_name']?.toString() ??
+              'KhÃƒÂ´ng rÃƒÂµ',
           totalAmount: _asInt(data['totalAmount'] ?? data['total_amount']) ?? 0,
           paidAmount: _asInt(data['paidAmount'] ?? data['paid_amount']) ?? 0,
-          monthlyPayment: _asInt(data['monthlyPayment'] ?? data['monthly_payment']) ?? 0,
-          dueDate: _parseDate(data['dueDate'] ?? data['due_date'] ?? data['nextDueDate'] ?? data['next_due_date']),
-          interestText: data['interestText']?.toString() ?? 'Chưa cập nhật',
+          monthlyPayment:
+              _asInt(data['monthlyPayment'] ?? data['monthly_payment']) ?? 0,
+          dueDate: _parseDate(
+            data['dueDate'] ??
+                data['due_date'] ??
+                data['nextDueDate'] ??
+                data['next_due_date'],
+          ),
+          interestText:
+              data['interestText']?.toString() ?? 'ChÃ†Â°a cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t',
           color: _parseColor(data['colorValue'] ?? data['color_value']),
         );
       }).toList();
@@ -1057,15 +1176,16 @@ class FinanceRepository {
         .map(
           (row) => FinanceDebtItem(
             id: _asInt(row['id']) ?? 0,
-            icon: row['icon']?.toString() ?? '💰',
-            title: row['title']?.toString() ?? 'Khoản vay',
-            lender: row['lender']?.toString() ?? 'Không rõ',
+            icon: row['icon']?.toString() ?? 'Ã°Å¸â€™Â°',
+            title: row['title']?.toString() ?? 'KhoÃ¡ÂºÂ£n vay',
+            lender: row['lender']?.toString() ?? 'KhÃƒÂ´ng rÃƒÂµ',
             totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
             paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
             monthlyPayment:
                 _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
             dueDate: _parseDate(row['dueDate']),
-            interestText: row['interestText']?.toString() ?? 'Chưa cập nhật',
+            interestText:
+                row['interestText']?.toString() ?? 'ChÃ†Â°a cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t',
             color: _parseColor(row['colorValue'] ?? row['color_value']),
           ),
         )
@@ -1145,7 +1265,12 @@ class FinanceRepository {
       'updated_at': now,
       'status': 'active',
     };
-    await _insertWithCompatibleColumns(db, 'debts', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _insertWithCompatibleColumns(
+      db,
+      'debts',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     try {
       if (userId != demoUserId && await _isOnline()) {
@@ -1153,7 +1278,7 @@ class FinanceRepository {
         await _firestoreService.addDebt(debt);
       }
     } catch (e) {
-      print("Lỗi đồng bộ vay nợ Firestore: $e");
+      print("LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ vay nÃ¡Â»Â£ Firestore: $e");
     }
   }
 
@@ -1163,11 +1288,15 @@ class FinanceRepository {
     if (kIsWeb) {
       final now = DateTime.now();
       final list = await _firestoreService.getTransactions();
-      final monthly = list.where((t) => 
-        !t.isDeleted && 
-        t.transactionDate.month == now.month && 
-        t.transactionDate.year == now.year
-      ).toList();
+      final monthly = list
+          .where(
+            (t) =>
+                !t.isDeleted &&
+                (t.userId.isEmpty || t.userId == userId) &&
+                t.transactionDate.month == now.month &&
+                t.transactionDate.year == now.year,
+          )
+          .toList();
 
       double totalIncome = 0;
       double totalExpense = 0;
@@ -1188,7 +1317,7 @@ class FinanceRepository {
     }
     final now = DateTime.now();
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
 
     final result = await db.rawQuery(
@@ -1197,7 +1326,7 @@ class FinanceRepository {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense
       FROM transactions
-      WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+      WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)
       AND strftime('%m', $dateColumn) = ?
       AND strftime('%Y', $dateColumn) = ?
       ''',
@@ -1225,14 +1354,17 @@ class FinanceRepository {
   }) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      return list.take(limit).toList();
+      return list
+          .where((t) => t.userId.isEmpty || t.userId == userId)
+          .take(limit)
+          .toList();
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final dateColumn = await _transactionDateColumn(db);
     final updatedColumn = await _transactionUpdatedColumn(db);
     final rows = await db.rawQuery(
-      'SELECT * FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
+      'SELECT * FROM transactions WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL) '
       'ORDER BY datetime($dateColumn) DESC, datetime($updatedColumn) DESC '
       'LIMIT ?',
       [userId, limit],
@@ -1310,7 +1442,9 @@ class FinanceRepository {
         await _firestoreService.updateSaving(goal);
       }
     } catch (e) {
-      print("Lỗi đồng bộ cập nhật tiết kiệm Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
+      );
     }
   }
 
@@ -1331,7 +1465,9 @@ class FinanceRepository {
         await _firestoreService.deleteSaving(goalId);
       }
     } catch (e) {
-      print("Lỗi đồng bộ xóa tiết kiệm Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a tiÃ¡ÂºÂ¿t kiÃ¡Â»â€¡m Firestore: $e",
+      );
     }
   }
 
@@ -1344,7 +1480,9 @@ class FinanceRepository {
           .doc(userId)
           .collection('debts')
           .get();
-      return snapshot.docs.map((doc) => DebtRecord.fromMap(doc.data())).toList();
+      return snapshot.docs
+          .map((doc) => DebtRecord.fromMap(doc.data()))
+          .toList();
     }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
@@ -1399,7 +1537,7 @@ class FinanceRepository {
       'id': int.tryParse(debt.id) ?? now,
       'userId': debt.userId,
       'user_id': debt.userId,
-      'icon': '💰',
+      'icon': 'Ã°Å¸â€™Â°',
       'title': debt.title,
       'lender': debt.lenderName,
       'lenderName': debt.lenderName,
@@ -1412,8 +1550,12 @@ class FinanceRepository {
       'monthly_payment': debt.monthlyPayment,
       'interestRate': debt.interestRate,
       'interest_rate': debt.interestRate,
-      'dueDate': DateTime.fromMillisecondsSinceEpoch(debt.nextDueDate).toIso8601String(),
-      'due_date': DateTime.fromMillisecondsSinceEpoch(debt.nextDueDate).toIso8601String(),
+      'dueDate': DateTime.fromMillisecondsSinceEpoch(
+        debt.nextDueDate,
+      ).toIso8601String(),
+      'due_date': DateTime.fromMillisecondsSinceEpoch(
+        debt.nextDueDate,
+      ).toIso8601String(),
       'nextDueDate': debt.nextDueDate,
       'next_due_date': debt.nextDueDate,
       'colorValue': Colors.blue.value,
@@ -1424,14 +1566,21 @@ class FinanceRepository {
       'updated_at': now,
       'status': debt.status,
     };
-    await _insertWithCompatibleColumns(db, 'debts', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _insertWithCompatibleColumns(
+      db,
+      'debts',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     try {
       if (debt.userId != demoUserId && await _isOnline()) {
         await _firestoreService.addDebt(debt);
       }
     } catch (e) {
-      print("Lỗi đồng bộ thêm vay nợ Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm vay nÃ¡Â»Â£ Firestore: $e",
+      );
     }
   }
 
@@ -1483,7 +1632,9 @@ class FinanceRepository {
         await _firestoreService.updateDebt(debt);
       }
     } catch (e) {
-      print("Lỗi đồng bộ cập nhật vay nợ Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t vay nÃ¡Â»Â£ Firestore: $e",
+      );
     }
   }
 
@@ -1509,7 +1660,9 @@ class FinanceRepository {
         await _firestoreService.deleteDebt(debtId);
       }
     } catch (e) {
-      print("Lỗi đồng bộ xóa vay nợ Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a vay nÃ¡Â»Â£ Firestore: $e",
+      );
     }
   }
 
@@ -1522,7 +1675,9 @@ class FinanceRepository {
           .doc(userId)
           .collection('installments')
           .get();
-      return snapshot.docs.map((doc) => InstallmentPlan.fromMap(doc.data())).toList();
+      return snapshot.docs
+          .map((doc) => InstallmentPlan.fromMap(doc.data()))
+          .toList();
     }
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
@@ -1594,8 +1749,12 @@ class FinanceRepository {
       'paid_periods': plan.paidPeriods,
       'totalPeriods': plan.totalPeriods,
       'total_periods': plan.totalPeriods,
-      'nextDueDate': DateTime.fromMillisecondsSinceEpoch(plan.nextDueDate).toIso8601String(),
-      'next_due_date': DateTime.fromMillisecondsSinceEpoch(plan.nextDueDate).toIso8601String(),
+      'nextDueDate': DateTime.fromMillisecondsSinceEpoch(
+        plan.nextDueDate,
+      ).toIso8601String(),
+      'next_due_date': DateTime.fromMillisecondsSinceEpoch(
+        plan.nextDueDate,
+      ).toIso8601String(),
       'nextDueDateEpoch': plan.nextDueDate,
       'next_due_date_epoch': plan.nextDueDate,
       'colorValue': Colors.purple.value,
@@ -1606,14 +1765,21 @@ class FinanceRepository {
       'updated_at': now,
       'status': plan.status,
     };
-    await _insertWithCompatibleColumns(db, 'installments', payload, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _insertWithCompatibleColumns(
+      db,
+      'installments',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     try {
       if (plan.userId != demoUserId && await _isOnline()) {
         await _firestoreService.addInstallment(plan);
       }
     } catch (e) {
-      print("Lỗi đồng bộ thêm trả góp Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ thÃƒÂªm trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
+      );
     }
   }
 
@@ -1667,7 +1833,9 @@ class FinanceRepository {
         await _firestoreService.updateInstallment(plan);
       }
     } catch (e) {
-      print("Lỗi đồng bộ cập nhật trả góp Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
+      );
     }
   }
 
@@ -1693,7 +1861,9 @@ class FinanceRepository {
         await _firestoreService.deleteInstallment(planId);
       }
     } catch (e) {
-      print("Lỗi đồng bộ xóa trả góp Firestore: $e");
+      print(
+        "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ xÃƒÂ³a trÃ¡ÂºÂ£ gÃƒÂ³p Firestore: $e",
+      );
     }
   }
 
@@ -1702,7 +1872,10 @@ class FinanceRepository {
   Future<List<Map<String, dynamic>>> getWalletsByUserId(String userId) async {
     if (kIsWeb) {
       final list = await _firestoreService.getWallets();
-      return list.map((w) => w.toMap()).toList();
+      return list
+          .where((wallet) => wallet.userId.isEmpty || wallet.userId == userId)
+          .map((w) => w.toMap())
+          .toList();
     }
     final db = await _databaseHelper.database;
     return await db.rawQuery(
@@ -1714,7 +1887,9 @@ class FinanceRepository {
   Future<double> getTotalWalletBalance(String userId) async {
     if (kIsWeb) {
       final list = await _firestoreService.getWallets();
-      return list.fold<double>(0.0, (sum, w) => sum + w.balance);
+      return list
+          .where((wallet) => wallet.userId.isEmpty || wallet.userId == userId)
+          .fold<double>(0.0, (sum, w) => sum + w.balance);
     }
     final db = await _databaseHelper.database;
     final result = await db.rawQuery(
@@ -1727,12 +1902,12 @@ class FinanceRepository {
   Future<int> getTransactionCountByUserId(String userId) async {
     if (kIsWeb) {
       final list = await _firestoreService.getTransactions();
-      return list.length;
+      return list.where((t) => t.userId.isEmpty || t.userId == userId).length;
     }
     final db = await _databaseHelper.database;
-    final userColumn = await _transactionUserColumn(db);
+    final userExpression = await _transactionUserExpression(db);
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM transactions WHERE $userColumn = ? AND (isDeleted = 0 OR isDeleted IS NULL)',
+      'SELECT COUNT(*) as count FROM transactions WHERE $userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)',
       [userId],
     );
     return Sqflite.firstIntValue(result) ?? 0;
@@ -1759,20 +1934,22 @@ class FinanceRepository {
         await _firestoreService.addWallet(wallet);
       }
     } catch (e) {
-      print("Lỗi đồng bộ ví lên Firestore: $e");
+      print("LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ vÃƒÂ­ lÃƒÂªn Firestore: $e");
     }
   }
 
   Future<void> ensureDefaultWalletsForUser(String userId) async {
     if (kIsWeb) {
-      final wallets = await _firestoreService.getWallets();
+      final wallets = (await _firestoreService.getWallets())
+          .where((wallet) => wallet.userId.isEmpty || wallet.userId == userId)
+          .toList();
       if (wallets.isEmpty) {
         final now = DateTime.now();
-        
+
         final cashWallet = WalletModel(
           id: 'wallet_cash_$userId',
           userId: userId,
-          name: 'Tiền mặt',
+          name: 'Ti\u1ec1n m\u1eb7t',
           balance: 0,
           type: 'cash',
           color: Colors.green.value,
@@ -1785,7 +1962,7 @@ class FinanceRepository {
         final bankWallet = WalletModel(
           id: 'wallet_bank_$userId',
           userId: userId,
-          name: 'Tài khoản ngân hàng',
+          name: 'T\u00e0i kho\u1ea3n ng\u00e2n h\u00e0ng',
           balance: 0,
           type: 'bank',
           color: Colors.blue.value,
@@ -1801,18 +1978,22 @@ class FinanceRepository {
       return;
     }
     final db = await _databaseHelper.database;
-    final walletCount = Sqflite.firstIntValue(await db.rawQuery(
-      'SELECT COUNT(*) FROM wallets WHERE COALESCE(userId, user_id) = ?',
-      [userId],
-    )) ?? 0;
+    final walletCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM wallets WHERE COALESCE(userId, user_id) = ?',
+            [userId],
+          ),
+        ) ??
+        0;
 
     if (walletCount == 0) {
       final now = DateTime.now();
-      
+
       final cashWallet = WalletModel(
         id: 'wallet_cash_$userId',
         userId: userId,
-        name: 'Tiền mặt',
+        name: 'Ti\u1ec1n m\u1eb7t',
         balance: 0,
         type: 'cash',
         color: Colors.green.value,
@@ -1825,7 +2006,7 @@ class FinanceRepository {
       final bankWallet = WalletModel(
         id: 'wallet_bank_$userId',
         userId: userId,
-        name: 'Tài khoản ngân hàng',
+        name: 'T\u00e0i kho\u1ea3n ng\u00e2n h\u00e0ng',
         balance: 0,
         type: 'bank',
         color: Colors.blue.value,
@@ -1846,7 +2027,142 @@ class FinanceRepository {
           await _firestoreService.addWallet(bankWallet);
         }
       } catch (e) {
-        print("Lỗi đồng bộ tạo ví mặc định Firestore: $e");
+        print(
+          "LÃ¡Â»â€”i Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ tÃ¡ÂºÂ¡o vÃƒÂ­ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh Firestore: $e",
+        );
+      }
+    }
+  }
+
+  Future<String> _resolveTransactionWalletId(
+    String userId,
+    String walletId,
+  ) async {
+    if (walletId.isNotEmpty) {
+      final wallet = await _getWalletById(userId, walletId);
+      if (wallet != null) {
+        return wallet.id;
+      }
+    }
+
+    final fallbackWallet = await _getDefaultWallet(userId);
+    return fallbackWallet?.id ?? walletId;
+  }
+
+  Future<WalletModel?> _getDefaultWallet(String userId) async {
+    await ensureDefaultWalletsForUser(userId);
+    final wallets = await getWalletsByUserId(userId);
+    if (wallets.isEmpty) return null;
+
+    final models = wallets.map((row) => WalletModel.fromMap(row)).toList();
+    for (final wallet in models) {
+      if (wallet.isDefault) return wallet;
+    }
+    for (final wallet in models) {
+      if (wallet.type == 'cash') return wallet;
+    }
+    return models.first;
+  }
+
+  Future<WalletModel?> _getWalletById(String userId, String walletId) async {
+    if (walletId.isEmpty) return null;
+
+    final wallets = await getWalletsByUserId(userId);
+    for (final row in wallets) {
+      final wallet = WalletModel.fromMap(row);
+      if (wallet.id == walletId) {
+        return wallet;
+      }
+    }
+    return null;
+  }
+
+  double _walletDeltaForTransaction(TransactionModel transaction) {
+    switch (transaction.type) {
+      case 'income':
+      case 'borrow':
+        return transaction.amount;
+      case 'expense':
+      case 'lend':
+        return -transaction.amount;
+      default:
+        return 0;
+    }
+  }
+
+  Future<void> _applyWalletImpact(
+    TransactionModel transaction, {
+    bool reverse = false,
+  }) async {
+    final delta = _walletDeltaForTransaction(transaction);
+    if (delta == 0 || transaction.userId.isEmpty) return;
+
+    final walletId = await _resolveTransactionWalletId(
+      transaction.userId,
+      transaction.walletId,
+    );
+    if (walletId.isEmpty) return;
+
+    final wallet = await _getWalletById(transaction.userId, walletId);
+    if (wallet == null) return;
+
+    final effectiveDelta = reverse ? -delta : delta;
+    await upsertWallet(
+      wallet.copyWith(
+        balance: wallet.balance + effectiveDelta,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+  Future<void> _cleanCorruptedTransactions(String userId) async {
+    await ensureDefaultWalletsForUser(userId);
+    final db = await _databaseHelper.database;
+    
+    // 1. Get all wallets of the user to know the valid wallet IDs
+    final walletsRaw = await getWalletsByUserId(userId);
+    final validWalletIds = walletsRaw.map((w) => w['id']?.toString() ?? '').toSet();
+    if (validWalletIds.isEmpty) return; // Don't delete if wallets aren't loaded yet
+
+    // 2. Find transactions belonging to the user but with invalid wallet ID
+    final userExpression = await _transactionUserExpression(db);
+    final corruptedRows = await db.query(
+      'transactions',
+      where: '$userExpression = ? AND (isDeleted = 0 OR isDeleted IS NULL)',
+      whereArgs: [userId],
+    );
+
+    final List<String> idsToDelete = [];
+    for (final row in corruptedRows) {
+      final walletId = row['walletId']?.toString() ?? row['wallet_id']?.toString() ?? '';
+      if (!validWalletIds.contains(walletId)) {
+        final id = row['id']?.toString() ?? '';
+        if (id.isNotEmpty) {
+          idsToDelete.add(id);
+        }
+      }
+    }
+
+    if (idsToDelete.isEmpty) return;
+
+    print('Cleaning up ${idsToDelete.length} corrupted transactions for user $userId');
+
+    // 3. Delete from local SQLite
+    await db.transaction((txn) async {
+      for (final id in idsToDelete) {
+        await txn.delete(
+          'transactions',
+          where: 'id = ? AND $userExpression = ?',
+          whereArgs: [id, userId],
+        );
+      }
+    });
+
+    // 4. Delete from Firestore
+    for (final id in idsToDelete) {
+      try {
+        await _firestoreService.deleteTransaction(id);
+      } catch (e) {
+        print('Error deleting corrupted remote transaction $id: $e');
       }
     }
   }
@@ -1861,23 +2177,35 @@ class FinanceRepository {
 
     try {
       final db = await _databaseHelper.database;
+      await _syncDefaultCategoriesToCloud(userId);
+      await _cleanCorruptedTransactions(userId);
 
       // 1. SYNC WALLETS
       final localWalletsRaw = await getWalletsByUserId(userId);
-      final localWallets = localWalletsRaw.map((row) => WalletModel.fromMap(row)).toList();
+      final localWallets = localWalletsRaw
+          .map((row) => WalletModel.fromMap(row))
+          .toList();
       final remoteWallets = await _firestoreService.getWallets();
+      final localWalletById = {for (final item in localWallets) item.id: item};
+      final remoteWalletById = {
+        for (final item in remoteWallets) item.id: item,
+      };
 
       final walletsToPush = <WalletModel>[];
       for (final local in localWallets) {
-        final remote = remoteWallets.firstWhere((w) => w.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        final remote = remoteWalletById[local.id];
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           walletsToPush.add(local);
         }
       }
       for (final remote in remoteWallets) {
-        final local = localWallets.firstWhere((w) => w.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('wallets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        final local = localWalletById[remote.id];
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          await db.insert(
+            'wallets',
+            remote.toSqliteMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       }
 
@@ -1897,18 +2225,26 @@ class FinanceRepository {
         whereArgs: [userId],
       );
       final localTx = localTxRaw.map(_transactionFromRow).toList();
+      final localTxById = {for (final item in localTx) item.id: item};
+      final remoteTxById = {for (final item in remoteTx) item.id: item};
 
       final txToPush = <TransactionModel>[];
       for (final local in localTx) {
-        final remote = remoteTx.firstWhere((t) => t.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        final remote = remoteTxById[local.id];
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           txToPush.add(local);
         }
       }
       for (final remote in remoteTx) {
-        final local = localTx.firstWhere((t) => t.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('transactions', _transactionToRow(remote), conflictAlgorithm: ConflictAlgorithm.replace);
+        final local = localTxById[remote.id];
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          final remotePayload = _transactionToRow(remote);
+          remotePayload['isSynced'] = 1;
+          await db.insert(
+            'transactions',
+            remotePayload,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       }
 
@@ -1927,19 +2263,31 @@ class FinanceRepository {
         where: 'COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
-      final localBudgets = localBudgetsRaw.map((row) => _budgetFromRow(row, userId)).toList();
+      final localBudgets = localBudgetsRaw
+          .map((row) => _budgetFromRow(row, userId))
+          .toList();
+      final localBudgetById = {for (final item in localBudgets) item.id: item};
+      final remoteBudgetById = {
+        for (final item in remoteBudgets) item.id: item,
+      };
 
       final budgetsToPush = <Budget>[];
       for (final local in localBudgets) {
-        final remote = remoteBudgets.firstWhere((b) => b.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt.isAfter(remote.updatedAt)) {
+        final remote = remoteBudgetById[local.id];
+        if (remote == null || local.updatedAt.isAfter(remote.updatedAt)) {
           budgetsToPush.add(local);
         }
       }
       for (final remote in remoteBudgets) {
-        final local = localBudgets.firstWhere((b) => b.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt.isAfter(local.updatedAt)) {
-          await db.insert('budgets', remote.toSqliteMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        final local = localBudgetById[remote.id];
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          final remotePayload = remote.toSqliteMap();
+          remotePayload['isSynced'] = 1;
+          await db.insert(
+            'budgets',
+            remotePayload,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       }
 
@@ -1954,17 +2302,21 @@ class FinanceRepository {
           .toList();
 
       final localSavings = await getAllSavingGoals(userId);
+      final localSavingById = {for (final item in localSavings) item.id: item};
+      final remoteSavingById = {
+        for (final item in remoteSavings) item.id: item,
+      };
 
       final savingsToPush = <SavingGoal>[];
       for (final local in localSavings) {
-        final remote = remoteSavings.firstWhere((s) => s.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        final remote = remoteSavingById[local.id];
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           savingsToPush.add(local);
         }
       }
       for (final remote in remoteSavings) {
-        final local = localSavings.firstWhere((s) => s.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        final local = localSavingById[remote.id];
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'savings', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -1975,7 +2327,9 @@ class FinanceRepository {
             'current_amount': remote.currentAmount,
             'targetAmount': remote.targetAmount,
             'target_amount': remote.targetAmount,
-            'deadline': DateTime.fromMillisecondsSinceEpoch(remote.targetDate).toIso8601String(),
+            'deadline': DateTime.fromMillisecondsSinceEpoch(
+              remote.targetDate,
+            ).toIso8601String(),
             'targetDate': remote.targetDate,
             'target_date': remote.targetDate,
             'createdAt': remote.createdAt,
@@ -1983,6 +2337,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -1998,17 +2353,19 @@ class FinanceRepository {
           .toList();
 
       final localDebts = await getAllDebtRecords(userId);
+      final localDebtById = {for (final item in localDebts) item.id: item};
+      final remoteDebtById = {for (final item in remoteDebts) item.id: item};
 
       final debtsToPush = <DebtRecord>[];
       for (final local in localDebts) {
-        final remote = remoteDebts.firstWhere((d) => d.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        final remote = remoteDebtById[local.id];
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           debtsToPush.add(local);
         }
       }
       for (final remote in remoteDebts) {
-        final local = localDebts.firstWhere((d) => d.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        final local = localDebtById[remote.id];
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'debts', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -2025,8 +2382,12 @@ class FinanceRepository {
             'monthly_payment': remote.monthlyPayment,
             'interestRate': remote.interestRate,
             'interest_rate': remote.interestRate,
-            'dueDate': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
-            'due_date': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'dueDate': DateTime.fromMillisecondsSinceEpoch(
+              remote.nextDueDate,
+            ).toIso8601String(),
+            'due_date': DateTime.fromMillisecondsSinceEpoch(
+              remote.nextDueDate,
+            ).toIso8601String(),
             'nextDueDate': remote.nextDueDate,
             'next_due_date': remote.nextDueDate,
             'createdAt': remote.createdAt,
@@ -2034,6 +2395,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -2049,17 +2411,23 @@ class FinanceRepository {
           .toList();
 
       final localInstallments = await getAllInstallmentPlans(userId);
+      final localInstallmentById = {
+        for (final item in localInstallments) item.id: item,
+      };
+      final remoteInstallmentById = {
+        for (final item in remoteInstallments) item.id: item,
+      };
 
       final installmentsToPush = <InstallmentPlan>[];
       for (final local in localInstallments) {
-        final remote = remoteInstallments.firstWhere((i) => i.id == local.id, orElse: () => null as dynamic);
-        if (local.updatedAt > remote.updatedAt) {
+        final remote = remoteInstallmentById[local.id];
+        if (remote == null || local.updatedAt > remote.updatedAt) {
           installmentsToPush.add(local);
         }
       }
       for (final remote in remoteInstallments) {
-        final local = localInstallments.firstWhere((i) => i.id == remote.id, orElse: () => null as dynamic);
-        if (remote.updatedAt > local.updatedAt) {
+        final local = localInstallmentById[remote.id];
+        if (local == null || remote.updatedAt > local.updatedAt) {
           await _insertWithCompatibleColumns(db, 'installments', {
             'id': int.tryParse(remote.id) ?? remote.createdAt,
             'userId': userId,
@@ -2078,8 +2446,12 @@ class FinanceRepository {
             'paid_periods': remote.paidPeriods,
             'totalPeriods': remote.totalPeriods,
             'total_periods': remote.totalPeriods,
-            'nextDueDate': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
-            'next_due_date': DateTime.fromMillisecondsSinceEpoch(remote.nextDueDate).toIso8601String(),
+            'nextDueDate': DateTime.fromMillisecondsSinceEpoch(
+              remote.nextDueDate,
+            ).toIso8601String(),
+            'next_due_date': DateTime.fromMillisecondsSinceEpoch(
+              remote.nextDueDate,
+            ).toIso8601String(),
             'nextDueDateEpoch': remote.nextDueDate,
             'next_due_date_epoch': remote.nextDueDate,
             'createdAt': remote.createdAt,
@@ -2087,6 +2459,7 @@ class FinanceRepository {
             'updatedAt': remote.updatedAt,
             'updated_at': remote.updatedAt,
             'status': remote.status,
+            'isSynced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -2110,10 +2483,24 @@ class FinanceRepository {
 
       _notifyTransactionChanged(userId);
     } catch (e) {
-      print("Lỗi syncWithFirebase: $e");
+      print("syncWithFirebase error: $e");
     }
   }
 
+  Future<void> _syncDefaultCategoriesToCloud(String userId) async {
+    final remoteCategories = await _firestoreService.getCategories();
+    final remoteIds = remoteCategories.map((item) => item.id).toSet();
+    final missingDefaults = CategoryData.getAllCategories()
+        .where((item) => !remoteIds.contains(item.id))
+        .map((item) => item.copyWith(userId: userId))
+        .toList();
+
+    if (missingDefaults.isEmpty) {
+      return;
+    }
+
+    await _firestoreService.batchWrite(categories: missingDefaults);
+  }
   // ========== AUTH SESSION FUNCTIONS ==========
 
   Future<Map<String, dynamic>?> getAuthSessionByUserId(String userId) async {
@@ -2156,14 +2543,18 @@ class FinanceRepository {
     );
   }
 
+  Future<void> submitAppFeedback(AppFeedback feedback) async {
+    await _firestoreService.addFeedback(feedback);
+  }
+
   // ========== HELPER FUNCTIONS FOR MODEL CONVERSION ==========
 
   SavingGoal _savingGoalFromRow(Map<String, Object?> row, String userId) {
     return SavingGoal(
       id: row['id']?.toString() ?? '',
       userId: userId,
-      title: row['title']?.toString() ?? 'Mục tiêu',
-      icon: row['icon']?.toString() ?? '🎯',
+      title: row['title']?.toString() ?? 'MÃ¡Â»Â¥c tiÃƒÂªu',
+      icon: row['icon']?.toString() ?? 'Ã°Å¸Å½Â¯',
       currentAmount: _asInt(row['currentAmount'] ?? row['current_amount']) ?? 0,
       targetAmount: _asInt(row['targetAmount'] ?? row['target_amount']) ?? 0,
       targetDate:
@@ -2183,12 +2574,12 @@ class FinanceRepository {
     return DebtRecord(
       id: row['id']?.toString() ?? '',
       userId: userId,
-      title: row['title']?.toString() ?? 'Khoản vay',
+      title: row['title']?.toString() ?? 'KhoÃ¡ÂºÂ£n vay',
       lenderName:
           row['lender']?.toString() ??
           row['lenderName']?.toString() ??
           row['lender_name']?.toString() ??
-          'Không rõ',
+          'KhÃƒÂ´ng rÃƒÂµ',
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
       monthlyPayment:
@@ -2218,8 +2609,8 @@ class FinanceRepository {
     return InstallmentPlan(
       id: row['id']?.toString() ?? '',
       userId: userId,
-      title: row['title']?.toString() ?? 'Kế hoạch trả góp',
-      icon: row['icon']?.toString() ?? '🧾',
+      title: row['title']?.toString() ?? 'KÃ¡ÂºÂ¿ hoÃ¡ÂºÂ¡ch trÃ¡ÂºÂ£ gÃƒÂ³p',
+      icon: row['icon']?.toString() ?? 'Ã°Å¸Â§Â¾',
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
       monthlyPayment:
@@ -2356,10 +2747,10 @@ class FinanceRepository {
           ? (row['categoryName']?.toString() ??
                 row['category_name']?.toString() ??
                 '')
-          : category?.name ?? 'Không rõ',
+          : category?.name ?? 'KhÃƒÂ´ng rÃƒÂµ',
       icon: row['icon']?.toString().isNotEmpty == true
           ? row['icon'].toString()
-          : category?.icon ?? '🏷️',
+          : category?.icon ?? 'Ã°Å¸ÂÂ·Ã¯Â¸Â',
       month: _asInt(row['month']) ?? DateTime.now().month,
       year: _asInt(row['year']) ?? DateTime.now().year,
       limitAmount: limitAmount.toDouble(),
@@ -2374,7 +2765,8 @@ class FinanceRepository {
   }
 
   String _resolveCategoryName(Object? categoryId) {
-    return _findCategory(categoryId?.toString() ?? '')?.name ?? 'Không rõ';
+    return _findCategory(categoryId?.toString() ?? '')?.name ??
+        'KhÃƒÂ´ng rÃƒÂµ';
   }
 
   CategoryModel? _findCategory(String categoryId) {
@@ -2452,6 +2844,23 @@ class FinanceRepository {
     final columns = await _getTableColumns(db, 'transactions');
     if (columns.contains('userId')) return 'userId';
     if (columns.contains('user_id')) return 'user_id';
+    return 'userId';
+  }
+
+  Future<String> _transactionUserExpression(Database db) async {
+    final columns = await _getTableColumns(db, 'transactions');
+    final hasUserId = columns.contains('userId');
+    final hasLegacyUserId = columns.contains('user_id');
+
+    if (hasUserId && hasLegacyUserId) {
+      return 'COALESCE(userId, user_id)';
+    }
+    if (hasUserId) {
+      return 'userId';
+    }
+    if (hasLegacyUserId) {
+      return 'user_id';
+    }
     return 'userId';
   }
 

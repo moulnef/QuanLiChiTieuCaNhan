@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'register_screen.dart';
-import '../providers/auth_provider.dart';
+
 import '../../utils/snackbar_utils.dart';
-import '../../utils/app_localizer.dart';
+import '../providers/auth_provider.dart';
+import 'forgot_password_screen.dart';
+import 'register_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,9 +19,9 @@ class _LoginPageState extends State<LoginPage>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
 
   @override
   void initState() {
@@ -46,15 +47,17 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
       if (mounted) {
         SnackbarUtils.showError(
           context,
-          "Vui lòng nhập đầy đủ email và mật khẩu".xtr(context),
+          'Vui lòng nhập đầy đủ email và mật khẩu.',
         );
       }
       return;
     }
+
     try {
       final rootNavigator = Navigator.of(context, rootNavigator: true);
       showDialog(
@@ -77,7 +80,6 @@ class _LoginPageState extends State<LoginPage>
       if (!mounted) return;
 
       if (result == null) {
-        // MyApp tự chuyển màn theo auth state để tránh race-condition.
         return;
       }
 
@@ -87,21 +89,36 @@ class _LoginPageState extends State<LoginPage>
       if (rootNavigator.mounted && rootNavigator.canPop()) {
         rootNavigator.pop();
       }
-      String msg = e.message ?? "Đã có lỗi xảy ra".xtr(context);
+
+      String msg = e.message ?? 'Đã có lỗi xảy ra.';
       if (e.code == 'user-not-found') {
-        msg = "Không tìm thấy tài khoản này.".xtr(context);
+        msg = 'Không tìm thấy tài khoản này.';
+      } else if (e.code == 'wrong-password') {
+        msg = 'Mật khẩu không chính xác.';
       }
-      if (e.code == 'wrong-password') {
-        msg = "Mật khẩu không chính xác.".xtr(context);
+
+      if (mounted) {
+        SnackbarUtils.showError(context, msg);
       }
-      if (mounted) SnackbarUtils.showError(context, msg);
     } catch (e) {
       final rootNavigator = Navigator.of(context, rootNavigator: true);
       if (rootNavigator.mounted && rootNavigator.canPop()) {
         rootNavigator.pop();
       }
-      if (mounted) SnackbarUtils.showError(context, e.toString());
+      if (mounted) {
+        SnackbarUtils.showError(context, e.toString());
+      }
     }
+  }
+
+  Future<void> _openForgotPasswordPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            ForgotPasswordPage(initialEmail: _emailController.text.trim()),
+      ),
+    );
   }
 
   @override
@@ -119,8 +136,6 @@ class _LoginPageState extends State<LoginPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 52),
-
-                  // Brand mark
                   Container(
                     width: 56,
                     height: 56,
@@ -146,11 +161,9 @@ class _LoginPageState extends State<LoginPage>
                     ),
                   ),
                   const SizedBox(height: 32),
-
-                  // Heading
-                  Text(
-                    "Chào mừng\ntrở lại".xtr(context),
-                    style: const TextStyle(
+                  const Text(
+                    'Chào mừng\ntrở lại',
+                    style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF1E293B),
@@ -159,46 +172,40 @@ class _LoginPageState extends State<LoginPage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    "Đăng nhập để quản lý tài chính của bạn".xtr(context),
-                    style: const TextStyle(
+                  const Text(
+                    'Đăng nhập để quản lý tài chính của bạn',
+                    style: TextStyle(
                       fontSize: 15,
                       color: Color(0xFF64748B),
                       height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 48),
-
-                  // Email field
-                  _buildLabel("Email"),
+                  _buildLabel('Email'),
                   const SizedBox(height: 8),
                   _buildInput(
                     controller: _emailController,
-                    hint: "your@email.com",
+                    hint: 'your@email.com',
                     keyboardType: TextInputType.emailAddress,
                     icon: Icons.email_outlined,
                   ),
                   const SizedBox(height: 20),
-
-                  // Password field
-                  _buildLabel("Mật khẩu".xtr(context)),
+                  _buildLabel('Mật khẩu'),
                   const SizedBox(height: 8),
                   _buildInput(
                     controller: _passwordController,
-                    hint: "••••••••",
+                    hint: '••••••••',
                     isPassword: true,
                     icon: Icons.lock_outline_rounded,
                   ),
                   const SizedBox(height: 14),
-
-                  // Forgot password
                   Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
-                      onTap: () {},
-                      child: Text(
-                        "Quên mật khẩu?".xtr(context),
-                        style: const TextStyle(
+                      onTap: _openForgotPasswordPage,
+                      child: const Text(
+                        'Quên mật khẩu?',
+                        style: TextStyle(
                           fontSize: 14,
                           color: Color(0xFF6D28D9),
                           fontWeight: FontWeight.w600,
@@ -207,12 +214,8 @@ class _LoginPageState extends State<LoginPage>
                     ),
                   ),
                   const SizedBox(height: 36),
-
-                  // Login button
-                  _buildPrimaryButton("ĐĂNG NHẬP".xtr(context), login),
+                  _buildPrimaryButton('ĐĂNG NHẬP', login),
                   const SizedBox(height: 28),
-
-                  // Divider
                   Row(
                     children: [
                       Expanded(
@@ -220,11 +223,11 @@ class _LoginPageState extends State<LoginPage>
                           color: const Color(0xFFCBD5E1).withValues(alpha: 0.5),
                         ),
                       ),
-                      Padding(
+                      const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          "hoặc tiếp tục với".xtr(context),
-                          style: const TextStyle(
+                          'hoặc tiếp tục với',
+                          style: TextStyle(
                             fontSize: 13,
                             color: Color(0xFF94A3B8),
                             fontWeight: FontWeight.w500,
@@ -239,15 +242,12 @@ class _LoginPageState extends State<LoginPage>
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Social buttons
                   Row(
                     children: [
                       Expanded(
                         child: _buildSocialButton(
-                          iconPath: 'lib/ui/ai_chat/google_logo.png',
                           icon: Icons.g_mobiledata_rounded,
-                          label: "Google",
+                          label: 'Google',
                           onTap: () {},
                         ),
                       ),
@@ -255,22 +255,20 @@ class _LoginPageState extends State<LoginPage>
                       Expanded(
                         child: _buildSocialButton(
                           icon: Icons.apple_rounded,
-                          label: "Apple",
+                          label: 'Apple',
                           onTap: () {},
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 36),
-
-                  // Register link
                   Center(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          "Chưa có tài khoản? ".xtr(context),
-                          style: const TextStyle(
+                        const Text(
+                          'Chưa có tài khoản? ',
+                          style: TextStyle(
                             fontSize: 15,
                             color: Color(0xFF64748B),
                           ),
@@ -282,9 +280,9 @@ class _LoginPageState extends State<LoginPage>
                               builder: (_) => const RegisterPage(),
                             ),
                           ),
-                          child: Text(
-                            "Đăng ký ngay".xtr(context),
-                            style: const TextStyle(
+                          child: const Text(
+                            'Đăng ký ngay',
+                            style: TextStyle(
                               fontSize: 15,
                               color: Color(0xFF1D4ED8),
                               fontWeight: FontWeight.bold,
@@ -416,7 +414,6 @@ class _LoginPageState extends State<LoginPage>
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    String? iconPath,
   }) {
     return GestureDetector(
       onTap: onTap,

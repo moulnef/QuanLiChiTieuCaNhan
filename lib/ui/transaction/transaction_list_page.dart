@@ -35,6 +35,23 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     return _dynamicCategoryTranslations[raw] ?? raw;
   }
 
+  CategoryModel? _resolveCategoryModel(TransactionModel tx) {
+    return CategoryData.findByIdOrName(tx.categoryId) ??
+        CategoryData.findByIdOrName(tx.categoryName);
+  }
+
+  String _displayTransactionCategory(TransactionModel tx) {
+    final category = _resolveCategoryModel(tx);
+    final rawName = category?.name ?? tx.categoryName.trim();
+    if (rawName.isNotEmpty) {
+      return _displayCategory(rawName);
+    }
+    if (tx.categoryId.trim().isNotEmpty) {
+      return _displayCategory(CategoryData.resolveDisplayName(tx.categoryId));
+    }
+    return _displayCategory('Khác');
+  }
+
   void _queueCategoryTranslations(TransactionListState state) {
     final lang = Localizations.localeOf(context).languageCode.toLowerCase();
     if (lang != 'en') {
@@ -48,11 +65,8 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
 
     final candidates = <String>{};
     for (final tx in state.filteredList) {
-      final categoryId = tx.categoryId.trim();
-      final categoryName = tx.categoryName.trim();
-      if (categoryId.isNotEmpty) {
-        candidates.add(categoryId);
-      }
+      final category = _resolveCategoryModel(tx);
+      final categoryName = (category?.name ?? tx.categoryName).trim();
       if (categoryName.isNotEmpty) {
         candidates.add(categoryName);
       }
@@ -196,7 +210,8 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                           children: [
                             if (canGoBack) ...[
                               IconButton(
-                                onPressed: () => Navigator.of(context).maybePop(),
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
                                 icon: const Icon(
                                   Icons.arrow_back_ios_new_rounded,
                                   color: Colors.white,
@@ -253,16 +268,35 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                               ),
                             ),
                             child: Container(
-                              width: 40,
                               height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
                               ),
-                              child: const Icon(
-                                Icons.add_rounded,
-                                color: Colors.white,
-                                size: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.22),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.add_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Thêm'.xtr(context),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -384,9 +418,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                         ...txList.map((tx) {
                           final isExpense = tx.type == 'expense';
-                          final category = CategoryData.getAllCategories()
-                              .where((c) => c.name == tx.categoryId)
-                              .firstOrNull;
+                          final category = _resolveCategoryModel(tx);
 
                           return _ScaleOnTap(
                             onTap: () => Navigator.push(
@@ -423,12 +455,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                       width: 46,
                                       height: 46,
                                       decoration: BoxDecoration(
-                                        color:
-                                            (category?.color ?? Colors.grey)
-                                                .withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(
-                                          14,
-                                        ),
+                                        color: (category?.color ?? Colors.grey)
+                                            .withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Icon(
                                         category?.iconData ??
@@ -446,8 +475,8 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                           Text(
                                             tx.note.isNotEmpty
                                                 ? tx.note
-                                                : _displayCategory(
-                                                    tx.categoryId,
+                                                : _displayTransactionCategory(
+                                                    tx,
                                                   ),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
@@ -459,7 +488,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            _displayCategory(tx.categoryId),
+                                            _displayTransactionCategory(tx),
                                             style: const TextStyle(
                                               color: Color(0xFF94A3B8),
                                               fontSize: 13,
@@ -1502,12 +1531,13 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     String? selectedCategory,
     Function(String) onTapCategory,
   ) {
-    bool isSelected = cat.name == selectedCategory;
+    bool isSelected =
+        cat.id == selectedCategory || cat.name == selectedCategory;
 
     return Builder(
       builder: (context) {
         return InkWell(
-          onTap: () => onTapCategory(cat.name),
+          onTap: () => onTapCategory(cat.id),
           borderRadius: BorderRadius.circular(16),
           child: SizedBox(
             width:

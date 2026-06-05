@@ -1,12 +1,13 @@
 import 'dart:async';
 
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/transaction_repository.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/transaction_repository.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/utils/app_localizer.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -16,9 +17,6 @@ class StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<StatsPage> {
-  static const String _demoUserId = 'user_001';
-
-  // Đã đồng bộ mã màu Tím Galaxy với toàn bộ App
   static const Color _primary = Color(0xFF6D28D9);
 
   static const List<Color> _chartColors = [
@@ -40,6 +38,7 @@ class _StatsPageState extends State<StatsPage> {
   bool _isLoading = true;
   List<TransactionModel> _allTransactions = [];
   final TransactionRepository _repository = TransactionRepository();
+  StreamSubscription<User?>? _authSubscription;
   StreamSubscription<void>? _transactionSubscription;
 
   double _totalIncome = 0;
@@ -56,31 +55,58 @@ class _StatsPageState extends State<StatsPage> {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _transactionSubscription?.cancel();
     super.dispose();
   }
 
-  String _resolveUserId() {
+  String? _resolveUserId() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      return uid;
+    if (uid == null || uid.isEmpty) {
+      return null;
     }
-    return _demoUserId;
+    return uid;
   }
 
   void _bindTransactions() {
-    final userId = _resolveUserId();
-    _loadData();
-    _transactionSubscription = _repository
-        .watchTransactions(userId)
-        .listen((_) => _loadData());
+    _authSubscription?.cancel();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _transactionSubscription?.cancel();
+      final userId = user?.uid;
+      if (userId == null || userId.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _allTransactions = [];
+          _computeStats();
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _loadData();
+      _transactionSubscription = _repository
+          .watchTransactions(userId)
+          .listen((_) => _loadData(silent: true));
+    });
   }
 
-  Future<void> _loadData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool silent = false}) async {
+    final userId = _resolveUserId();
+    if (userId == null) {
+      if (!mounted) return;
+      setState(() {
+        _allTransactions = [];
+        _computeStats();
+        _isLoading = false;
+      });
+      return;
+    }
+
+    if (!silent && _allTransactions.isEmpty) {
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+    }
     try {
-      final userId = _resolveUserId();
       final transactions = await _repository.getTransactions(userId);
       if (!mounted) return;
       setState(() {
@@ -142,17 +168,22 @@ class _StatsPageState extends State<StatsPage> {
         filtered = _allTransactions;
     }
 
-    double income = 0, expense = 0;
+    double income = 0;
+    double expense = 0;
     final catMap = <String, double>{};
 
     for (final t in filtered) {
       if (t.type == 'income') {
         income += t.amount;
-      } else {
-        expense += t.amount;
-        final cat = t.categoryName.isEmpty ? 'Khác' : t.categoryName;
-        catMap[cat] = (catMap[cat] ?? 0) + t.amount;
+        continue;
       }
+
+      expense += t.amount;
+      final cat = CategoryData.resolveDisplayName(
+        t.categoryId,
+        t.categoryName.isEmpty ? 'Khác' : t.categoryName,
+      );
+      catMap[cat] = (catMap[cat] ?? 0) + t.amount;
     }
 
     final groupedMap = <String, double>{};
@@ -173,7 +204,9 @@ class _StatsPageState extends State<StatsPage> {
 
   String _mapToGroup(String categoryName) {
     final name = categoryName.toLowerCase();
+
     if (name.contains('ăn') ||
+        name.contains('an ') ||
         name.contains('cafe') ||
         name.contains('bữa') ||
         name.contains('chợ') ||
@@ -222,7 +255,9 @@ class _StatsPageState extends State<StatsPage> {
         name.contains('dịch vụ')) {
       return 'Hóa đơn';
     }
-    if (name.contains('du lịch') || name.contains('travel')) return 'Du lịch';
+    if (name.contains('du lịch') || name.contains('travel')) {
+      return 'Du lịch';
+    }
     return categoryName.isEmpty ? 'Khác' : categoryName;
   }
 
@@ -231,7 +266,8 @@ class _StatsPageState extends State<StatsPage> {
     final result = <Map<String, double>>[];
     for (int i = 5; i >= 0; i--) {
       final month = DateTime(now.year, now.month - i, 1);
-      double income = 0, expense = 0;
+      double income = 0;
+      double expense = 0;
       for (final t in _allTransactions) {
         if (t.transactionDate.year == month.year &&
             t.transactionDate.month == month.month) {
@@ -268,8 +304,12 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   String _formatMoney(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}tr';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}k';
+    if (amount >= 1000000) {
+      return '${(amount / 1000000).toStringAsFixed(1)}tr';
+    }
+    if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(0)}k';
+    }
     return NumberFormat('#,###', 'vi').format(amount);
   }
 
@@ -325,7 +365,6 @@ class _StatsPageState extends State<StatsPage> {
   Widget _buildHeader(String monthLabel) {
     return Container(
       decoration: const BoxDecoration(
-        // ĐỒNG BỘ: Gradient chuẩn Galaxy
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -370,7 +409,7 @@ class _StatsPageState extends State<StatsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Thống Kê & Báo Cáo'.xtr(context),
+                    'Thống kê & Báo cáo'.xtr(context),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -389,7 +428,10 @@ class _StatsPageState extends State<StatsPage> {
                   const SizedBox(height: 24),
                   Row(
                     children: [
-                      _buildSummaryCard('Thu nhập'.xtr(context), _formatMoney(_totalIncome)),
+                      _buildSummaryCard(
+                        'Thu nhập'.xtr(context),
+                        _formatMoney(_totalIncome),
+                      ),
                       const SizedBox(width: 10),
                       _buildSummaryCard(
                         'Chi tiêu'.xtr(context),
@@ -620,13 +662,16 @@ class _StatsPageState extends State<StatsPage> {
   Widget _buildMonthlyBarChart() {
     final now = DateTime.now();
     final monthLabels = List.generate(6, (i) {
-      final m = DateTime(now.year, now.month - 5 + i, 1);
-      return 'T${m.month}';
+      final month = DateTime(now.year, now.month - 5 + i, 1);
+      return 'T${month.month}';
     });
 
-    final maxVal = _monthlyData.fold<double>(0, (prev, m) {
-      final v = [m['income']!, m['expense']!].reduce((a, b) => a > b ? a : b);
-      return v > prev ? v : prev;
+    final maxVal = _monthlyData.fold<double>(0, (prev, item) {
+      final value = [
+        item['income']!,
+        item['expense']!,
+      ].reduce((a, b) => a > b ? a : b);
+      return value > prev ? value : prev;
     });
 
     return _buildCard(
@@ -765,7 +810,7 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   Widget _buildWeeklyLineChart() {
-    final dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+    const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
     final maxVal = _weeklyData.isEmpty
         ? 10.0
         : _weeklyData.reduce((a, b) => a > b ? a : b);
@@ -795,8 +840,8 @@ class _StatsPageState extends State<StatsPage> {
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipItems: (spots) => spots
                         .map(
-                          (s) => LineTooltipItem(
-                            _formatMoney(s.y),
+                          (spot) => LineTooltipItem(
+                            _formatMoney(spot.y),
                             const TextStyle(color: Colors.white, fontSize: 11),
                           ),
                         )
@@ -806,7 +851,7 @@ class _StatsPageState extends State<StatsPage> {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (v) => FlLine(
+                  getDrawingHorizontalLine: (value) => FlLine(
                     color: Colors.grey.withValues(alpha: 0.15),
                     strokeWidth: 1,
                   ),

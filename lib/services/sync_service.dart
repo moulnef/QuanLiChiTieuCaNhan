@@ -49,16 +49,19 @@ class SyncService with WidgetsBindingObserver {
   final StreamController<SyncEvent> _syncEventController = StreamController<SyncEvent>.broadcast();
   Stream<SyncEvent> get syncEventStream => _syncEventController.stream;
 
-  Future<int> getPendingCount() async {
+  Future<int> getPendingCount([String? userId]) async {
     if (kIsWeb) return 0;
     try {
+      final targetUserId = userId ?? _currentUserId;
+      if (targetUserId == null || targetUserId.isEmpty) return 0;
       final db = await DatabaseHelper.instance.database;
       int count = 0;
 
       final tables = ['transactions', 'budgets', 'savings', 'debts', 'installments'];
       for (final table in tables) {
         final res = await db.rawQuery(
-          'SELECT COUNT(*) as cnt FROM $table WHERE isSynced = 0 OR isSynced IS NULL'
+          'SELECT COUNT(*) as cnt FROM $table WHERE (isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+          [targetUserId]
         );
         count += Sqflite.firstIntValue(res) ?? 0;
       }
@@ -86,7 +89,8 @@ class SyncService with WidgetsBindingObserver {
       // 1. Transactions
       final txRows = await db.query(
         'transactions',
-        where: 'isSynced = 0 OR isSynced IS NULL',
+        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
       );
       final List<TransactionModel> txList = [];
       for (final row in txRows) {
@@ -101,7 +105,8 @@ class SyncService with WidgetsBindingObserver {
       // 2. Budgets
       final budgetRows = await db.query(
         'budgets',
-        where: 'isSynced = 0 OR isSynced IS NULL',
+        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
       );
       final List<Budget> budgetList = [];
       for (final row in budgetRows) {
@@ -116,7 +121,8 @@ class SyncService with WidgetsBindingObserver {
       // 3. Savings
       final savingRows = await db.query(
         'savings',
-        where: 'isSynced = 0 OR isSynced IS NULL',
+        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
       );
       final List<SavingGoal> savingList = [];
       for (final row in savingRows) {
@@ -131,7 +137,8 @@ class SyncService with WidgetsBindingObserver {
       // 4. Debts
       final debtRows = await db.query(
         'debts',
-        where: 'isSynced = 0 OR isSynced IS NULL',
+        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
       );
       final List<DebtRecord> debtList = [];
       for (final row in debtRows) {
@@ -146,7 +153,8 @@ class SyncService with WidgetsBindingObserver {
       // 5. Installments
       final installmentRows = await db.query(
         'installments',
-        where: 'isSynced = 0 OR isSynced IS NULL',
+        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        whereArgs: [userId],
       );
       final List<InstallmentPlan> installmentList = [];
       for (final row in installmentRows) {

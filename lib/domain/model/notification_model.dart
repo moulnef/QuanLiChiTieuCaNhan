@@ -1,7 +1,10 @@
 enum NotificationType {
+  transactionIncome,
+  transactionExpense,
   savingLow,
   budgetNearLimit,
   budgetExceeded,
+  budgetNegative,
   monthlyOverspend,
   debtDueSoon,
   installmentDue,
@@ -9,6 +12,7 @@ enum NotificationType {
 
 class NotificationItem {
   final String id;
+  final String userId;
   final NotificationType type;
   final String title;
   final String body;
@@ -18,6 +22,7 @@ class NotificationItem {
 
   NotificationItem({
     required this.id,
+    required this.userId,
     required this.type,
     required this.title,
     required this.body,
@@ -28,6 +33,7 @@ class NotificationItem {
 
   NotificationItem copyWith({
     String? id,
+    String? userId,
     NotificationType? type,
     String? title,
     String? body,
@@ -37,6 +43,7 @@ class NotificationItem {
   }) {
     return NotificationItem(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       type: type ?? this.type,
       title: title ?? this.title,
       body: body ?? this.body,
@@ -49,6 +56,7 @@ class NotificationItem {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'userId': userId,
       'type': type.name,
       'title': title,
       'body': body,
@@ -61,9 +69,10 @@ class NotificationItem {
   factory NotificationItem.fromMap(Map<String, dynamic> map) {
     return NotificationItem(
       id: map['id'] ?? '',
+      userId: map['userId'] ?? '',
       type: NotificationType.values.firstWhere(
         (e) => e.name == map['type'],
-        orElse: () => NotificationType.savingLow,
+        orElse: () => NotificationType.transactionExpense,
       ),
       title: map['title'] ?? '',
       body: map['body'] ?? '',

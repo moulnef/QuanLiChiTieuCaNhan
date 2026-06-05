@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:http/http.dart' as http;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'dart:convert';
-import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-import '../../domain/model/transaction_model.dart';
-import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/transaction/transaction_controller.dart';
 import '../../data/local/category_data.dart';
+import '../../domain/model/category_model.dart';
+import '../../domain/model/transaction_model.dart';
+import '../transaction/transaction_controller.dart';
 
 class VoiceAssistant extends ConsumerStatefulWidget {
   const VoiceAssistant({super.key});
@@ -18,311 +17,689 @@ class VoiceAssistant extends ConsumerStatefulWidget {
 }
 
 class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
-  late stt.SpeechToText _speech;
+  late final stt.SpeechToText _speech;
+  late final FlutterTts _tts;
+
   bool _isListening = false;
-  bool _isProcessing = false; // Trạng thái AI đang suy nghĩ, tránh đụng chạm
-  String _text = "Bấm vào mic để nói...";
-
-  final String githubToken = 'ghp_' '0fMl3mRh24hvx7uoegoMcuvTfxKO1x09xMXD';
-
-  static final List<Map<String, dynamic>> _voiceHistory = [];
-  static final FlutterTts _flutterTts = FlutterTts();
+  bool _isProcessing = false;
+  bool _isInitializingSpeech = false;
+  bool _isSpeechReady = false;
+  bool _relistenAfterSpeech = false;
+  String _text = 'Bam vao mic de noi...';
+  _PendingDraft? _pendingDraft;
 
   @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    _tts = FlutterTts();
     _initTts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _prepareSpeech();
+    });
   }
 
   Future<void> _initTts() async {
     try {
-      await _flutterTts.setLanguage("vi-VN");
-      await _flutterTts.setSpeechRate(1.0);
-      await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.0);
-
-      // Quan trọng cho Web: Ép hệ thống đợi đọc xong mới làm việc khác
-      await _flutterTts.awaitSpeakCompletion(true);
-    } catch (e) {
-      debugPrint("Lỗi khởi tạo giọng nói: $e");
-    }
-  }
-
-  static Future<void> _speak(String text) async {
-    try {
-      await _flutterTts.speak(text);
-    } catch (e) {
-      debugPrint("Lỗi không thể phát âm: $e");
-    }
-  }
-
-  void _listen() async {
-    // Nếu AI đang suy nghĩ thì không cho bấm lung tung
-    if (_isProcessing) return;
-
-    if (!_isListening) {
-      try {
-        bool available = await _speech.initialize(
-          onStatus: (val) {
-            if (val == 'done' || val == 'notListening') {
-              if (mounted && _isListening && !_isProcessing) {
-                setState(() => _isListening = false);
-              }
-            }
-          },
-          onError: (val) {
-            debugPrint('Lỗi mic: $val');
-            if (mounted) {
-              setState(() {
-                _isListening = false;
-                _text = "Lỗi kết nối Mic! (Hãy f5 tải lại trang nhé)";
-              });
-            }
-          },
-        );
-
-        if (available) {
-          // 🛡️ BỘ LỌC NGÔN NGỮ AN TOÀN (CHỐNG CRASH 100%)
-          String targetLocale = 'vi-VN'; // Lấy Web làm mặc định để chống sập
-          try {
-            var locales = await _speech.locales();
-            if (locales.isNotEmpty) {
-              var viLocales = locales.where((loc) => loc.localeId.contains('vi'));
-              if (viLocales.isNotEmpty) {
-                targetLocale = viLocales.first.localeId;
-              } else {
-                targetLocale = locales.first.localeId;
-              }
-            }
-          } catch (e) {
-            debugPrint("Lỗi lấy danh sách ngôn ngữ, dùng mặc định vi-VN: $e");
-          }
-
-          debugPrint("👉 Đã chốt mã ngôn ngữ để nghe: $targetLocale");
-
-          setState(() {
-            _isListening = true;
-            _text = "Đang nghe...";
-          });
-
-          // Bọc try-catch để lỡ TTS trên web bị kẹt cũng không làm sập luồng nghe
-          try {
-            await _flutterTts.stop();
-          } catch (_) {}
-
-          bool hasProcessedThisTurn = false;
-
-          _speech.listen(
-            localeId: targetLocale,
-            pauseFor: const Duration(seconds: 4),
-            onResult: (val) async {
-              if (mounted && !hasProcessedThisTurn) {
-                setState(() {
-                  if (val.recognizedWords.isNotEmpty) {
-                    _text = val.recognizedWords;
-                  }
-                });
-
-                if (val.finalResult) {
-                  if (val.recognizedWords.isNotEmpty) {
-                    hasProcessedThisTurn = true;
-                    setState(() {
-                      _isListening = false;
-                      _isProcessing = true;
-                      _text = "AI đang suy nghĩ...";
-                    });
-
-                    final messenger = ScaffoldMessenger.of(context);
-                    final controller = ref.read(transactionControllerProvider);
-
-                    await _processWithAI(val.recognizedWords, messenger, controller);
-                  } else {
-                    setState(() {
-                      _isListening = false;
-                      _text = "Chưa nghe rõ, vui lòng bấm mic nói lại.";
-                    });
-                  }
-                }
-              }
-            },
-          );
-        } else {
-          setState(() => _text = "Không tìm thấy Micro hoặc chưa cấp quyền!");
+      await _tts.setLanguage('vi-VN');
+      await _tts.setSpeechRate(0.48);
+      await _tts.setVolume(1.0);
+      await _tts.setPitch(1.0);
+      await _tts.awaitSpeakCompletion(true);
+      _tts.setCompletionHandler(() {
+        if (!mounted) {
+          return;
         }
-      } catch (e) {
-        // Bắt lỗi tổng để app không bao giờ bị đơ
-        debugPrint("Lỗi hệ thống Mic: $e");
-        if (mounted) {
+        final shouldRelisten = _relistenAfterSpeech;
+        _relistenAfterSpeech = false;
+        if (shouldRelisten) {
+          _listen();
+        }
+      });
+    } catch (e) {
+      debugPrint('TTS init error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _tts.stop();
+    super.dispose();
+  }
+
+  Future<void> _speak(String message, {bool relisten = false}) async {
+    _relistenAfterSpeech = relisten;
+    try {
+      await _tts.stop();
+      await _tts.speak(message);
+    } catch (e) {
+      debugPrint('TTS speak error: $e');
+      _relistenAfterSpeech = false;
+    }
+  }
+
+  Future<void> _prepareSpeech() async {
+    if (_isInitializingSpeech || _isSpeechReady) {
+      return;
+    }
+
+    setState(() {
+      _isInitializingSpeech = true;
+      _text = 'Dang chuan bi micro...';
+    });
+
+    final hasPermission = await _ensureMicrophonePermission();
+    if (!mounted) {
+      return;
+    }
+
+    if (!hasPermission) {
+      setState(() {
+        _isInitializingSpeech = false;
+        _text =
+            'Ban chua cap quyen micro. Hay cho phep micro de su dung tro ly giong noi.';
+      });
+      return;
+    }
+
+    try {
+      final available = await _speech.initialize(
+        onStatus: (status) {
+          if (!mounted) {
+            return;
+          }
+          if ((status == 'done' || status == 'notListening') &&
+              !_isProcessing) {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (error) {
+          debugPrint('Speech error: $error');
+          if (!mounted) {
+            return;
+          }
           setState(() {
             _isListening = false;
-            _text = "Hệ thống Mic bị lỗi, vui lòng F5 lại trang!";
+            _isProcessing = false;
+            _isSpeechReady = false;
+            _text = 'Khong the su dung micro. Hay kiem tra quyen truy cap.';
           });
-        }
-      }
-    } else {
-      setState(() => _isListening = false);
-      try {
-        _speech.stop();
-      } catch (_) {}
-    }
-  }
-
-  String _getValidCategory(String aiCategory, String type) {
-    final list = type == 'income' ? CategoryData.getIncomeCategories() : CategoryData.getExpenseCategories();
-    for (var cat in list) {
-      if (cat.name.toLowerCase() == aiCategory.toLowerCase()) return cat.name;
-    }
-    for (var cat in list) {
-      if (cat.name.toLowerCase().contains(aiCategory.toLowerCase()) || aiCategory.toLowerCase().contains(cat.name.toLowerCase())) return cat.name;
-    }
-    return list.isNotEmpty ? list.first.name : 'Khác';
-  }
-
-  Future<void> _processWithAI(String speechText, ScaffoldMessengerState messenger, TransactionController controller) async {
-    String expenseNames = CategoryData.getExpenseCategories().map((c) => c.name).join(", ");
-    String incomeNames = CategoryData.getIncomeCategories().map((c) => c.name).join(", ");
-
-    String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    String currentTime = DateFormat('HH:mm').format(DateTime.now());
-
-    _voiceHistory.add({"role": "user", "content": speechText});
-
-    List<Map<String, dynamic>> apiMessages = [
-      {
-        "role": "system",
-        "content": """Bạn là trợ lý tài chính thông minh. HÔM NAY LÀ: $currentDate, THỜI GIAN HIỆN TẠI: $currentTime.
-
-QUY TẮC KIỂM TRA ĐIỀU KIỆN (BẮT BUỘC PHẢI THỎA MÃN CẢ 3):
-Để tạo được giao dịch, câu nói CỦA NGƯỜI DÙNG PHẢI CÓ ĐỦ 3 YẾU TỐ SAU:
-1. MỤC ĐÍCH CỤ THỂ: Mua cái gì? (VD: "ăn phở", "mua nho", "đóng tiền học"). Các từ chung chung như "mua đồ", "mua sắm", "tiêu tiền" LÀ KHÔNG HỢP LỆ, BẮT BUỘC phải hỏi rõ là mua món gì.
-2. SỐ TIỀN: Phải có con số (VD: 30k, 50 ngàn).
-3. THỜI GIAN: Phải nói rõ buổi (sáng, trưa, chiều, tối, đêm) HOẶC giờ giấc (1h, 8g). 
-* AI TỰ XỬ LÝ NGỮ CẢNH: "Sáng nay" = buổi sáng. "8g chiều" hay "8g tối" = buổi tối. "1 giờ" có thể là 1h trưa (13h) hoặc 1h sáng tùy ngữ cảnh. Nếu người dùng đã nói "sáng/trưa/chiều/tối/đêm" thì TUYỆT ĐỐI KHÔNG HỎI LẠI THỜI GIAN.
-
-HÀNH ĐỘNG 1: NẾU THIẾU THÔNG TIN -> PHẢI HỎI LẠI
-Nếu thiếu BẤT KỲ yếu tố nào trong 3 yếu tố trên, trả về JSON hỏi lại:
-{"is_transaction": false, "message": "<Hỏi thông tin bị thiếu>"}
-- Ưu tiên 1 (Thiếu mục đích): "Mua đồ lúc 8h tối" -> Hỏi: "Bạn mua đồ gì thế?"
-- Ưu tiên 2 (Thiếu tiền): "Sáng nay ăn phở" -> Hỏi: "Sáng nay bạn ăn phở hết bao nhiêu tiền?"
-- Ưu tiên 3 (Thiếu thời gian): "Mua nho hết 50k" -> Hỏi: "Bạn mua nho vào buổi sáng, trưa hay tối vậy?"
-
-HÀNH ĐỘNG 2: NẾU ĐÃ ĐỦ 3 THÔNG TIN -> TẠO GIAO DỊCH
-TRẢ VỀ JSON:
-{"is_transaction": true, "type": "expense", "amount": 30000, "category": "Ăn sáng", "note": "Ăn phở", "date": "$currentDate"}
-- 'category': CHỈ CHỌN TỪ Chi: [$expenseNames] hoặc Thu: [$incomeNames]. KHÔNG TỰ CHẾ.
-- Bắt buộc phân loại Ăn uống: Từ 00h-10h (Sáng) -> "Ăn sáng"; Từ 10h-15h (Trưa) -> "Ăn trưa"; Từ 15h-24h (Chiều/Tối/Đêm) -> "Ăn tối".
-
-HÀNH ĐỘNG 3: TRÒ CHUYỆN BÌNH THƯỜNG
-Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời tiết), TRẢ VỀ JSON:
-{"is_transaction": false, "message": "<Câu trả lời thân thiện>"}"""
-      }
-    ];
-
-    apiMessages.addAll(_voiceHistory);
-
-    try {
-      final response = await http.post(
-        Uri.parse('https://models.inference.ai.azure.com/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Bearer $githubToken',
         },
-        body: jsonEncode({
-          "model": "gpt-4o-mini",
-          "messages": apiMessages,
-        }),
       );
 
-      if (response.statusCode == 200) {
-        String aiText = jsonDecode(utf8.decode(response.bodyBytes))['choices'][0]['message']['content'];
+      if (!mounted) {
+        return;
+      }
 
-        String potentialJson = aiText;
-        int startIndex = aiText.indexOf('{');
-        int endIndex = aiText.lastIndexOf('}');
-        if (startIndex != -1 && endIndex != -1) {
-          potentialJson = aiText.substring(startIndex, endIndex + 1);
-        } else {
-          potentialJson = aiText.replaceAll('```json', '').replaceAll('```', '').trim();
-        }
+      setState(() {
+        _isInitializingSpeech = false;
+        _isSpeechReady = available;
+        _text = available
+            ? 'Bam vao mic de noi...'
+            : 'Khong tim thay dich vu nhan dien giong noi tren thiet bi.';
+      });
+    } catch (e) {
+      debugPrint('Speech init error: $e');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isInitializingSpeech = false;
+        _isSpeechReady = false;
+        _text = 'Khoi tao micro that bai. Hay thu lai.';
+      });
+    }
+  }
 
-        try {
-          final aiData = jsonDecode(potentialJson);
+  Future<bool> _ensureMicrophonePermission() async {
+    final status = await Permission.microphone.status;
+    if (status.isGranted) {
+      return true;
+    }
 
-          // TRƯỜNG HỢP 1: TẠO GIAO DỊCH THÀNH CÔNG -> ĐÓNG BẢNG
-          if (aiData['is_transaction'] == true) {
-            final exactCategory = _getValidCategory(aiData['category'] ?? 'Khác', aiData['type'] ?? 'expense');
-            double parsedAmount = double.tryParse(aiData['amount'].toString()) ?? 0;
+    final requested = await Permission.microphone.request();
+    if (requested.isGranted) {
+      return true;
+    }
 
-            DateTime txDate = DateTime.now();
-            if (aiData['date'] != null) {
-              try {
-                DateTime parsedDate = DateTime.parse(aiData['date']);
-                txDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, txDate.hour, txDate.minute);
-              } catch (_) {}
-            }
+    if (requested.isPermanentlyDenied) {
+      await openAppSettings();
+    }
 
-            final newTx = TransactionModel(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              amount: parsedAmount,
-              type: aiData['type'] ?? 'expense',
-              categoryId: exactCategory,
-              transactionDate: txDate,
-              note: aiData['note'] ?? '',
-            );
+    return false;
+  }
 
-            await controller.createOrUpdateTransaction(newTx);
-            _voiceHistory.clear();
+  Future<void> _listen() async {
+    if (_isProcessing) {
+      return;
+    }
 
-            setState(() {
-              _text = "✅ Đã tạo giao dịch thành công!";
-              _isProcessing = false;
-            });
+    if (_isListening) {
+      setState(() => _isListening = false);
+      await _speech.stop();
+      return;
+    }
 
-            // Đọc xong thì tự động đóng cái bảng xuống
-            await _flutterTts.speak("Đã lưu ${aiData['note']} với số tiền ${parsedAmount.toInt()} đồng");
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) Navigator.pop(context);
-            });
+    try {
+      final hasPermission = await _ensureMicrophonePermission();
+      if (!mounted) {
+        return;
+      }
 
-          }
-          // TRƯỜNG HỢP 2: AI HỎI LẠI HOẶC TRẢ LỜI -> TỰ ĐỘNG MỞ MIC NGHE TIẾP
-          else {
-            String aiMessage = aiData['message'] ?? "Xin lỗi, mình chưa nghe rõ.";
-            _voiceHistory.add({"role": "assistant", "content": aiMessage});
+      if (!hasPermission) {
+        setState(() {
+          _text =
+              'Ban chua cap quyen micro. Hay cho phep micro trong cai dat ung dung.';
+        });
+        return;
+      }
 
-            setState(() {
-              _text = aiMessage;
-              _isProcessing = false;
-            });
-
-            // Cài đặt: Đọc xong tự bật Mic trở lại
-            _flutterTts.setCompletionHandler(() {
-              if (mounted) {
-                _listen();
-              }
-            });
-            await _flutterTts.speak(aiMessage);
-          }
-        } catch (e) {
-          String cleanText = aiText.replaceAll('```json', '').replaceAll('```', '').trim();
-          _voiceHistory.add({"role": "assistant", "content": cleanText});
-
-          setState(() {
-            _text = cleanText;
-            _isProcessing = false;
-          });
-
-          _flutterTts.setCompletionHandler(() {
-            if (mounted) _listen();
-          });
-          await _flutterTts.speak(cleanText);
+      if (!_isSpeechReady) {
+        await _prepareSpeech();
+        if (!mounted || !_isSpeechReady) {
+          return;
         }
       }
+
+      var localeId = 'vi-VN';
+      try {
+        final locales = await _speech.locales();
+        final vietnamese = locales.where(
+          (item) => item.localeId.contains('vi'),
+        );
+        if (vietnamese.isNotEmpty) {
+          localeId = vietnamese.first.localeId;
+        } else if (locales.isNotEmpty) {
+          localeId = locales.first.localeId;
+        }
+      } catch (e) {
+        debugPrint('Locale lookup error: $e');
+      }
+
+      await _tts.stop();
+      setState(() {
+        _isListening = true;
+        _text = 'Dang nghe...';
+      });
+
+      await _speech.listen(
+        localeId: localeId,
+        listenFor: const Duration(seconds: 20),
+        pauseFor: const Duration(seconds: 4),
+        onResult: (result) async {
+          if (!mounted) {
+            return;
+          }
+
+          if (result.recognizedWords.isNotEmpty) {
+            setState(() {
+              _text = result.recognizedWords;
+            });
+          }
+
+          if (!result.finalResult) {
+            return;
+          }
+
+          setState(() {
+            _isListening = false;
+            _isProcessing = true;
+          });
+
+          await _handleRecognizedText(result.recognizedWords);
+        },
+      );
     } catch (e) {
-      debugPrint("Lỗi AI Voice: $e");
-      if (mounted) setState(() => _isProcessing = false);
+      debugPrint('Listen error: $e');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isListening = false;
+        _isProcessing = false;
+        _text = 'Micro gap loi. Hay thu lai.';
+      });
     }
+  }
+
+  Future<void> _handleRecognizedText(String speechText) async {
+    final parsed = _parseVoiceCommand(speechText);
+
+    if (!parsed.canSave) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isProcessing = false;
+        _text = parsed.message;
+      });
+      await _speak(parsed.message, relisten: parsed.relisten);
+      return;
+    }
+
+    final controller = ref.read(transactionControllerProvider);
+    final category =
+        CategoryData.findByName(parsed.categoryName) ??
+        CategoryData.getAllCategories()
+            .where((item) => item.type == parsed.type)
+            .firstOrNull;
+
+    try {
+      final transaction = TransactionModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        amount: parsed.amount!,
+        type: parsed.type,
+        categoryId: category?.id ?? parsed.categoryName,
+        categoryName: category?.name ?? parsed.categoryName,
+        transactionDate: DateTime.now(),
+        note: parsed.note,
+      );
+
+      await controller.createOrUpdateTransaction(transaction);
+      _pendingDraft = null;
+
+      if (!mounted) {
+        return;
+      }
+
+      final amountText = parsed.amount!.toStringAsFixed(0);
+      final success =
+          'Da luu ${parsed.note} - $amountText dong vao muc ${parsed.categoryName}.';
+      setState(() {
+        _isProcessing = false;
+        _text = success;
+      });
+      await _speak(success);
+
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          Navigator.of(context).pop(true);
+        }
+      });
+    } catch (e) {
+      debugPrint('Save voice transaction error: $e');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isProcessing = false;
+        _text = 'Khong the luu giao dich. Hay thu lai.';
+      });
+      await _speak('Khong the luu giao dich. Hay thu lai.');
+    }
+  }
+
+  _ParsedVoiceCommand _parseVoiceCommand(String rawText) {
+    final original = rawText.trim();
+    final normalized = _normalize(original);
+
+    if (normalized.isEmpty) {
+      return const _ParsedVoiceCommand.message(
+        'Minh chua nghe ro. Hay noi lai giao dich cua ban.',
+        relisten: true,
+      );
+    }
+
+    if (_containsAny(normalized, const ['huy', 'thoat', 'dung lai'])) {
+      _pendingDraft = null;
+      return const _ParsedVoiceCommand.message('Da huy lenh hien tai.');
+    }
+
+    if (_pendingDraft != null) {
+      final amount = _extractAmount(normalized);
+      if (amount == null || amount <= 0) {
+        return const _ParsedVoiceCommand.message(
+          'Minh van chua nghe ro so tien. Ban hay noi vi du 50 nghin hoac 2 trieu.',
+          relisten: true,
+        );
+      }
+
+      final draft = _pendingDraft!;
+      return _ParsedVoiceCommand.save(
+        amount: amount,
+        type: draft.type,
+        categoryName: draft.categoryName,
+        note: draft.note,
+        message: 'Dang luu giao dich...',
+      );
+    }
+
+    if (_containsAny(normalized, const [
+      'xin chao',
+      'hello',
+      'hi',
+      'ban la ai',
+    ])) {
+      return const _ParsedVoiceCommand.message(
+        'Minh co the ghi giao dich cho ban. Hay noi vi du an sang 50 nghin.',
+        relisten: true,
+      );
+    }
+
+    final type = _detectTransactionType(normalized);
+    final amount = _extractAmount(normalized);
+    final category = _detectCategory(normalized, type);
+    final note = _buildNote(original, category?.name);
+
+    if (amount == null || amount <= 0) {
+      if (category == null) {
+        return const _ParsedVoiceCommand.message(
+          'Hay noi day du hon, vi du an trua 50 nghin, do xang 100 nghin, hoac nhan luong 10 trieu.',
+          relisten: true,
+        );
+      }
+
+      _pendingDraft = _PendingDraft(
+        type: type,
+        categoryName: category.name,
+        note: note,
+      );
+      return _ParsedVoiceCommand.message(
+        'Minh da hieu giao dich ${category.name}. Ban cho minh biet so tien nhe.',
+        relisten: true,
+      );
+    }
+
+    final resolvedCategory =
+        category?.name ?? (type == 'income' ? 'Tien vao' : 'Tien ra');
+
+    return _ParsedVoiceCommand.save(
+      amount: amount,
+      type: type,
+      categoryName: resolvedCategory,
+      note: note,
+      message: 'Dang luu giao dich...',
+    );
+  }
+
+  String _detectTransactionType(String normalized) {
+    const incomeKeywords = [
+      'nhan luong',
+      'luong',
+      'thuong',
+      'thu nhap',
+      'ban duoc',
+      'ban hang',
+      'duoc tang',
+      'duoc cho',
+      'lai ngan hang',
+      'lai tiet kiem',
+      'tien vao',
+      'thu duoc',
+    ];
+
+    return _containsAny(normalized, incomeKeywords) ? 'income' : 'expense';
+  }
+
+  CategoryModel? _detectCategory(String normalized, String type) {
+    final categories = type == 'income'
+        ? CategoryData.getIncomeCategories()
+        : CategoryData.getExpenseCategories();
+
+    String? targetName;
+    final mealCategory = _detectMealCategory(normalized);
+    if (mealCategory != null) {
+      targetName = mealCategory;
+    } else if (_containsAny(normalized, const ['ca phe', 'cafe', 'tra sua'])) {
+      targetName = 'Cafe';
+    } else if (_containsAny(normalized, const [
+      'cho',
+      'sieu thi',
+      'rau',
+      'thuc pham',
+    ])) {
+      targetName = 'Đi chợ/Siêu thị';
+    } else if (_containsAny(normalized, const ['xang', 'do xang'])) {
+      targetName = 'Xăng xe';
+    } else if (_containsAny(normalized, const [
+      'grab',
+      'taxi',
+      'xe om',
+      'thue xe',
+    ])) {
+      targetName = 'Taxi/Thuê xe';
+    } else if (_containsAny(normalized, const ['gui xe'])) {
+      targetName = 'Gửi xe';
+    } else if (_containsAny(normalized, const ['dien nuoc', 'tien dien'])) {
+      targetName = 'Điện';
+    } else if (_containsAny(normalized, const [
+      'nuoc sinh hoat',
+      'tien nuoc',
+    ])) {
+      targetName = 'Nước';
+    } else if (_containsAny(normalized, const ['internet', 'wifi'])) {
+      targetName = 'Internet';
+    } else if (_containsAny(normalized, const ['dien thoai', 'nap the'])) {
+      targetName = 'Điện thoại';
+    } else if (_containsAny(normalized, const ['quan ao', 'ao quan'])) {
+      targetName = 'Quần áo';
+    } else if (_containsAny(normalized, const ['giay', 'dep'])) {
+      targetName = 'Giày dép';
+    } else if (_containsAny(normalized, const ['xem phim', 'phim'])) {
+      targetName = 'Phim ảnh';
+    } else if (_containsAny(normalized, const [
+      'giai tri',
+      'vui choi',
+      'karaoke',
+    ])) {
+      targetName = 'Vui chơi giải trí';
+    } else if (_containsAny(normalized, const ['thue nha'])) {
+      targetName = 'Thuê nhà';
+    } else if (_containsAny(normalized, const ['hoc phi'])) {
+      targetName = 'Học phí';
+    } else if (_containsAny(normalized, const ['sach vo', 'mua sach'])) {
+      targetName = 'Sách vở';
+    } else if (_containsAny(normalized, const ['kham benh', 'bac si'])) {
+      targetName = 'Khám chữa bệnh';
+    } else if (_containsAny(normalized, const ['thuoc', 'mua thuoc'])) {
+      targetName = 'Thuốc men';
+    } else if (_containsAny(normalized, const ['the thao', 'gym'])) {
+      targetName = 'Thể thao';
+    } else if (type == 'income' && _containsAny(normalized, const ['luong'])) {
+      targetName = 'Lương';
+    } else if (type == 'income' && _containsAny(normalized, const ['thuong'])) {
+      targetName = 'Thưởng';
+    } else if (type == 'income' &&
+        _containsAny(normalized, const ['lai tiet kiem', 'lai ngan hang'])) {
+      targetName = 'Lãi tiết kiệm';
+    } else if (type == 'income' && _containsAny(normalized, const ['lai'])) {
+      targetName = 'Tiền lãi';
+    } else if (type == 'income' &&
+        _containsAny(normalized, const ['duoc tang', 'duoc cho'])) {
+      targetName = 'Được cho/tặng';
+    }
+
+    if (targetName != null) {
+      return categories.where((item) => item.name == targetName).firstOrNull;
+    }
+
+    return null;
+  }
+
+  String? _detectMealCategory(String normalized) {
+    if (!_containsAny(normalized, const [
+      'an',
+      'pho',
+      'com',
+      'bun',
+      'mi tom',
+      'banh mi',
+      'do an',
+      'an sang',
+      'an trua',
+      'an toi',
+      'uong',
+    ])) {
+      return null;
+    }
+
+    if (_containsAny(normalized, const ['ca phe', 'cafe', 'tra sua'])) {
+      return null;
+    }
+
+    if (_containsAny(normalized, const ['sang', 'an sang', 'buoi sang'])) {
+      return 'Ăn sáng';
+    }
+    if (_containsAny(normalized, const ['trua', 'an trua', 'buoi trua'])) {
+      return 'Ăn trưa';
+    }
+    if (_containsAny(normalized, const [
+      'toi',
+      'dem',
+      'chieu',
+      'an toi',
+      'buoi toi',
+    ])) {
+      return 'Ăn tối';
+    }
+
+    final hour = DateTime.now().hour;
+    if (hour < 10) {
+      return 'Ăn sáng';
+    }
+    if (hour < 15) {
+      return 'Ăn trưa';
+    }
+    return 'Ăn tối';
+  }
+
+  double? _extractAmount(String normalized) {
+    final matches = RegExp(
+      r'(\d+(?:[.,]\d+)?)\s*(ty|trieu|tr|cu|k|nghin|ngan|dong|vnd)?',
+    ).allMatches(normalized).toList();
+
+    if (matches.isEmpty) {
+      return null;
+    }
+
+    RegExpMatch? selected;
+    for (final match in matches) {
+      final unit = match.group(2) ?? '';
+      if (unit.isNotEmpty) {
+        selected = match;
+      }
+    }
+    selected ??= matches.last;
+
+    final rawNumber = selected.group(1);
+    if (rawNumber == null) {
+      return null;
+    }
+
+    final baseValue = double.tryParse(rawNumber.replaceAll(',', '.'));
+    if (baseValue == null || baseValue <= 0) {
+      return null;
+    }
+
+    final unit = selected.group(2) ?? '';
+    var multiplier = 1.0;
+    if (unit == 'k' || unit == 'nghin' || unit == 'ngan') {
+      multiplier = 1000;
+    } else if (unit == 'tr' || unit == 'trieu' || unit == 'cu') {
+      multiplier = 1000000;
+    } else if (unit == 'ty') {
+      multiplier = 1000000000;
+    }
+
+    return (baseValue * multiplier).roundToDouble();
+  }
+
+  String _buildNote(String original, String? categoryName) {
+    final cleaned = original.trim();
+    if (cleaned.isEmpty) {
+      return categoryName ?? 'Giao dich bang giong noi';
+    }
+    return cleaned[0].toUpperCase() + cleaned.substring(1);
+  }
+
+  String _normalize(String input) {
+    final lower = input.toLowerCase().trim();
+    final map = <String, String>{
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
+      'đ': 'd',
+    };
+
+    final buffer = StringBuffer();
+    for (final char in lower.split('')) {
+      buffer.write(map[char] ?? char);
+    }
+
+    return buffer.toString().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _containsAny(String input, List<String> keywords) {
+    for (final keyword in keywords) {
+      if (input.contains(keyword)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
@@ -337,30 +714,108 @@ Nếu câu nói hoàn toàn KHÔNG phải giao dịch (VD: xin chào, thời ti�
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-              _isProcessing ? "AI đang xử lý..." : (_isListening ? "Đang nghe..." : "Trợ lý giọng nói"),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+            _isProcessing
+                ? 'Dang xu ly...'
+                : (_isInitializingSpeech
+                      ? 'Dang khoi tao micro...'
+                      : (_isListening ? 'Dang nghe...' : 'Tro ly giong noi')),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-
           CircleAvatar(
             radius: 40,
             backgroundColor: _isProcessing
-                ? Colors.grey.withValues(alpha: 0.2) // Màu xám khi đang bận
-                : (_isListening ? Colors.red.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1)),
+                ? Colors.grey.withValues(alpha: 0.2)
+                : (_isListening
+                      ? Colors.red.withValues(alpha: 0.2)
+                      : Colors.blue.withValues(alpha: 0.1)),
             child: IconButton(
               iconSize: 40,
-              icon: _isProcessing
-                  ? const CircularProgressIndicator() // Xoay xoay khi đang xử lý
-                  : Icon(_isListening ? Icons.mic : Icons.mic_none,
-                  color: _isListening ? Colors.red : Colors.blue),
-              onPressed: _listen, // Giờ bấm vào nó sẽ chạy chuẩn xác hơn
+              icon: (_isProcessing || _isInitializingSpeech)
+                  ? const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      color: _isListening ? Colors.red : Colors.blue,
+                    ),
+              onPressed: (_isProcessing || _isInitializingSpeech)
+                  ? null
+                  : _listen,
             ),
           ),
-
           const SizedBox(height: 20),
-          Text(_text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+          Text(
+            _text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+          if (_pendingDraft != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Dang cho so tien cho muc ${_pendingDraft!.categoryName}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _PendingDraft {
+  const _PendingDraft({
+    required this.type,
+    required this.categoryName,
+    required this.note,
+  });
+
+  final String type;
+  final String categoryName;
+  final String note;
+}
+
+class _ParsedVoiceCommand {
+  const _ParsedVoiceCommand._({
+    required this.canSave,
+    required this.message,
+    this.amount,
+    this.type = 'expense',
+    this.categoryName = '',
+    this.note = '',
+    this.relisten = false,
+  });
+
+  const _ParsedVoiceCommand.message(String message, {bool relisten = false})
+    : this._(canSave: false, message: message, relisten: relisten);
+
+  const _ParsedVoiceCommand.save({
+    required double amount,
+    required String type,
+    required String categoryName,
+    required String note,
+    required String message,
+  }) : this._(
+         canSave: true,
+         amount: amount,
+         type: type,
+         categoryName: categoryName,
+         note: note,
+         message: message,
+       );
+
+  final bool canSave;
+  final double? amount;
+  final String type;
+  final String categoryName;
+  final String note;
+  final String message;
+  final bool relisten;
 }

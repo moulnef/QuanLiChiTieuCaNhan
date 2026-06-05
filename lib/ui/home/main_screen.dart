@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/model/transaction_model.dart';
 import '../../domain/services/ocr_service.dart';
+import '../../services/login_tutorial_service.dart';
+import '../../services/receipt_image_service.dart';
 import '../../ui/ai_chat/chatbot.dart';
 import '../../ui/home/home_screen.dart';
 import '../../ui/home/voice_assistant.dart';
+import '../../ui/providers/auth_provider.dart';
 import '../../ui/settings/profile_screen.dart';
 import '../../ui/stats/stats_screen.dart';
 import '../../ui/transaction/create_transaction_page.dart';
@@ -70,6 +73,27 @@ class _TabRouteObserver extends NavigatorObserver {
   }
 }
 
+enum _TutorialTarget {
+  homeTab,
+  transactionsTab,
+  addButton,
+  quickActions,
+  statsTab,
+  profileTab,
+}
+
+class _TutorialStepData {
+  const _TutorialStepData({
+    required this.target,
+    required this.title,
+    required this.description,
+  });
+
+  final _TutorialTarget target;
+  final String title;
+  final String description;
+}
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -82,16 +106,64 @@ class _MainScreenState extends State<MainScreen>
   static const double _chatbotIconSize = 78;
   static const double _chatbotMinTop = 80;
   static const double _chatbotBottomReserve = 120;
+  static const List<_TutorialStepData> _tutorialSteps = [
+    _TutorialStepData(
+      target: _TutorialTarget.homeTab,
+      title: 'Trang tổng quan',
+      description:
+          'Đây là tab Trang chủ. Bạn có thể xem số dư, tổng thu chi và các mục quan trọng ngay tại đây.',
+    ),
+    _TutorialStepData(
+      target: _TutorialTarget.transactionsTab,
+      title: 'Lịch sử giao dịch',
+      description:
+          'Tab này giúp bạn xem và tìm lại toàn bộ giao dịch đã ghi trong ứng dụng.',
+    ),
+    _TutorialStepData(
+      target: _TutorialTarget.addButton,
+      title: 'Nút thêm nhanh',
+      description:
+          'Nút cộng ở giữa là lối vào nhanh để thêm giao dịch mới bất cứ lúc nào.',
+    ),
+    _TutorialStepData(
+      target: _TutorialTarget.quickActions,
+      title: 'Tác vụ nhanh',
+      description:
+          'Từ đây bạn có thể quét hóa đơn, ghi bằng giọng nói hoặc nhập giao dịch thủ công.',
+    ),
+    _TutorialStepData(
+      target: _TutorialTarget.statsTab,
+      title: 'Thống kê',
+      description:
+          'Mở tab Thống kê để xem biểu đồ, xu hướng chi tiêu và đánh giá tình hình tài chính.',
+    ),
+    _TutorialStepData(
+      target: _TutorialTarget.profileTab,
+      title: 'Tài khoản và cài đặt',
+      description:
+          'Tab cuối cùng dùng để xem thông tin tài khoản, đồng bộ, thông báo và đăng xuất.',
+    ),
+  ];
 
   int _selectedIndex = 0;
   bool _isMenuOpen = false;
   bool _hideOverlaysForRoute = false;
   bool _isNestedRouteActive = false;
   bool _isNavBarVisible = true;
+  bool _isTutorialActive = false;
+  int _tutorialStepIndex = 0;
+  bool _hasCheckedTutorial = false;
+  String? _tutorialUserId;
   late AnimationController _animationController;
   late Animation<double> _rotationAnimation;
   Offset? _chatbotOffset;
   late final List<_TabRouteObserver> _tabRouteObservers;
+  final GlobalKey _homeTabKey = GlobalKey();
+  final GlobalKey _transactionsTabKey = GlobalKey();
+  final GlobalKey _statsTabKey = GlobalKey();
+  final GlobalKey _profileTabKey = GlobalKey();
+  final GlobalKey _addButtonKey = GlobalKey();
+  final GlobalKey _quickActionsKey = GlobalKey();
 
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
@@ -119,6 +191,7 @@ class _MainScreenState extends State<MainScreen>
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateNestedRouteState();
+      _checkAndStartTutorial();
     });
   }
 
@@ -129,15 +202,128 @@ class _MainScreenState extends State<MainScreen>
   }
 
   void _toggleMenu() {
+    _setMenuOpen(!_isMenuOpen);
+  }
+
+  void _setMenuOpen(bool value) {
+    if (_isMenuOpen == value) return;
+    if (value) {
+      _animationController.forward();
+    } else {
+      _animationController.reverse();
+    }
+    setState(() => _isMenuOpen = value);
+  }
+
+  Future<void> _checkAndStartTutorial() async {
+    if (_hasCheckedTutorial) return;
+    _hasCheckedTutorial = true;
+
+    final userId = context.read<AuthProvider>().currentUser?.uid;
+    if (userId == null) {
+      return;
+    }
+
+    _tutorialUserId = userId;
+    final shouldShow = await LoginTutorialService.shouldShowForUser(userId);
+    if (!mounted || !shouldShow) return;
+
+    _startTutorial();
+  }
+
+  void _startTutorial() {
+    if (!mounted) return;
+    setState(() {
+      _isTutorialActive = true;
+      _tutorialStepIndex = 0;
+      _selectedIndex = 0;
+      _isNavBarVisible = true;
+    });
+    _syncTutorialStepUi();
+  }
+
+  Future<void> _completeTutorial() async {
+    final userId =
+        _tutorialUserId ?? context.read<AuthProvider>().currentUser?.uid;
+    if (userId != null) {
+      await LoginTutorialService.markSeenForUser(userId);
+    }
+    if (!mounted) return;
+
     if (_isMenuOpen) {
       _animationController.reverse();
-    } else {
-      _animationController.forward();
     }
-    setState(() => _isMenuOpen = !_isMenuOpen);
+
+    setState(() {
+      _isTutorialActive = false;
+      _tutorialStepIndex = 0;
+      _selectedIndex = 0;
+      _isMenuOpen = false;
+      _isNavBarVisible = true;
+    });
+  }
+
+  void _nextTutorialStep() {
+    if (_tutorialStepIndex >= _tutorialSteps.length - 1) {
+      _completeTutorial();
+      return;
+    }
+
+    setState(() {
+      _tutorialStepIndex += 1;
+    });
+    _syncTutorialStepUi();
+  }
+
+  void _previousTutorialStep() {
+    if (_tutorialStepIndex == 0) return;
+    setState(() {
+      _tutorialStepIndex -= 1;
+    });
+    _syncTutorialStepUi();
+  }
+
+  void _syncTutorialStepUi() {
+    if (!_isTutorialActive || !mounted) return;
+
+    final currentStep = _tutorialSteps[_tutorialStepIndex];
+    int nextIndex = _selectedIndex;
+    bool shouldOpenMenu = false;
+
+    switch (currentStep.target) {
+      case _TutorialTarget.homeTab:
+        nextIndex = 0;
+        break;
+      case _TutorialTarget.transactionsTab:
+        nextIndex = 1;
+        break;
+      case _TutorialTarget.addButton:
+        break;
+      case _TutorialTarget.quickActions:
+        shouldOpenMenu = true;
+        break;
+      case _TutorialTarget.statsTab:
+        nextIndex = 3;
+        break;
+      case _TutorialTarget.profileTab:
+        nextIndex = 4;
+        break;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedIndex = nextIndex;
+      _isNavBarVisible = true;
+    });
+    _setMenuOpen(shouldOpenMenu);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateNestedRouteState();
+    });
   }
 
   void _onItemTapped(int index) {
+    if (_isTutorialActive) return;
     if (index == 2) return;
 
     if (_selectedIndex == index) {
@@ -213,8 +399,7 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Future<void> _handleInvoiceScan() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final image = await ReceiptImageService.instance.pickReceiptImage(context);
 
     if (image != null) {
       if (!mounted) return;
@@ -254,6 +439,166 @@ class _MainScreenState extends State<MainScreen>
     }
   }
 
+  GlobalKey _keyForTutorialTarget(_TutorialTarget target) {
+    switch (target) {
+      case _TutorialTarget.homeTab:
+        return _homeTabKey;
+      case _TutorialTarget.transactionsTab:
+        return _transactionsTabKey;
+      case _TutorialTarget.addButton:
+        return _addButtonKey;
+      case _TutorialTarget.quickActions:
+        return _quickActionsKey;
+      case _TutorialTarget.statsTab:
+        return _statsTabKey;
+      case _TutorialTarget.profileTab:
+        return _profileTabKey;
+    }
+  }
+
+  Rect? _getRectForKey(GlobalKey key) {
+    final targetContext = key.currentContext;
+    if (targetContext == null) return null;
+
+    final renderObject = targetContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+
+    final offset = renderObject.localToGlobal(Offset.zero);
+    return offset & renderObject.size;
+  }
+
+  Widget _buildTutorialOverlay(BoxConstraints constraints) {
+    final step = _tutorialSteps[_tutorialStepIndex];
+    final rect = _getRectForKey(_keyForTutorialTarget(step.target));
+    final bool placeCardAbove =
+        rect != null && rect.center.dy > (constraints.maxHeight * 0.58);
+    final double cardTop = rect == null
+        ? constraints.maxHeight * 0.18
+        : (placeCardAbove ? rect.top - 196 : rect.bottom + 20)
+              .clamp(32.0, constraints.maxHeight - 212)
+              .toDouble();
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(color: Colors.black.withValues(alpha: 0.72)),
+        ),
+        if (rect != null)
+          Positioned(
+            left: (rect.left - 10)
+                .clamp(12.0, constraints.maxWidth - 24)
+                .toDouble(),
+            top: (rect.top - 10)
+                .clamp(12.0, constraints.maxHeight - 24)
+                .toDouble(),
+            child: IgnorePointer(
+              child: Container(
+                width: (rect.width + 20)
+                    .clamp(44.0, constraints.maxWidth - 24)
+                    .toDouble(),
+                height: (rect.height + 20)
+                    .clamp(44.0, constraints.maxHeight - 24)
+                    .toDouble(),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      blurRadius: 18,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          left: 20,
+          right: 20,
+          top: cardTop,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Bước ${_tutorialStepIndex + 1}/${_tutorialSteps.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6D28D9),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    step.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    step.description,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: _completeTutorial,
+                        child: const Text('Bỏ qua'),
+                      ),
+                      const Spacer(),
+                      if (_tutorialStepIndex > 0)
+                        OutlinedButton(
+                          onPressed: _previousTutorialStep,
+                          child: const Text('Trước'),
+                        ),
+                      if (_tutorialStepIndex > 0) const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _nextTutorialStep,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D28D9),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(
+                          _tutorialStepIndex == _tutorialSteps.length - 1
+                              ? 'Hoàn tất'
+                              : 'Tiếp',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
@@ -284,7 +629,8 @@ class _MainScreenState extends State<MainScreen>
                           }
                         });
                       }
-                    } else if (notification.direction == ScrollDirection.forward) {
+                    } else if (notification.direction ==
+                        ScrollDirection.forward) {
                       if (!_isNavBarVisible) {
                         setState(() {
                           _isNavBarVisible = true;
@@ -339,6 +685,7 @@ class _MainScreenState extends State<MainScreen>
                       duration: const Duration(milliseconds: 200),
                       opacity: _isMenuOpen && _isNavBarVisible ? 1.0 : 0.0,
                       child: Row(
+                        key: _quickActionsKey,
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.max,
                         children: [
@@ -411,22 +758,26 @@ class _MainScreenState extends State<MainScreen>
                             0,
                             Icons.home_outlined,
                             Icons.home_rounded,
+                            tutorialKey: _homeTabKey,
                           ),
                           _buildNavItem(
                             1,
                             Icons.receipt_long_outlined,
                             Icons.receipt_long_rounded,
+                            tutorialKey: _transactionsTabKey,
                           ),
                           const SizedBox(width: 60),
                           _buildNavItem(
                             3,
                             Icons.bar_chart_outlined,
                             Icons.bar_chart_rounded,
+                            tutorialKey: _statsTabKey,
                           ),
                           _buildNavItem(
                             4,
                             Icons.person_outline_rounded,
                             Icons.person_rounded,
+                            tutorialKey: _profileTabKey,
                           ),
                         ],
                       ),
@@ -482,6 +833,7 @@ class _MainScreenState extends State<MainScreen>
                     child: Transform.scale(
                       scale: 1.1,
                       child: GestureDetector(
+                        key: _addButtonKey,
                         onTap: _toggleMenu,
                         child: Container(
                           width: 56,
@@ -517,6 +869,7 @@ class _MainScreenState extends State<MainScreen>
                     ),
                   ),
                 ),
+              if (_isTutorialActive) _buildTutorialOverlay(constraints),
             ],
           );
         },
@@ -565,9 +918,15 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-  Widget _buildNavItem(int index, IconData outlineIcon, IconData filledIcon) {
+  Widget _buildNavItem(
+    int index,
+    IconData outlineIcon,
+    IconData filledIcon, {
+    Key? tutorialKey,
+  }) {
     final bool isSelected = _selectedIndex == index;
     return GestureDetector(
+      key: tutorialKey,
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
       child: Padding(

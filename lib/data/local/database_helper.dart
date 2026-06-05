@@ -5,7 +5,7 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 5;
+  static const int _databaseVersion = 6;
 
   DatabaseHelper._init();
 
@@ -37,6 +37,7 @@ class DatabaseHelper {
     await _createAllTables(db);
     await _migrateTransactionsColumns(db);
     await _migrateAllTablesForSync(db);
+    await _migrateNotificationsTable(db);
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -223,6 +224,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
+        userId TEXT,
         type TEXT,
         title TEXT,
         body TEXT,
@@ -234,6 +236,7 @@ class DatabaseHelper {
 
     await _migrateTransactionsColumns(db);
     await _migrateAllTablesForSync(db);
+    await _migrateNotificationsTable(db);
   }
 
   Future<void> _migrateTransactionsColumns(Database db) async {
@@ -268,10 +271,20 @@ class DatabaseHelper {
   }
 
   Future<void> _migrateAllTablesForSync(Database db) async {
-    final tables = ['transactions', 'budgets', 'savings', 'installments', 'debts'];
+    final tables = [
+      'transactions',
+      'budgets',
+      'savings',
+      'installments',
+      'debts',
+    ];
     for (final table in tables) {
       await _addColumnIfMissing(db, table, 'isSynced INTEGER DEFAULT 0');
     }
+  }
+
+  Future<void> _migrateNotificationsTable(Database db) async {
+    await _addColumnIfMissing(db, 'notifications', 'userId TEXT');
   }
 
   Future<void> _addColumnIfMissing(

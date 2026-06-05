@@ -131,19 +131,22 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   void initState() {
     super.initState();
     if (widget.editData != null) {
-      final formatted = NumberFormat('#,###', 'en_US')
-          .format(widget.editData!.amount)
-          .replaceAll(',', '.');
+      final formatted = NumberFormat(
+        '#,###',
+        'en_US',
+      ).format(widget.editData!.amount).replaceAll(',', '.');
       _amountController = TextEditingController(text: formatted);
       _currentType = widget.editData!.type;
       _selectedDate = widget.editData!.transactionDate;
       _categoryId = widget.editData!.categoryId;
       _noteInput.text = widget.editData!.note;
 
-      final allCategories = CategoryData.getAllCategories();
-      _selectedCategory = allCategories
-          .where((c) => c.name == _categoryId)
-          .firstOrNull;
+      _selectedCategory =
+          CategoryData.findByIdOrName(widget.editData!.categoryId) ??
+          CategoryData.findByIdOrName(widget.editData!.categoryName);
+      if (_selectedCategory != null) {
+        _categoryId = _selectedCategory!.id;
+      }
     } else {
       _amountController = TextEditingController(text: '0');
     }
@@ -187,17 +190,6 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     setState(() {
       _amountController.text = formatted;
     });
-  }
-
-  void _quickPickDate(DateTime date) {
-    final picked = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      _selectedDate.hour,
-      _selectedDate.minute,
-    );
-    setState(() => _selectedDate = picked);
   }
 
   void _showCompactNotification(
@@ -270,7 +262,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       ..sort((a, b) => b.value.compareTo(a.value));
     List<CategoryModel> top = [];
     for (var entry in sorted.take(6)) {
-      var cat = allCats.where((c) => c.name == entry.key).firstOrNull;
+      final cat = CategoryData.findByIdOrName(entry.key);
       if (cat != null) top.add(cat);
     }
     if (top.isEmpty) top = allCats.take(6).toList();
@@ -299,18 +291,34 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
     setState(() => _isSaving = true);
 
-    await controller.createOrUpdateTransaction(
-      TransactionModel(
-        id:
-            widget.editData?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-        amount: amount,
-        type: _currentType,
-        categoryId: _categoryId,
-        transactionDate: _selectedDate,
-        note: _noteInput.text,
-      ),
-    );
+    try {
+      await controller.createOrUpdateTransaction(
+        TransactionModel(
+          id:
+              widget.editData?.id ??
+              DateTime.now().millisecondsSinceEpoch.toString(),
+          amount: amount,
+          type: _currentType,
+          walletId: widget.editData?.walletId ?? '',
+          categoryId: _selectedCategory?.id ?? _categoryId,
+          categoryName:
+              _selectedCategory?.name ?? widget.editData?.categoryName ?? '',
+          transactionDate: _selectedDate,
+          note: _noteInput.text,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isSaving = false);
+      _showCompactNotification(
+        'Khong the luu giao dich: $e',
+        Colors.redAccent,
+        Icons.error_outline,
+      );
+      return;
+    }
 
     if (mounted) {
       setState(() {
@@ -330,7 +338,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           );
 
           final budget = budgets.firstWhere(
-            (b) => b.categoryId == _categoryId,
+            (b) => b.categoryId == (_selectedCategory?.id ?? _categoryId),
             orElse: () => Budget(
               id: '',
               userId: '',
@@ -358,7 +366,8 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               await Future.delayed(const Duration(milliseconds: 1500));
             } else if (ratio >= 0.9) {
               _showCompactNotification(
-                "Cảnh báo: Chi tiêu đạt ${(ratio * 100).toStringAsFixed(0)}% ngân sách!".xtr(context),
+                "Cảnh báo: Chi tiêu đạt ${(ratio * 100).toStringAsFixed(0)}% ngân sách!"
+                    .xtr(context),
                 const Color(0xFFD97706),
                 Icons.warning_amber_rounded,
               );
@@ -378,7 +387,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         Icons.check_circle_outline,
       );
       await Future.delayed(const Duration(milliseconds: 1000));
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.of(context).pop(true);
     }
   }
 
@@ -491,7 +500,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
 
   void _handleDelete() async {
     if (widget.editData != null) {
-      ref
+      await ref
           .read(transactionControllerProvider)
           .deleteTransaction(widget.editData!.id);
       _showCompactNotification(
@@ -499,7 +508,9 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
         Colors.red,
         Icons.delete_outline,
       );
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
     }
   }
 
@@ -729,6 +740,269 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     return Icon(cat.iconData, color: cat.color, size: size);
   }
 
+  double get _currentAmountValue {
+    final cleanText = _amountController.text.replaceAll('.', '');
+    return double.tryParse(cleanText) ?? 0;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  void _applyQuickDatePreset(DateTime date) {
+    if (_isSuccess) return;
+    setState(() {
+      _selectedDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        _selectedDate.hour,
+        _selectedDate.minute,
+      );
+    });
+  }
+
+  Widget _buildLivePreviewCard() {
+    final isExpense = _currentType == 'expense';
+    final accent = isExpense
+        ? const Color(0xFFEF4444)
+        : const Color(0xFF10B981);
+    final accentSoft = isExpense
+        ? const Color(0xFFFECDD3)
+        : const Color(0xFFBBF7D0);
+    final amount = NumberFormat('#,###', 'vi_VN').format(_currentAmountValue);
+    final categoryLabel = _selectedCategory != null
+        ? _displayCategoryName(_selectedCategory!.name)
+        : "Chọn danh mục".xtr(context);
+    final note = _noteInput.text.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            accent,
+            Color.lerp(accent, const Color(0xFF111827), 0.28) ?? accent,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -18,
+            top: -20,
+            child: Container(
+              width: 108,
+              height: 108,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            left: -10,
+            bottom: -36,
+            child: Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: accentSoft.withValues(alpha: 0.20),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isExpense
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isExpense
+                              ? "Chi tiêu".xtr(context)
+                              : "Thu nhập".xtr(context),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    DateFormat('dd/MM • HH:mm').format(_selectedDate),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.84),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "$amount đ",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                categoryLabel,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.94),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: Text(
+                  note.isEmpty
+                      ? "Chưa có ghi chú. Bạn có thể thêm mô tả ngắn để dễ tìm lại."
+                            .xtr(context)
+                      : note,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickDateStrip() {
+    final now = DateTime.now();
+    final presets = <({String label, DateTime date})>[
+      (label: "Hôm nay".xtr(context), date: now),
+      (
+        label: "Hôm qua".xtr(context),
+        date: now.subtract(const Duration(days: 1)),
+      ),
+      (
+        label: "Cuối tuần".xtr(context),
+        date: now.add(Duration(days: DateTime.saturday - now.weekday)),
+      ),
+    ];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: presets.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final preset = presets[index];
+          final selected = _isSameDay(_selectedDate, preset.date);
+          return _ScaleOnTap(
+            onTap: () => _applyQuickDatePreset(preset.date),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF1D4ED8) : Colors.white,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected
+                      ? const Color(0xFF1D4ED8)
+                      : const Color(0xFFE2E8F0),
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF1D4ED8,
+                          ).withValues(alpha: 0.16),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    size: 15,
+                    color: selected ? Colors.white : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    preset.label,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF334155),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isEditing = widget.editData != null;
@@ -748,35 +1022,6 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
           ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: TextButton.icon(
-              onPressed: _isSaving ? null : _handleSaveData,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.check_circle_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-              label: const Text(
-                'Lưu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -803,9 +1048,13 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 children: [
+                  _buildLivePreviewCard(),
+                  const SizedBox(height: 16),
                   _buildToggleType(),
                   const SizedBox(height: 16),
                   _buildAmountBox(),
+                  const SizedBox(height: 16),
+                  _buildQuickDateStrip(),
                   const SizedBox(height: 16),
                   _buildCategoryAndDateRow(),
                   const SizedBox(height: 16),
@@ -816,10 +1065,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               ),
             ),
           ),
-          if (isEditing)
-            _buildEditButtons()
-          else
-            _buildSaveButtonOnly(),
+          if (isEditing) _buildEditButtons() else _buildSaveButtonOnly(),
         ],
       ),
     );
@@ -876,7 +1122,11 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             label,
             style: TextStyle(
               color: isSelected ? Colors.white : const Color(0xFF64748B),
-              fontWeight: isSelected ? FontWeight.bold : const Color(0xFF6D28D9) == const Color(0xFF6D28D9) ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: isSelected
+                  ? FontWeight.bold
+                  : const Color(0xFF6D28D9) == const Color(0xFF6D28D9)
+                  ? FontWeight.w600
+                  : FontWeight.w500,
               fontSize: 15,
             ),
           ),
@@ -1008,18 +1258,6 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
     _queueCategoryTranslations();
     bool hasCat = _selectedCategory != null;
 
-    List<String> weekdays = [
-      'Chủ Nhật',
-      'Thứ 2',
-      'Thứ 3',
-      'Thứ 4',
-      'Thứ 5',
-      'Thứ 6',
-      'Thứ 7',
-    ];
-    String weekday =
-        weekdays[_selectedDate.weekday == 7 ? 0 : _selectedDate.weekday];
-
     return Row(
       children: [
         Expanded(
@@ -1037,7 +1275,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
               if (res != null) {
                 setState(() {
                   _selectedCategory = res;
-                  _categoryId = res.name;
+                  _categoryId = res.id;
                 });
               }
               if (res != null) {
@@ -1202,7 +1440,11 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       child: TextField(
         controller: _noteInput,
         decoration: InputDecoration(
-          icon: const Icon(Icons.notes_rounded, color: Color(0xFF94A3B8), size: 24),
+          icon: const Icon(
+            Icons.notes_rounded,
+            color: Color(0xFF94A3B8),
+            size: 24,
+          ),
           hintText: "Ghi chú thêm...".xtr(context),
           hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
           border: InputBorder.none,
@@ -1235,10 +1477,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
             onTap: () =>
                 setState(() => _isFrequentExpanded = !_isFrequentExpanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 16,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1283,7 +1522,7 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                     onTap: () {
                       setState(() {
                         _selectedCategory = cat;
-                        _categoryId = cat.name;
+                        _categoryId = cat.id;
                         _isFrequentExpanded = false;
                       });
                     },
@@ -1335,7 +1574,75 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
   }
 
   Widget _buildSaveButtonOnly() {
-    return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: _ScaleOnTap(
+          onTap: _isSaving ? null : _handleSaveData,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 58,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1D4ED8), Color(0xFF6D28D9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6D28D9).withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Center(
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Lưu giao dịch'.xtr(context),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildEditButtons() {
@@ -1362,7 +1669,10 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFEF4444),
+                    width: 1.5,
+                  ),
                 ),
                 child: Center(
                   child: Text(
@@ -1418,13 +1728,14 @@ class _CreateTransactionPageState extends ConsumerState<CreateTransactionPage> {
       ),
     );
   }
-
 }
 
 class ThousandSeparatorFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     if (newValue.text.isEmpty) {
       return const TextEditingValue(
         text: '',
@@ -1451,11 +1762,15 @@ class ThousandSeparatorFormatter extends TextInputFormatter {
 
     int digitsBeforeCursor = newValue.selection.end > newValue.text.length
         ? cleanText.length
-        : newValue.text.substring(0, newValue.selection.end).replaceAll('.', '').length;
+        : newValue.text
+              .substring(0, newValue.selection.end)
+              .replaceAll('.', '')
+              .length;
 
     int newCursorPosition = 0;
     int digitCount = 0;
-    while (newCursorPosition < formatted.length && digitCount < digitsBeforeCursor) {
+    while (newCursorPosition < formatted.length &&
+        digitCount < digitsBeforeCursor) {
       if (formatted[newCursorPosition] != '.') {
         digitCount++;
       }

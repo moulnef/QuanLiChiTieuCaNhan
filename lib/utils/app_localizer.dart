@@ -1,6 +1,8 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../services/translation_service.dart';
+
 class AppLocalizer {
   AppLocalizer._();
 
@@ -8,14 +10,23 @@ class AppLocalizer {
     if (context.locale.languageCode != 'en') {
       return viText;
     }
-    return _viToEn[viText] ?? viText;
+    return _viToEn[viText] ??
+        TranslationService.instance.translateCachedOrQueue(
+          sourceText: viText,
+          targetLanguageCode: 'en',
+        );
   }
 
   static String category(BuildContext context, String value) {
     if (context.locale.languageCode != 'en') {
       return value;
     }
-    return _categoryViToEn[value] ?? _viToEn[value] ?? value;
+    return _categoryViToEn[value] ??
+        _viToEn[value] ??
+        TranslationService.instance.translateCachedOrQueue(
+          sourceText: value,
+          targetLanguageCode: 'en',
+        );
   }
 
   static String weekdayLabel(BuildContext context, DateTime date) {
@@ -124,17 +135,17 @@ class AppLocalizer {
     'LƯU GIAO DỊCH': 'SAVE TRANSACTION',
     'XÓA': 'DELETE',
     'LƯU LẠI': 'SAVE',
-    
+
     // Header statistics
     'Tổng ví': 'Total balance',
     'Tham gia': 'Joined',
-    
+
     // Status and buttons
     'Đã xác minh': 'Verified',
     'Đăng xuất': 'Logout',
     'Bảng điều khiển quản trị': 'Admin Dashboard',
     'Mở trang dashboard dành cho admin': 'Open the admin dashboard',
-    
+
     // Cloud sync UI
     'Đang đồng bộ...': 'Syncing...',
     'Đã đồng bộ': 'Synced',
@@ -148,9 +159,10 @@ class AppLocalizer {
     'bản ghi thành công!': 'records successfully!',
     'Đồng bộ thất bại: ': 'Sync failed: ',
     'Đã bật thông báo thành công!': 'Notifications enabled successfully!',
-    'Vui lòng bật quyền thông báo trong cài đặt thiết bị.': 'Please enable notification permissions in device settings.',
+    'Vui lòng bật quyền thông báo trong cài đặt thiết bị.':
+        'Please enable notification permissions in device settings.',
     'Đã tắt thông báo.': 'Notifications disabled.',
-    
+
     // Personal Information Page
     'Họ và tên': 'Full name',
     'Nhập họ và tên': 'Enter your full name',
@@ -160,14 +172,16 @@ class AppLocalizer {
     'Lưu thay đổi': 'Save changes',
     'Cập nhật hồ sơ thành công': 'Profile updated successfully',
     'Lỗi cập nhật hồ sơ: ': 'Error updating profile: ',
-    
+
     // Password Change Page
-    'Mật khẩu mới của bạn phải khác với mật khẩu đã sử dụng trước đó.': 'Your new password must be different from your previously used password.',
+    'Mật khẩu mới của bạn phải khác với mật khẩu đã sử dụng trước đó.':
+        'Your new password must be different from your previously used password.',
     'Mật khẩu hiện tại': 'Current password',
     'Vui lòng nhập mật khẩu hiện tại': 'Please enter your current password',
     'Mật khẩu mới': 'New password',
     'Vui lòng nhập mật khẩu mới': 'Please enter your new password',
-    'Mật khẩu phải có ít nhất 6 ký tự': 'Password must be at least 6 characters',
+    'Mật khẩu phải có ít nhất 6 ký tự':
+        'Password must be at least 6 characters',
     'Xác nhận mật khẩu': 'Confirm password',
     'Mật khẩu xác nhận không khớp': 'Confirm password does not match',
     'Đổi mật khẩu thành công!': 'Password changed successfully!',
@@ -182,7 +196,8 @@ class AppLocalizer {
     'Thu - Chi 6 tháng': '6-Month Cash Flow',
     'Thu': 'Income',
     'Chi': 'Expense',
-    'Gợi ý tối ưu chi tiêu của bạn hôm nay': 'Tips to optimize your spending today',
+    'Gợi ý tối ưu chi tiêu của bạn hôm nay':
+        'Tips to optimize your spending today',
     'Ngân sách tháng này': 'This month\'s budget',
     'Xem tất cả': 'See all',
     'Bạn chưa thiết lập ngân sách.': 'You haven\'t set up any budget.',
@@ -249,7 +264,8 @@ class AppLocalizer {
     'Bạn đã chi quá ': 'You spent over ',
     ' ngân sách ăn uống': ' of food & drink budget',
     'Không thể tải giao dịch': 'Unable to load transactions',
-    'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!': 'No transactions yet.\nAdd your first transaction!',
+    'Chưa có giao dịch nào.\nHãy thêm giao dịch đầu tiên!':
+        'No transactions yet.\nAdd your first transaction!',
     'Không tên': 'Unnamed',
     'Lưu mục tiêu tiết kiệm thất bại: ': 'Saving goal creation failed: ',
     'Xem thêm ': 'See ',
@@ -267,7 +283,8 @@ class AppLocalizer {
     'Vui lòng chọn danh mục': 'Please select category',
     'Hạn mức phải lớn hơn 0': 'Limit must be greater than 0',
     'Chọn danh mục': 'Select category',
-    'Không tìm thấy danh mục chi tiêu nào trong tài khoản. Hãy tạo danh mục trước.': 'No spending categories found in this account. Please create categories first.',
+    'Không tìm thấy danh mục chi tiêu nào trong tài khoản. Hãy tạo danh mục trước.':
+        'No spending categories found in this account. Please create categories first.',
     'Tổng ngân sách tháng 3': 'Total Budget',
     'Đã dùng: ': 'Spent: ',
     'Giới hạn: ': 'Limit: ',

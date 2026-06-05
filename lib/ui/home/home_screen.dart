@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/local/category_data.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/data/repository/finance_repository.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/domain/model/transaction_model.dart';
 import 'package:ai_quan_ly_chi_tieu_ca_nhan/ui/ai_chat/chatbot.dart';
@@ -125,7 +126,7 @@ class HomePageState extends State<HomePage> {
     final String fullName =
         (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
         ? user.displayName!.trim()
-        : 'Bạn'.xtr(context);
+        : 'B\u1ea1n'.xtr(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4FF),
@@ -140,14 +141,14 @@ class HomePageState extends State<HomePage> {
           final budgets = budgetProvider.budgets.take(3).toList();
 
           final displayBalance = _isBalanceVisible
-              ? '${currency.format(financeProvider.cashBalance)} đ'
-              : '••••••••';
+              ? '${currency.format(financeProvider.cashBalance)} \u0111'
+              : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
           final displayIncome = _isBalanceVisible
-              ? '${currency.format(financeProvider.totalIncome)} đ'
-              : '••••••';
+              ? '${currency.format(financeProvider.totalIncome)} \u0111'
+              : '\u2022\u2022\u2022\u2022\u2022\u2022';
           final displayExpense = _isBalanceVisible
-              ? '${currency.format(financeProvider.totalExpense)} đ'
-              : '••••••';
+              ? '${currency.format(financeProvider.totalExpense)} \u0111'
+              : '\u2022\u2022\u2022\u2022\u2022\u2022';
 
           return RefreshIndicator(
             onRefresh: _reloadHomeData,
@@ -252,7 +253,7 @@ class HomePageState extends State<HomePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Xin chào,'.xtr(context),
+                              'Xin ch\u00e0o,'.xtr(context),
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.72),
                                 fontSize: 13,
@@ -261,7 +262,7 @@ class HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              '$fullName 👋',
+                              fullName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -401,7 +402,9 @@ class HomePageState extends State<HomePage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Số dư khả dụng'.xtr(context).toUpperCase(),
+                              'S\u1ed1 d\u01b0 kh\u1ea3 d\u1ee5ng'
+                                  .xtr(context)
+                                  .toUpperCase(),
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.8),
                                 fontSize: 11,
@@ -468,7 +471,7 @@ class HomePageState extends State<HomePage> {
                         child: _headerStatCard(
                           icon: Icons.trending_up_rounded,
                           iconColor: const Color(0xFF4ADE80),
-                          label: 'Thu nhập'.xtr(context),
+                          label: 'Thu nh\u1eadp'.xtr(context),
                           value: displayIncome,
                         ),
                       ),
@@ -477,7 +480,7 @@ class HomePageState extends State<HomePage> {
                         child: _headerStatCard(
                           icon: Icons.trending_down_rounded,
                           iconColor: const Color(0xFFF87171),
-                          label: 'Chi tiêu'.xtr(context),
+                          label: 'Chi ti\u00eau'.xtr(context),
                           value: displayExpense,
                         ),
                       ),
@@ -556,7 +559,7 @@ class HomePageState extends State<HomePage> {
             children: [
               Expanded(
                 child: Text(
-                  'Thu - Chi 6 tháng'.xtr(context),
+                  'Thu - Chi 6 th\u00e1ng'.xtr(context),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -710,7 +713,11 @@ class HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: const Text('🤖', style: TextStyle(fontSize: 20)),
+              child: const Icon(
+                Icons.smart_toy_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -727,7 +734,8 @@ class HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Gợi ý tối ưu chi tiêu của bạn hôm nay'.xtr(context),
+                    'G\u1ee3i \u00fd t\u1ed1i \u01b0u chi ti\u00eau c\u1ee7a b\u1ea1n h\u00f4m nay'
+                        .xtr(context),
                     style: const TextStyle(
                       color: Color(0xFFE9D5FF),
                       fontSize: 12,
@@ -756,7 +764,7 @@ class HomePageState extends State<HomePage> {
             children: [
               Expanded(
                 child: Text(
-                  'Ngân sách tháng này'.xtr(context),
+                  'Ng\u00e2n s\u00e1ch th\u00e1ng n\u00e0y'.xtr(context),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -773,7 +781,7 @@ class HomePageState extends State<HomePage> {
                     ),
                   );
                 },
-                child: Text('Xem tất cả'.xtr(context)),
+                child: Text('Xem t\u1ea5t c\u1ea3'.xtr(context)),
               ),
             ],
           ),
@@ -783,7 +791,8 @@ class HomePageState extends State<HomePage> {
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'Bạn chưa thiết lập ngân sách.'.xtr(context),
+                  'B\u1ea1n ch\u01b0a thi\u1ebft l\u1eadp ng\u00e2n s\u00e1ch.'
+                      .xtr(context),
                   style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
               ),
@@ -815,12 +824,16 @@ class HomePageState extends State<HomePage> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            (budget.icon as String).isEmpty
-                                ? '💰'
-                                : budget.icon as String,
-                            style: const TextStyle(fontSize: 16),
-                          ),
+                          (budget.icon as String).isEmpty
+                              ? const Icon(
+                                  Icons.savings_outlined,
+                                  size: 18,
+                                  color: Color(0xFF4B5563),
+                                )
+                              : Text(
+                                  budget.icon as String,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -835,7 +848,7 @@ class HomePageState extends State<HomePage> {
                             ),
                           ),
                           Text(
-                            '${currency.format(budget.spentAmount)} / ${currency.format(budget.limitAmount)} đ',
+                            '${currency.format(budget.spentAmount)} / ${currency.format(budget.limitAmount)} \u0111',
                             style: TextStyle(
                               fontSize: 11,
                               color: progressColor,
@@ -879,7 +892,7 @@ class HomePageState extends State<HomePage> {
             children: [
               Expanded(
                 child: Text(
-                  'Giao dịch gần đây'.xtr(context),
+                  'Giao d\u1ecbch g\u1ea7n \u0111\u00e2y'.xtr(context),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -897,7 +910,7 @@ class HomePageState extends State<HomePage> {
                     ),
                   );
                 },
-                child: Text('Xem tất cả'.xtr(context)),
+                child: Text('Xem t\u1ea5t c\u1ea3'.xtr(context)),
               ),
             ],
           ),
@@ -907,7 +920,9 @@ class HomePageState extends State<HomePage> {
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'Bạn chưa có giao dịch nào.'.xtr(context),
+                  'B\u1ea1n ch\u01b0a c\u00f3 giao d\u1ecbch n\u00e0o.'.xtr(
+                    context,
+                  ),
                   style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
               ),
@@ -915,6 +930,10 @@ class HomePageState extends State<HomePage> {
           else
             ...tx.map((item) {
               final isExpense = item.type == 'expense';
+              final categoryName = CategoryData.resolveDisplayName(
+                item.categoryId,
+                item.categoryName,
+              );
               return _ScaleOnTap(
                 onTap: () {
                   Navigator.push(
@@ -938,12 +957,16 @@ class HomePageState extends State<HomePage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         alignment: Alignment.center,
-                        child: Text(
-                          item.categoryName.isEmpty
-                              ? '💸'
-                              : item.categoryName.characters.first,
-                          style: const TextStyle(fontSize: 18),
-                        ),
+                        child: categoryName.isEmpty
+                            ? const Icon(
+                                Icons.payments_outlined,
+                                size: 18,
+                                color: Color(0xFF4B5563),
+                              )
+                            : Text(
+                                categoryName.characters.first,
+                                style: const TextStyle(fontSize: 18),
+                              ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -952,8 +975,8 @@ class HomePageState extends State<HomePage> {
                           children: [
                             Text(
                               item.note.isNotEmpty
-                                  ? item.note
-                                  : item.categoryName.xtrCategory(context),
+                                  ? CategoryData.normalizeLabel(item.note)
+                                  : categoryName.xtrCategory(context),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -964,7 +987,7 @@ class HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${item.categoryName.xtrCategory(context)} · ${DateFormat('dd/MM').format(item.transactionDate)}',
+                              '${categoryName.xtrCategory(context)} - ${DateFormat('dd/MM').format(item.transactionDate)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF9CA3AF),
@@ -975,7 +998,7 @@ class HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${isExpense ? '-' : '+'}${currency.format(item.amount)} đ',
+                        '${isExpense ? '-' : '+'}${currency.format(item.amount)} \u0111',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,

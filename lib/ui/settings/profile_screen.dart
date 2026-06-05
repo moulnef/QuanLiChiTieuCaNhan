@@ -7,15 +7,14 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'user_info_screen.dart';
 import 'change_password_screen.dart';
+import 'app_feedback_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:intl/intl.dart' show DateFormat;
 import '../../utils/app_localizer.dart';
 import '../providers/sync_provider.dart';
 import '../../services/sync_service.dart';
 import '../../services/notification_service.dart';
 import '../providers/notification_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../modules/admin/admin_dashboard.dart';
 import '../providers/auth_provider.dart';
@@ -34,7 +33,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final FinanceRepository _repository = FinanceRepository();
 
   bool _isNotifyEnabled = true;
-  bool _isSyncEnabled = true;
 
   String _displayName = 'Người dùng';
   String _email = 'Chưa cập nhật';
@@ -62,9 +60,10 @@ class _ProfilePageState extends State<ProfilePage> {
         _currentUserId,
       );
 
-      final prefs = await SharedPreferences.getInstance();
-      final notifyEnabledPref = prefs.getBool('notification_enabled') ?? false;
-      final hasOSPermission = await NotificationService.instance.checkPermission();
+      final notifyEnabledPref = await NotificationService.instance
+          .isNotificationEnabledForUser(_currentUserId);
+      final hasOSPermission = await NotificationService.instance
+          .checkPermission();
 
       if (!mounted) return;
       setState(() {
@@ -81,9 +80,10 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (_) {
       bool localNotify = false;
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final notifyEnabledPref = prefs.getBool('notification_enabled') ?? false;
-        final hasOSPermission = await NotificationService.instance.checkPermission();
+        final notifyEnabledPref = await NotificationService.instance
+            .isNotificationEnabledForUser(_currentUserId);
+        final hasOSPermission = await NotificationService.instance
+            .checkPermission();
         localNotify = notifyEnabledPref && hasOSPermission;
       } catch (_) {}
 
@@ -111,6 +111,13 @@ class _ProfilePageState extends State<ProfilePage> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+    );
+  }
+
+  void _onFeedbackTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AppFeedbackPage()),
     );
   }
 
@@ -158,6 +165,14 @@ class _ProfilePageState extends State<ProfilePage> {
                         onTap: _onChangePasswordTap,
                       ),
                       _buildDivider(),
+                      _buildItem(
+                        icon: Icons.rate_review_outlined,
+                        label: 'Góp ý và đánh giá ứng dụng',
+                        subtitle: 'Gửi nhận xét và chấm điểm từ 1 đến 5 sao',
+                        color: const Color(0xFFF59E0B),
+                        onTap: _onFeedbackTap,
+                      ),
+                      _buildDivider(),
                       _buildLanguageItem(),
                     ],
                   ),
@@ -174,46 +189,66 @@ class _ProfilePageState extends State<ProfilePage> {
                         value: _isNotifyEnabled,
                         onChanged: (val) async {
                           if (val) {
-                            final hasPermission = await NotificationService.instance.checkPermission();
+                            final hasPermission = await NotificationService
+                                .instance
+                                .checkPermission();
                             bool granted = hasPermission;
                             if (!hasPermission) {
-                              granted = await NotificationService.instance.requestPermission();
+                              granted = await NotificationService.instance
+                                  .requestPermission();
                             }
                             if (granted) {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('notification_enabled', true);
+                              await NotificationService.instance
+                                  .setNotificationEnabledForUser(
+                                    _currentUserId,
+                                    true,
+                                  );
                               setState(() {
                                 _isNotifyEnabled = true;
                               });
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Đã bật thông báo thành công!'.xtr(context)),
+                                    content: Text(
+                                      'Đã bật thông báo thành công!'.xtr(
+                                        context,
+                                      ),
+                                    ),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
-                                context.read<NotificationProvider>().checkNewNotifications(_currentUserId);
+                                context
+                                    .read<NotificationProvider>()
+                                    .checkNewNotifications(_currentUserId);
                               }
                             } else {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Vui lòng bật quyền thông báo trong cài đặt thiết bị.'.xtr(context)),
+                                    content: Text(
+                                      'Vui lòng bật quyền thông báo trong cài đặt thiết bị.'
+                                          .xtr(context),
+                                    ),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
                               }
                             }
                           } else {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('notification_enabled', false);
+                            await NotificationService.instance
+                                .setNotificationEnabledForUser(
+                                  _currentUserId,
+                                  false,
+                                );
                             setState(() {
                               _isNotifyEnabled = false;
                             });
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Đã tắt thông báo.'.xtr(context)),
+                                  content: Text(
+                                    'Đã tắt thông báo.'.xtr(context),
+                                  ),
                                   backgroundColor: Colors.orange,
                                 ),
                               );
@@ -448,7 +483,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               color: dotColor,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: const Color(0xFF1D4ED8), // matched gradient background
+                                color: const Color(
+                                  0xFF1D4ED8,
+                                ), // matched gradient background
                                 width: 2,
                               ),
                             ),
@@ -545,7 +582,11 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     return Row(
       children: [
-        _statCard("$_transactionCount", "Giao dịch".xtr(context), Icons.swap_horiz_rounded),
+        _statCard(
+          "$_transactionCount",
+          "Giao dịch".xtr(context),
+          Icons.swap_horiz_rounded,
+        ),
         const SizedBox(width: 12),
         _statCard(
           _formatMoney(_walletBalance),
@@ -553,7 +594,11 @@ class _ProfilePageState extends State<ProfilePage> {
           Icons.account_balance_wallet_outlined,
         ),
         const SizedBox(width: 12),
-        _statCard(joinedDate, "Tham gia".xtr(context), Icons.calendar_today_outlined),
+        _statCard(
+          joinedDate,
+          "Tham gia".xtr(context),
+          Icons.calendar_today_outlined,
+        ),
       ],
     );
   }
@@ -757,7 +802,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildLogoutButton() {
     return GestureDetector(
-      onTap: () => fb_auth.FirebaseAuth.instance.signOut(),
+      onTap: () => context.read<AuthProvider>().signOut(),
       child: Container(
         width: double.infinity,
         height: 54,
@@ -776,7 +821,11 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
+            const Icon(
+              Icons.logout_rounded,
+              color: Color(0xFFEF4444),
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               "Đăng xuất".xtr(context),
@@ -859,7 +908,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 4),
                     Text(
                       'Mở trang dashboard dành cho admin'.xtr(context),
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -900,17 +952,30 @@ class _ProfilePageState extends State<ProfilePage> {
             break;
           case SyncStatus.success:
             iconColor = const Color(0xFF10B981); // Green
-            trailingWidget = const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981), size: 20);
+            trailingWidget = const Icon(
+              Icons.check_circle_outline_rounded,
+              color: Color(0xFF10B981),
+              size: 20,
+            );
             statusText = "Đã đồng bộ".xtr(context);
             break;
           case SyncStatus.error:
             iconColor = const Color(0xFFEF4444); // Red
-            trailingWidget = const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 20);
-            statusText = syncProvider.errorMessage ?? "Lỗi đồng bộ".xtr(context);
+            trailingWidget = const Icon(
+              Icons.error_outline_rounded,
+              color: Color(0xFFEF4444),
+              size: 20,
+            );
+            statusText =
+                syncProvider.errorMessage ?? "Lỗi đồng bộ".xtr(context);
             break;
           case SyncStatus.offline:
             iconColor = const Color(0xFF94A3B8); // Grey
-            trailingWidget = const Icon(Icons.cloud_off_rounded, color: Color(0xFF94A3B8), size: 20);
+            trailingWidget = const Icon(
+              Icons.cloud_off_rounded,
+              color: Color(0xFF94A3B8),
+              size: 20,
+            );
             statusText = "Không có kết nối mạng".xtr(context);
             break;
           case SyncStatus.idle:
@@ -932,10 +997,16 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               );
-              statusText = "${syncProvider.pendingCount} " + "bản ghi chờ đồng bộ".xtr(context);
+              statusText =
+                  "${syncProvider.pendingCount} " +
+                  "bản ghi chờ đồng bộ".xtr(context);
             } else {
               iconColor = const Color(0xFF10B981); // Green
-              trailingWidget = const Icon(Icons.cloud_done_outlined, color: Color(0xFF10B981), size: 20);
+              trailingWidget = const Icon(
+                Icons.cloud_done_outlined,
+                color: Color(0xFF10B981),
+                size: 20,
+              );
               statusText = "Đã đồng bộ".xtr(context);
             }
             break;
@@ -944,7 +1015,11 @@ class _ProfilePageState extends State<ProfilePage> {
         final lastSyncTimeStr = syncProvider.lastSyncTime != null
             ? DateFormat('HH:mm dd/MM/yyyy').format(syncProvider.lastSyncTime!)
             : "Chưa đồng bộ lần nào".xtr(context);
-        final subtitle = "Lần cuối: ".xtr(context) + lastSyncTimeStr + " • " + "Tự động đồng bộ khi có kết nối".xtr(context);
+        final subtitle =
+            "Lần cuối: ".xtr(context) +
+            lastSyncTimeStr +
+            " • " +
+            "Tự động đồng bộ khi có kết nối".xtr(context);
 
         final showRetryButton = syncProvider.status == SyncStatus.error;
 
@@ -961,7 +1036,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: iconColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.cloud_outlined, color: iconColor, size: 20),
+                    child: Icon(
+                      Icons.cloud_outlined,
+                      color: iconColor,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -1006,11 +1085,17 @@ class _ProfilePageState extends State<ProfilePage> {
                     ElevatedButton(
                       onPressed: () async {
                         try {
-                          final result = await syncProvider.syncNow(_currentUserId);
+                          final result = await syncProvider.syncNow(
+                            _currentUserId,
+                          );
                           if (context.mounted && result != null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Đã đồng bộ ".xtr(context) + "${result.successCount} " + "bản ghi thành công!".xtr(context)),
+                                content: Text(
+                                  "Đã đồng bộ ".xtr(context) +
+                                      "${result.successCount} " +
+                                      "bản ghi thành công!".xtr(context),
+                                ),
                                 backgroundColor: const Color(0xFF10B981),
                               ),
                             );
@@ -1019,7 +1104,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Đồng bộ thất bại: ".xtr(context) + "$e"),
+                                content: Text(
+                                  "Đồng bộ thất bại: ".xtr(context) + "$e",
+                                ),
                                 backgroundColor: const Color(0xFFEF4444),
                               ),
                             );
@@ -1030,7 +1117,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         elevation: 0,
                         backgroundColor: const Color(0xFFEF4444),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
