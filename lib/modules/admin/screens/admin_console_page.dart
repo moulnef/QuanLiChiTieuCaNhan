@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -91,20 +91,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     final users = usersSnapshot.data!.docs
                         .map((doc) => doc.data())
                         .toList();
-                    final transactionCount = txSnapshot.data!.docs.length;
+                    final transactionCount = txSnapshot.data!.docs.where((doc) {
+                      final data = doc.data();
+                      return data['isDeleted'] != true;
+                    }).length;
                     final adminCount = users.where((u) {
                       return (u['role'] ?? '').toString().toLowerCase() ==
                           'admin';
                     }).length;
-                    final feedbacks = feedbackSnapshot.data!.docs
-                        .map(
-                          (doc) => AppFeedback.fromMap(
-                            Map<String, dynamic>.from(doc.data()),
-                            doc.id,
-                          ),
-                        )
-                        .toList()
-                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    final feedbacks =
+                        feedbackSnapshot.data!.docs
+                            .map(
+                              (doc) => AppFeedback.fromMap(
+                                Map<String, dynamic>.from(doc.data()),
+                                doc.id,
+                              ),
+                            )
+                            .toList()
+                          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
                     return TabBarView(
                       children: [
@@ -320,7 +324,8 @@ class _FeedbackTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = keyword.trim().toLowerCase();
     final filtered = feedbacks.where((feedback) {
-      final matchesKeyword = normalized.isEmpty ||
+      final matchesKeyword =
+          normalized.isEmpty ||
           feedback.userDisplayName.toLowerCase().contains(normalized) ||
           feedback.userEmail.toLowerCase().contains(normalized) ||
           feedback.comment.toLowerCase().contains(normalized);
@@ -426,9 +431,9 @@ class _FeedbackTab extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  DateFormat('dd/MM/yyyy HH:mm').format(
-                                    feedback.createdAt,
-                                  ),
+                                  DateFormat(
+                                    'dd/MM/yyyy HH:mm',
+                                  ).format(feedback.createdAt),
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: Color(0xFF94A3B8),
@@ -577,9 +582,7 @@ class _FilterChip extends StatelessWidget {
           color: selected ? const Color(0xFFDBEAFE) : Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF2563EB)
-                : const Color(0xFFE2E8F0),
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
@@ -587,9 +590,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: selected
-                ? const Color(0xFF1D4ED8)
-                : const Color(0xFF475569),
+            color: selected ? const Color(0xFF1D4ED8) : const Color(0xFF475569),
           ),
         ),
       ),

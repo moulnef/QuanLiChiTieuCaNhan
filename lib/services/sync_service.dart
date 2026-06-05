@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../data/local/database_helper.dart';
 import '../data/remote/firestore_service.dart';
+import '../data/repository/finance_repository.dart';
 import '../domain/model/transaction_model.dart';
 import '../domain/model/budget.dart';
 import '../domain/model/saving.dart';
@@ -39,6 +40,7 @@ class SyncService with WidgetsBindingObserver {
   SyncService._internal();
 
   final FirestoreService _firestoreService = FirestoreService();
+  final FinanceRepository _financeRepository = FinanceRepository();
   StreamSubscription? _connectivitySubscription;
   bool _wasOnline = true;
 
@@ -46,7 +48,8 @@ class SyncService with WidgetsBindingObserver {
   Timer? _debounceTimer;
   String? _currentUserId;
 
-  final StreamController<SyncEvent> _syncEventController = StreamController<SyncEvent>.broadcast();
+  final StreamController<SyncEvent> _syncEventController =
+      StreamController<SyncEvent>.broadcast();
   Stream<SyncEvent> get syncEventStream => _syncEventController.stream;
 
   Future<int> getPendingCount([String? userId]) async {
@@ -57,11 +60,17 @@ class SyncService with WidgetsBindingObserver {
       final db = await DatabaseHelper.instance.database;
       int count = 0;
 
-      final tables = ['transactions', 'budgets', 'savings', 'debts', 'installments'];
+      final tables = [
+        'transactions',
+        'budgets',
+        'savings',
+        'debts',
+        'installments',
+      ];
       for (final table in tables) {
         final res = await db.rawQuery(
           'SELECT COUNT(*) as cnt FROM $table WHERE (isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
-          [targetUserId]
+          [targetUserId],
         );
         count += Sqflite.firstIntValue(res) ?? 0;
       }
@@ -89,7 +98,8 @@ class SyncService with WidgetsBindingObserver {
       // 1. Transactions
       final txRows = await db.query(
         'transactions',
-        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        where:
+            '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
       final List<TransactionModel> txList = [];
@@ -105,7 +115,8 @@ class SyncService with WidgetsBindingObserver {
       // 2. Budgets
       final budgetRows = await db.query(
         'budgets',
-        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        where:
+            '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
       final List<Budget> budgetList = [];
@@ -121,7 +132,8 @@ class SyncService with WidgetsBindingObserver {
       // 3. Savings
       final savingRows = await db.query(
         'savings',
-        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        where:
+            '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
       final List<SavingGoal> savingList = [];
@@ -137,7 +149,8 @@ class SyncService with WidgetsBindingObserver {
       // 4. Debts
       final debtRows = await db.query(
         'debts',
-        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        where:
+            '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
       final List<DebtRecord> debtList = [];
@@ -153,7 +166,8 @@ class SyncService with WidgetsBindingObserver {
       // 5. Installments
       final installmentRows = await db.query(
         'installments',
-        where: '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
+        where:
+            '(isSynced = 0 OR isSynced IS NULL) AND COALESCE(userId, user_id) = ?',
         whereArgs: [userId],
       );
       final List<InstallmentPlan> installmentList = [];
@@ -166,8 +180,14 @@ class SyncService with WidgetsBindingObserver {
         }
       }
 
-      final totalUnsynced = txList.length + budgetList.length + savingList.length + debtList.length + installmentList.length;
+      final totalUnsynced =
+          txList.length +
+          budgetList.length +
+          savingList.length +
+          debtList.length +
+          installmentList.length;
       if (totalUnsynced == 0) {
+        await _financeRepository.syncWithFirebase(userId);
         await saveLastSyncTime();
         _emitEvent(SyncStatus.success);
         return SyncResult(successCount: 0, failCount: failCount, syncTime: now);
@@ -184,29 +204,55 @@ class SyncService with WidgetsBindingObserver {
 
       // If we reach here, batchWrite succeeded! Mark all these as synced in SQLite
       final batch = db.batch();
-      
+
       for (final tx in txList) {
-        batch.update('transactions', {'isSynced': 1}, where: 'id = ?', whereArgs: [tx.id]);
+        batch.update(
+          'transactions',
+          {'isSynced': 1},
+          where: 'id = ?',
+          whereArgs: [tx.id],
+        );
         successCount++;
       }
       for (final b in budgetList) {
-        batch.update('budgets', {'isSynced': 1}, where: 'id = ?', whereArgs: [b.id]);
+        batch.update(
+          'budgets',
+          {'isSynced': 1},
+          where: 'id = ?',
+          whereArgs: [b.id],
+        );
         successCount++;
       }
       for (final s in savingList) {
-        batch.update('savings', {'isSynced': 1}, where: 'id = ?', whereArgs: [s.id]);
+        batch.update(
+          'savings',
+          {'isSynced': 1},
+          where: 'id = ?',
+          whereArgs: [s.id],
+        );
         successCount++;
       }
       for (final d in debtList) {
-        batch.update('debts', {'isSynced': 1}, where: 'id = ?', whereArgs: [d.id]);
+        batch.update(
+          'debts',
+          {'isSynced': 1},
+          where: 'id = ?',
+          whereArgs: [d.id],
+        );
         successCount++;
       }
       for (final i in installmentList) {
-        batch.update('installments', {'isSynced': 1}, where: 'id = ?', whereArgs: [i.id]);
+        batch.update(
+          'installments',
+          {'isSynced': 1},
+          where: 'id = ?',
+          whereArgs: [i.id],
+        );
         successCount++;
       }
 
       await batch.commit(noResult: true);
+      await _financeRepository.syncWithFirebase(userId);
       await saveLastSyncTime();
 
       _emitEvent(SyncStatus.success);
@@ -226,11 +272,13 @@ class SyncService with WidgetsBindingObserver {
   void startAutoSync(String userId) {
     if (kIsWeb || userId.isEmpty) return;
     _currentUserId = userId;
-    
+
     stopAutoSync();
-    
+
     // 1. Listen to connectivity changes
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) async {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) async {
       final hasConnection = _checkHasConnection(results);
       if (hasConnection) {
         if (!_wasOnline) {
@@ -361,15 +409,26 @@ class SyncService with WidgetsBindingObserver {
     return TransactionModel(
       id: row['id']?.toString() ?? '',
       userId: row['userId']?.toString() ?? row['user_id']?.toString() ?? '',
-      walletId: row['walletId']?.toString() ?? row['wallet_id']?.toString() ?? '',
-      categoryId: row['categoryId']?.toString() ?? row['category_id']?.toString() ?? '',
-      categoryName: row['categoryName']?.toString() ?? row['category_name']?.toString() ?? '',
+      walletId:
+          row['walletId']?.toString() ?? row['wallet_id']?.toString() ?? '',
+      categoryId:
+          row['categoryId']?.toString() ?? row['category_id']?.toString() ?? '',
+      categoryName:
+          row['categoryName']?.toString() ??
+          row['category_name']?.toString() ??
+          '',
       type: row['type']?.toString() ?? 'expense',
       amount: _asDouble(row['amount']),
       note: row['note']?.toString() ?? '',
-      transactionDate: _parseDate(row['transactionDate'] ?? row['transaction_date'] ?? row['date']),
-      createdAt: _parseDate(row['createdAt'] ?? row['created_at'] ?? row['transactionDate']),
-      updatedAt: _parseDate(row['updatedAt'] ?? row['updated_at'] ?? row['transactionDate']),
+      transactionDate: _parseDate(
+        row['transactionDate'] ?? row['transaction_date'] ?? row['date'],
+      ),
+      createdAt: _parseDate(
+        row['createdAt'] ?? row['created_at'] ?? row['transactionDate'],
+      ),
+      updatedAt: _parseDate(
+        row['updatedAt'] ?? row['updated_at'] ?? row['transactionDate'],
+      ),
       isDeleted: _asInt(row['isDeleted']) == 1,
       receiptImageUrl: row['receiptImageUrl']?.toString(),
       tags: parsedTags,
@@ -398,11 +457,18 @@ class SyncService with WidgetsBindingObserver {
       id: row['id']?.toString() ?? '',
       userId: row['userId']?.toString() ?? row['user_id']?.toString() ?? '',
       title: row['title']?.toString() ?? '',
-      lenderName: row['lenderName']?.toString() ?? row['lender_name']?.toString() ?? row['lender']?.toString() ?? 'Không rõ',
+      lenderName:
+          row['lenderName']?.toString() ??
+          row['lender_name']?.toString() ??
+          row['lender']?.toString() ??
+          'Không rõ',
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
-      monthlyPayment: _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
-      interestRate: ((row['interestRate'] ?? row['interest_rate'] ?? 0.0) as num).toDouble(),
+      monthlyPayment:
+          _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
+      interestRate:
+          ((row['interestRate'] ?? row['interest_rate'] ?? 0.0) as num)
+              .toDouble(),
       nextDueDate: _asInt(row['nextDueDate'] ?? row['next_due_date']) ?? 0,
       createdAt: _asInt(row['createdAt'] ?? row['created_at']) ?? 0,
       updatedAt: _asInt(row['updatedAt'] ?? row['updated_at']) ?? 0,
@@ -418,10 +484,25 @@ class SyncService with WidgetsBindingObserver {
       icon: row['icon']?.toString() ?? '💰',
       totalAmount: _asInt(row['totalAmount'] ?? row['total_amount']) ?? 0,
       paidAmount: _asInt(row['paidAmount'] ?? row['paid_amount']) ?? 0,
-      monthlyPayment: _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
-      paidPeriods: _asInt(row['paidPeriods'] ?? row['paid_periods'] ?? row['currentPeriod'] ?? row['current_period']) ?? 0,
+      monthlyPayment:
+          _asInt(row['monthlyPayment'] ?? row['monthly_payment']) ?? 0,
+      paidPeriods:
+          _asInt(
+            row['paidPeriods'] ??
+                row['paid_periods'] ??
+                row['currentPeriod'] ??
+                row['current_period'],
+          ) ??
+          0,
       totalPeriods: _asInt(row['totalPeriods'] ?? row['total_periods']) ?? 0,
-      nextDueDate: _asInt(row['nextDueDate'] ?? row['next_due_date'] ?? row['nextDueDateEpoch'] ?? row['next_due_date_epoch']) ?? 0,
+      nextDueDate:
+          _asInt(
+            row['nextDueDate'] ??
+                row['next_due_date'] ??
+                row['nextDueDateEpoch'] ??
+                row['next_due_date_epoch'],
+          ) ??
+          0,
       createdAt: _asInt(row['createdAt'] ?? row['created_at']) ?? 0,
       updatedAt: _asInt(row['updatedAt'] ?? row['updated_at']) ?? 0,
       status: row['status']?.toString() ?? 'active',

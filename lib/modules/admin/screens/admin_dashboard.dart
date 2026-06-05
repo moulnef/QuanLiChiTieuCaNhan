@@ -84,6 +84,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       doc.id,
                     ),
                   )
+                  .where((tx) => !tx.isDeleted)
                   .toList();
 
               final data = _AdminData.from(users, transactions);

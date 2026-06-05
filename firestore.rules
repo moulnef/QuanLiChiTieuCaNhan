@@ -28,75 +28,75 @@ service cloud.firestore {
 
       match /wallets/{walletId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.name is string &&
-               request.resource.data.balance is number &&
-               request.resource.data.type in ['cash', 'bank', 'ewallet', 'credit']
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.name is string
+          && request.resource.data.balance is number
+          && request.resource.data.type in ['cash', 'bank', 'ewallet', 'credit'];
+        allow delete: if isOwner(userId);
       }
 
       match /categories/{categoryId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.name is string &&
-               request.resource.data.type in ['income', 'expense']
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.name is string
+          && request.resource.data.type in ['income', 'expense'];
+        allow delete: if isOwner(userId);
       }
 
       match /transactions/{transId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.amount is number &&
-               request.resource.data.amount > 0 &&
-               request.resource.data.type in ['income', 'expense', 'transfer'] &&
-               request.resource.data.categoryId is string &&
-               request.resource.data.walletId is string
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.type in ['income', 'expense', 'transfer', 'lend', 'borrow']
+          && request.resource.data.categoryId is string
+          && request.resource.data.walletId is string;
+        allow delete: if isOwner(userId);
       }
 
       match /budgets/{budgetId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.limitAmount is number &&
-               request.resource.data.limitAmount > 0 &&
-               request.resource.data.month >= 1 &&
-               request.resource.data.month <= 12 &&
-               request.resource.data.year is int
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.limitAmount is number
+          && request.resource.data.limitAmount > 0
+          && request.resource.data.month >= 1
+          && request.resource.data.month <= 12
+          && request.resource.data.year is int;
+        allow delete: if isOwner(userId);
       }
 
       match /savings/{savingId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.targetAmount is number &&
-               request.resource.data.targetAmount > 0 &&
-               request.resource.data.currentAmount is number &&
-               request.resource.data.currentAmount >= 0
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.targetAmount is number
+          && request.resource.data.targetAmount > 0
+          && request.resource.data.currentAmount is number
+          && request.resource.data.currentAmount >= 0;
+        allow delete: if isOwner(userId);
       }
 
       match /debts/{debtId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.amount is number &&
-               request.resource.data.amount > 0 &&
-               request.resource.data.type in ['lend', 'borrow']
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.totalAmount is number
+          && request.resource.data.totalAmount > 0
+          && request.resource.data.paidAmount is number
+          && request.resource.data.paidAmount >= 0
+          && request.resource.data.monthlyPayment is number
+          && request.resource.data.interestRate is number
+          && request.resource.data.lenderName is string;
+        allow delete: if isOwner(userId);
       }
 
       match /installments/{planId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
-          && (request.resource == null || (
-               request.resource.data.totalAmount is number &&
-               request.resource.data.totalAmount > 0
-             ));
+        allow create, update: if isOwner(userId)
+          && request.resource.data.totalAmount is number
+          && request.resource.data.totalAmount > 0
+          && request.resource.data.paidAmount is number
+          && request.resource.data.monthlyPayment is number
+          && request.resource.data.totalPeriods is int;
+        allow delete: if isOwner(userId);
       }
 
       match /feedbacks/{feedbackId} {
@@ -111,6 +111,14 @@ service cloud.firestore {
           && request.resource.data.rating >= 1
           && request.resource.data.rating <= 5;
       }
+    }
+
+    match /{path=**}/transactions/{transId} {
+      allow read: if isAdmin();
+    }
+
+    match /{path=**}/feedbacks/{feedbackId} {
+      allow read: if isAdmin();
     }
   }
 }
