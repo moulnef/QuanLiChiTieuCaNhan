@@ -83,33 +83,38 @@ class SplitProvider extends ChangeNotifier {
   // 1. Lắng nghe danh sách nhóm của user
   void listenToMyGroups(String uid) {
     _groupsSub?.cancel();
-    _groupsSub = SplitService.instance.watchMyGroups(uid).listen((groups) {
-      _myGroups = groups;
-      
-      // Nếu đang mở nhóm, cập nhật thông tin nhóm theo real-time
-      if (_activeGroup != null) {
-        final updatedActive = groups.firstWhere(
-          (g) => g.id == _activeGroup!.id,
-          orElse: () => _activeGroup!,
+    _groupsSub = SplitService.instance
+        .watchMyGroups(uid)
+        .listen(
+          (groups) {
+            _myGroups = groups;
+
+            // Nếu đang mở nhóm, cập nhật thông tin nhóm theo real-time
+            if (_activeGroup != null) {
+              final updatedActive = groups.firstWhere(
+                (g) => g.id == _activeGroup!.id,
+                orElse: () => _activeGroup!,
+              );
+              if (updatedActive != _activeGroup) {
+                _activeGroup = updatedActive;
+                _resolveMembers(updatedActive.memberUids);
+              }
+            }
+
+            // Tải trước thông tin thành viên của tất cả các nhóm để hiển thị mượt mà
+            // Đồng thời tải tổng chi tiêu của mỗi nhóm
+            for (final g in groups) {
+              _resolveMembers(g.memberUids);
+              _fetchGroupTotalSpent(g.id);
+            }
+
+            notifyListeners();
+          },
+          onError: (e) {
+            _errorMessage = 'Lỗi kết nối nhóm: $e';
+            notifyListeners();
+          },
         );
-        if (updatedActive != _activeGroup) {
-          _activeGroup = updatedActive;
-          _resolveMembers(updatedActive.memberUids);
-        }
-      }
-
-      // Tải trước thông tin thành viên của tất cả các nhóm để hiển thị mượt mà
-      // Đồng thời tải tổng chi tiêu của mỗi nhóm
-      for (final g in groups) {
-        _resolveMembers(g.memberUids);
-        _fetchGroupTotalSpent(g.id);
-      }
-
-      notifyListeners();
-    }, onError: (e) {
-      _errorMessage = 'Lỗi kết nối nhóm: $e';
-      notifyListeners();
-    });
   }
 
   Future<void> _fetchGroupTotalSpent(String groupId) async {
@@ -147,7 +152,9 @@ class SplitProvider extends ChangeNotifier {
     notifyListeners();
 
     // Lắng nghe chi tiêu
-    _expensesSub = SplitService.instance.watchExpenses(groupId).listen((expenses) {
+    _expensesSub = SplitService.instance.watchExpenses(groupId).listen((
+      expenses,
+    ) {
       // So sánh để phát hiện chi tiêu mới và push notification
       if (_previousExpenses.isNotEmpty) {
         for (final exp in expenses) {
@@ -155,7 +162,8 @@ class SplitProvider extends ChangeNotifier {
           if (!exists && exp.createdByUid != _currentUserId) {
             _triggerPush(
               title: 'Khoản chi tiêu mới 💸',
-              body: 'Thành viên ${_displayName(exp.paidByUid)} đã thêm "${exp.description}" số tiền ${_formatMoney(exp.amount)}.',
+              body:
+                  'Thành viên ${_displayName(exp.paidByUid)} đã thêm "${exp.description}" số tiền ${_formatMoney(exp.amount)}.',
               relatedId: groupId,
             );
           }
@@ -168,28 +176,33 @@ class SplitProvider extends ChangeNotifier {
     });
 
     // Lắng nghe thanh toán
-    _paymentsSub = SplitService.instance.watchPayments(groupId).listen((payments) {
+    _paymentsSub = SplitService.instance.watchPayments(groupId).listen((
+      payments,
+    ) {
       if (_previousPayments.isNotEmpty) {
         for (final pay in payments) {
           final oldPayIdx = _previousPayments.indexWhere((p) => p.id == pay.id);
-          
+
           if (oldPayIdx == -1) {
             // Thanh toán mới được ghi nhận
             if (pay.fromUid != _currentUserId && pay.toUid == _currentUserId) {
               _triggerPush(
                 title: 'Yêu cầu xác nhận nhận tiền 💰',
-                body: 'Thành viên ${_displayName(pay.fromUid)} đã gửi ${_formatMoney(pay.amount)} cho bạn. Vui lòng xác nhận.',
+                body:
+                    'Thành viên ${_displayName(pay.fromUid)} đã gửi ${_formatMoney(pay.amount)} cho bạn. Vui lòng xác nhận.',
                 relatedId: groupId,
               );
             }
           } else {
             // Thanh toán cũ thay đổi (ví dụ: chuyển từ chờ xác nhận sang đã nhận)
             final oldPay = _previousPayments[oldPayIdx];
-            if (oldPay.confirmedByToUid == null && pay.confirmedByToUid != null) {
+            if (oldPay.confirmedByToUid == null &&
+                pay.confirmedByToUid != null) {
               if (pay.fromUid == _currentUserId) {
                 _triggerPush(
                   title: 'Thanh toán được xác nhận! ✅',
-                  body: 'Thành viên ${_displayName(pay.toUid)} đã xác nhận nhận được ${_formatMoney(pay.amount)} từ bạn.',
+                  body:
+                      'Thành viên ${_displayName(pay.toUid)} đã xác nhận nhận được ${_formatMoney(pay.amount)} từ bạn.',
                   relatedId: groupId,
                 );
               }
@@ -221,14 +234,17 @@ class SplitProvider extends ChangeNotifier {
     if (_activeGroup == null) return;
 
     // Lấy danh sách nợ gốc từ các chi tiêu trong nhóm
-    final rawDebts = SplitService.calculateDebts(_currentExpenses, _activeGroup!.memberUids);
+    final rawDebts = SplitService.calculateDebts(
+      _currentExpenses,
+      _activeGroup!.memberUids,
+    );
 
     final List<SplitDebt> adjustedDebts = [];
 
     for (final debt in rawDebts) {
       // Tìm các khoản thanh toán giữa 2 người này trong nhóm
       final paymentsBetween = _currentPayments.where(
-        (p) => p.fromUid == debt.fromUid && p.toUid == debt.toUid
+        (p) => p.fromUid == debt.fromUid && p.toUid == debt.toUid,
       );
 
       // Tính tổng số tiền đã trả (đã được xác nhận)
@@ -238,11 +254,13 @@ class SplitProvider extends ChangeNotifier {
 
       final remaining = debt.amount - confirmedPaid;
       if (remaining >= 1000) {
-        adjustedDebts.add(SplitDebt(
-          fromUid: debt.fromUid,
-          toUid: debt.toUid,
-          amount: remaining,
-        ));
+        adjustedDebts.add(
+          SplitDebt(
+            fromUid: debt.fromUid,
+            toUid: debt.toUid,
+            amount: remaining,
+          ),
+        );
       }
     }
 
@@ -270,7 +288,11 @@ class SplitProvider extends ChangeNotifier {
   }
 
   // Gửi thông báo local
-  void _triggerPush({required String title, required String body, required String relatedId}) {
+  void _triggerPush({
+    required String title,
+    required String body,
+    required String relatedId,
+  }) {
     NotificationService.instance.sendNotification(
       userId: _currentUserId,
       title: title,
@@ -316,12 +338,15 @@ class SplitProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final error = await SplitService.instance.addMemberByEmail(groupId, email);
+      final error = await SplitService.instance.addMemberByEmail(
+        groupId,
+        email,
+      );
       if (error == null) {
         final member = await SplitService.instance.findUserByEmail(email);
         if (member != null) {
           _membersCache[member.uid] = member;
-          
+
           // Gửi thông báo cho chính mình rằng đã thêm thành viên thành công
           _triggerPush(
             title: 'Thêm thành viên nhóm 👥',
@@ -375,7 +400,12 @@ class SplitProvider extends ChangeNotifier {
   }
 
   // 10. Ghi nhận thanh toán ("Tôi đã trả")
-  Future<void> payDebt(String groupId, String fromUid, String toUid, double amount) async {
+  Future<void> payDebt(
+    String groupId,
+    String fromUid,
+    String toUid,
+    double amount,
+  ) async {
     if (_activeGroup?.status == SplitGroupStatus.settled) return;
 
     try {
@@ -403,11 +433,16 @@ class SplitProvider extends ChangeNotifier {
   }
 
   // Ghi nhận giao dịch cá nhân trong sổ sách chi tiêu
-  Future<void> _logPersonalTransaction(double amount, String recipientUid) async {
+  Future<void> _logPersonalTransaction(
+    double amount,
+    String recipientUid,
+  ) async {
     try {
-      final walletsRaw = await _financeRepository.getWalletsByUserId(_currentUserId);
+      final walletsRaw = await _financeRepository.getWalletsByUserId(
+        _currentUserId,
+      );
       final wallets = walletsRaw.map((w) => WalletModel.fromMap(w)).toList();
-      
+
       final wallet = wallets.firstWhere(
         (w) => w.isDefault,
         orElse: () => wallets.isNotEmpty
@@ -429,7 +464,8 @@ class SplitProvider extends ChangeNotifier {
         categoryName: 'Chia tiền nhóm',
         type: 'expense',
         amount: amount,
-        note: 'Quyết toán trả tiền cho $recipientName (Nhóm: ${_activeGroup?.name ?? ""})',
+        note:
+            'Quyết toán trả tiền cho $recipientName (Nhóm: ${_activeGroup?.name ?? ""})',
         transactionDate: DateTime.now(),
       );
 
@@ -445,10 +481,68 @@ class SplitProvider extends ChangeNotifier {
     if (_activeGroup!.status == SplitGroupStatus.settled) return;
 
     try {
-      await SplitService.instance.confirmPayment(_activeGroup!.id, paymentId, _currentUserId);
+      final paymentIndex = _currentPayments.indexWhere((p) => p.id == paymentId);
+      SplitPayment? payment;
+      if (paymentIndex != -1) {
+        payment = _currentPayments[paymentIndex];
+      }
+
+      await SplitService.instance.confirmPayment(
+        _activeGroup!.id,
+        paymentId,
+        _currentUserId,
+      );
+
+      // Nếu nhận tiền thành công và tôi là người nhận (chủ nợ), tự động ghi nhận giao dịch thu nhập cá nhân
+      if (payment != null && payment.toUid == _currentUserId) {
+        await _logPersonalIncomeTransaction(payment.amount, payment.fromUid);
+      }
     } catch (e) {
       _errorMessage = 'Lỗi xác nhận nhận tiền: $e';
       notifyListeners();
+    }
+  }
+
+  // Ghi nhận giao dịch cá nhân dạng thu nhập khi nhận tiền quyết toán
+  Future<void> _logPersonalIncomeTransaction(
+    double amount,
+    String senderUid,
+  ) async {
+    try {
+      final walletsRaw = await _financeRepository.getWalletsByUserId(
+        _currentUserId,
+      );
+      final wallets = walletsRaw.map((w) => WalletModel.fromMap(w)).toList();
+
+      final wallet = wallets.firstWhere(
+        (w) => w.isDefault,
+        orElse: () => wallets.isNotEmpty
+            ? wallets.first
+            : WalletModel(
+                id: 'default',
+                userId: _currentUserId,
+                name: 'Ví mặc định',
+                balance: 0.0,
+              ),
+      );
+
+      final senderName = _displayName(senderUid);
+      final tx = TransactionModel(
+        id: '',
+        userId: _currentUserId,
+        walletId: wallet.id,
+        categoryId: 'split_bill',
+        categoryName: 'Chia tiền nhóm',
+        type: 'income',
+        amount: amount,
+        note:
+            'Quyết toán nhận tiền từ $senderName (Nhóm: ${_activeGroup?.name ?? ""})',
+        transactionDate: DateTime.now(),
+      );
+
+      await _financeRepository.upsertTransaction(tx);
+    } catch (e) {
+      debugPrint('Lỗi tự động tạo giao dịch thu nhập cá nhân: $e');
     }
   }
 
@@ -457,10 +551,11 @@ class SplitProvider extends ChangeNotifier {
     if (_activeGroup == null) return;
     try {
       await SplitService.instance.settleGroup(_activeGroup!.id);
-      
+
       _triggerPush(
         title: 'Nhóm đã tất toán! 🏁',
-        body: 'Nhóm "${_activeGroup!.name}" đã hoàn thành tất toán và được đóng.',
+        body:
+            'Nhóm "${_activeGroup!.name}" đã hoàn thành tất toán và được đóng.',
         relatedId: _activeGroup!.id,
       );
     } catch (e) {

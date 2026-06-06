@@ -31,7 +31,7 @@ class _VoiceAssistantState extends ConsumerState<VoiceAssistant> {
 
   // Quản lý lịch sử hội thoại của Voice tương tự như Chatbot
   final List<Map<String, dynamic>> _voiceMessages = [];
-  final String githubToken = '#';
+  final String githubToken = 'Y3HGjCGAOh7ws2UMD2lqM6INtSysqW4AhqMJ';
 
   @override
   void initState() {
